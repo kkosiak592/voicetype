@@ -12,6 +12,15 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+[features]
+# Enable whisper-rs CUDA transcription. Requires:
+#   - LIBCLANG_PATH (LLVM clang for bindgen)
+#   - CUDA Toolkit 11.7 (CUDA_PATH)
+#   - CMAKE_CUDA_ARCHITECTURES=61
+# First build: 10-30 min (compiles whisper.cpp + CUDA kernels via cmake).
+# Audio capture (cpal) works without this feature flag.
+whisper = ["dep:whisper-rs"]
+
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-single-instance = "2"
@@ -26,7 +35,7 @@ log = "0.4"
 env_logger = "0.11"
 # Requires: CUDA_PATH env var (CUDA Toolkit 11.7) + LIBCLANG_PATH (for bindgen) + CMAKE_CUDA_ARCHITECTURES=61
 # First build takes 10-30 minutes (compiles whisper.cpp with CUDA via cmake)
-whisper-rs = { version = "0.15", features = ["cuda"] }
+whisper-rs = { version = "0.15", features = ["cuda"], optional = true }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-global-shortcut = "2"
