@@ -31,12 +31,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. App icon appears in the system tray with a right-click context menu showing at minimum Settings and Quit
   3. User can configure the global hotkey binding in settings; the new binding takes effect immediately without restarting the app
   4. Settings survive an app restart — hotkey binding and any other persisted config are restored from disk
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: Tauri scaffold — create project, configure two-window architecture (pill + settings), add system tray with context menu
-- [ ] 01-02: Global hotkey registration — wire tauri-plugin-global-shortcut, verify hotkey fires from background app, no focus steal
-- [ ] 01-03: Settings persistence — integrate tauri-plugin-store, define config schema, implement hotkey rebinding with live apply
+- [ ] 01-01-PLAN.md — Tauri scaffold with system tray, settings window, single-instance, and hide-to-tray
+- [ ] 01-02-PLAN.md — Global hotkey registration with tauri-plugin-global-shortcut, verify no focus steal
+- [ ] 01-03-PLAN.md — Settings persistence with tauri-plugin-store, hotkey rebinding UI, theme and autostart toggles
 
 ### Phase 2: Audio + Whisper
 **Goal**: Microphone audio captured at 16kHz and transcribed by whisper.cpp with GPU acceleration confirmed on the development machine — the two highest-risk components verified in isolation before being wired together
@@ -132,11 +132,11 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/3 | Not started | - |
+| 1. Foundation | 0/3 | Planning complete | - |
 | 2. Audio + Whisper | 0/3 | Not started | - |
 | 3. Core Pipeline | 0/2 | Not started | - |
 | 4. Pill Overlay | 0/2 | Not started | - |
