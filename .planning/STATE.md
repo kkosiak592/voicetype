@@ -8,7 +8,7 @@ progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-02-27)
 ## Current Position
 
 Phase: 1 of 7 (Foundation)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-02-27 — Completed 01-01 (Tauri app scaffold)
+Last activity: 2026-02-27 — Completed 01-02 (Global hotkey Ctrl+Shift+Space)
 
-Progress: [█░░░░░░░░░] 5%
+Progress: [██░░░░░░░░] 10%
 
 ## Performance Metrics
 
@@ -48,6 +48,7 @@ Progress: [█░░░░░░░░░] 5%
 
 *Updated after each plan completion*
 | Phase 01-foundation P01 | 22 | 1 tasks | 23 files |
+| Phase 01-foundation P02 | 5 | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,9 @@ Recent decisions affecting current work:
 - [Phase 01-foundation]: show_menu_on_left_click(false) replaces deprecated menu_on_left_click in Tauri 2.10.x tray API
 - [Phase 01-foundation]: use tauri::Manager must be explicitly imported to call get_webview_window on AppHandle — not re-exported from tauri prelude
 - [Phase 01-foundation]: App identifier must not end in .app — use com.voicetype.desktop to avoid macOS bundle extension conflict
+- [Phase 01-foundation 01-02]: Global-shortcut plugin must be registered in setup() via app.handle().plugin() with #[cfg(desktop)], not in builder chain — CLI auto-inserts incorrectly
+- [Phase 01-foundation 01-02]: use tauri::Emitter required in shortcut handler closures — applies everywhere app.emit() is called
+- [Phase 01-foundation 01-02]: desktop.json capability windows list must match actual window labels — CLI generates "main" but this app only has "settings"
 
 ### Pending Todos
 
@@ -77,5 +81,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 01-foundation/01-01-PLAN.md (Tauri app scaffold)
+Stopped at: Completed 01-foundation/01-02-PLAN.md (Global hotkey Ctrl+Shift+Space)
 Resume file: None
