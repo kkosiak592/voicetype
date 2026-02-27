@@ -12,7 +12,7 @@ VoiceType is built in strict dependency order: the framework and hotkey system m
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation** - Tauri scaffold, global hotkey, system tray, and settings persistence
+- [x] **Phase 1: Foundation** - Tauri scaffold, global hotkey, system tray, and settings persistence (completed 2026-02-27)
 - [ ] **Phase 2: Audio + Whisper** - Microphone capture pipeline and GPU-verified whisper transcription
 - [ ] **Phase 3: Core Pipeline** - End-to-end hold-to-talk: hotkey to audio to transcription to text injection
 - [ ] **Phase 4: Pill Overlay** - Floating transparent overlay with visualizer and no-focus-steal guarantee
@@ -136,7 +136,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 2/3 | In Progress|  |
+| 1. Foundation | 3/3 | Complete   | 2026-02-27 |
 | 2. Audio + Whisper | 0/3 | Not started | - |
 | 3. Core Pipeline | 0/2 | Not started | - |
 | 4. Pill Overlay | 0/2 | Not started | - |

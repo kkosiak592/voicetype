@@ -43,10 +43,10 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Settings & Configuration
 
 - [ ] **SET-01**: App has a settings panel UI for configuring hotkeys, model, microphone, profiles, and corrections
-- [ ] **SET-02**: User can configure the global hotkey binding (choose any key or key combo)
+- [x] **SET-02**: User can configure the global hotkey binding (choose any key or key combo)
 - [ ] **SET-03**: User can select which whisper model to use (large-v3-turbo for GPU, small for CPU, medium as alternative)
 - [ ] **SET-04**: User can select which microphone to use from available input devices
-- [ ] **SET-05**: Settings persist across app restarts (tauri-plugin-store)
+- [x] **SET-05**: Settings persist across app restarts (tauri-plugin-store)
 
 ### Distribution
 
@@ -121,10 +121,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VOC-05 | Phase 6 | Pending |
 | VOC-06 | Phase 6 | Pending |
 | SET-01 | Phase 6 | Pending |
-| SET-02 | Phase 1 | Pending |
+| SET-02 | Phase 1 | Complete |
 | SET-03 | Phase 6 | Pending |
 | SET-04 | Phase 6 | Pending |
-| SET-05 | Phase 1 | Pending |
+| SET-05 | Phase 1 | Complete |
 | DIST-01 | Phase 7 | Pending |
 | DIST-02 | Phase 7 | Pending |
 | DIST-03 | Phase 7 | Pending |
