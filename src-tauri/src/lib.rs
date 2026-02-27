@@ -3,6 +3,21 @@ mod tray;
 use tauri::{Emitter, Manager};
 use tray::build_tray;
 
+/// Read the saved hotkey from settings.json in the app data directory.
+/// Returns None on first launch, file missing, or parse error — callers fall back to default.
+fn read_saved_hotkey(app: &tauri::App) -> Option<String> {
+    let data_dir = app.path().app_data_dir().ok()?;
+    let settings_path = data_dir.join("settings.json");
+
+    let contents = std::fs::read_to_string(&settings_path).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&contents).ok()?;
+
+    json.get("hotkey")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_owned())
+}
+
 #[tauri::command]
 fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<(), String> {
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -41,11 +56,17 @@ pub fn run() {
         .setup(|app| {
             build_tray(app)?;
 
+            // Determine hotkey to register: use saved setting if present, else default
+            let hotkey = read_saved_hotkey(app)
+                .unwrap_or_else(|| "ctrl+shift+space".to_owned());
+
+            println!("Registering hotkey: {}", hotkey);
+
             // Register global hotkey plugin (desktop only — no Android/iOS support)
             #[cfg(desktop)]
             app.handle().plugin(
                 tauri_plugin_global_shortcut::Builder::new()
-                    .with_shortcuts(["ctrl+shift+space"])?
+                    .with_shortcuts([hotkey.as_str()])?
                     .with_handler(|app, shortcut, event| {
                         use tauri_plugin_global_shortcut::ShortcutState;
                         if event.state == ShortcutState::Pressed {

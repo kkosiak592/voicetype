@@ -1,1 +1,5 @@
 @import "tailwindcss";
+
+/* Dark mode via .dark class on html element (not prefers-color-scheme).
+   Tailwind v4: dark mode variant is configured via the @variant directive. */
+@variant dark (&:where(.dark, .dark *));
