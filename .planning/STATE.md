@@ -1,3 +1,16 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: unknown
+last_updated: "2026-02-27T15:48:03.806Z"
+progress:
+  total_phases: 2
+  completed_phases: 0
+  total_plans: 3
+  completed_plans: 1
+---
+
 # Project State
 
 ## Project Reference
@@ -10,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-02-27)
 ## Current Position
 
 Phase: 1 of 7 (Foundation)
-Plan: 0 of 3 in current phase
-Status: Ready to plan
-Last activity: 2026-02-27 — Roadmap created from requirements and research
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-02-27 — Completed 01-01 (Tauri app scaffold)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 5%
 
 ## Performance Metrics
 
@@ -34,6 +47,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 01-foundation P01 | 22 | 1 tasks | 23 files |
 
 ## Accumulated Context
 
@@ -46,6 +60,9 @@ Recent decisions affecting current work:
 - [Init]: Clipboard paste as primary injection — 50-100ms delays must be built in from day one, not retrofitted
 - [Init]: Win32 WS_EX_NOACTIVATE required for overlay — Tauri config `focus: false` is insufficient on Windows (issue #11566)
 - [Init]: CUDA build must set CMAKE_CUDA_ARCHITECTURES=61 explicitly — silent CPU fallback is a known failure mode
+- [Phase 01-foundation]: show_menu_on_left_click(false) replaces deprecated menu_on_left_click in Tauri 2.10.x tray API
+- [Phase 01-foundation]: use tauri::Manager must be explicitly imported to call get_webview_window on AppHandle — not re-exported from tauri prelude
+- [Phase 01-foundation]: App identifier must not end in .app — use com.voicetype.desktop to avoid macOS bundle extension conflict
 
 ### Pending Todos
 
@@ -60,5 +77,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Roadmap and STATE initialized; ready to begin Phase 1 planning
+Stopped at: Completed 01-foundation/01-01-PLAN.md (Tauri app scaffold)
 Resume file: None
