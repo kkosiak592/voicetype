@@ -24,6 +24,8 @@ rubato = "0.15"
 hound = "3"
 log = "0.4"
 env_logger = "0.11"
+# Requires: CUDA_PATH env var (CUDA Toolkit 11.7) + LIBCLANG_PATH (for bindgen) + CMAKE_CUDA_ARCHITECTURES=61
+# First build takes 10-30 minutes (compiles whisper.cpp with CUDA via cmake)
 whisper-rs = { version = "0.15", features = ["cuda"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
