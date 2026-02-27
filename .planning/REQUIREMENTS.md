@@ -10,7 +10,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Core Pipeline
 
 - [x] **CORE-01**: User can activate voice recording via a system-wide global hotkey from any application
-- [ ] **CORE-02**: App captures microphone audio at 16kHz via cpal/WASAPI
+- [x] **CORE-02**: App captures microphone audio at 16kHz via cpal/WASAPI
 - [x] **CORE-03**: App transcribes audio using whisper.cpp (whisper-rs) with GPU acceleration on CUDA 11.7
 - [ ] **CORE-04**: App falls back to CPU inference (whisper small model) when no NVIDIA GPU is detected
 - [ ] **CORE-05**: Transcribed text is injected at the active cursor position via clipboard paste (Ctrl+V)
@@ -100,7 +100,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CORE-01 | Phase 1 | Complete |
-| CORE-02 | Phase 2 | Pending |
+| CORE-02 | Phase 2 | Complete |
 | CORE-03 | Phase 2 | Complete |
 | CORE-04 | Phase 2 | Pending |
 | CORE-05 | Phase 3 | Pending |

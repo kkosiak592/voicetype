@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-27T16:25:55.061Z"
+last_updated: "2026-02-27T16:44:14.218Z"
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 6
-  completed_plans: 3
+  completed_plans: 5
 ---
 
 # Project State
@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-02-27)
 ## Current Position
 
 Phase: 2 of 7 (Audio + Whisper)
-Plan: 2 of 3 in current phase (Task 1 complete, blocked at human-verify checkpoint)
-Status: Phase 2 Plan 2 — whisper-rs CUDA module written, blocked on CUDA Toolkit install for build verification
-Last activity: 2026-02-27 — Completed 02-02 Task 1 (code written, blocked on env setup for Task 1 verify + Task 2)
+Plan: 2 of 3 in current phase (Plan 01 complete — audio capture; Plan 02 blocked on env setup)
+Status: Phase 2 Plan 01 complete — audio.rs with persistent cpal stream, rubato resampling, 3 Tauri commands. Plan 02-02 still blocked on LIBCLANG_PATH + CUDA Toolkit install
+Last activity: 2026-02-27 — Completed 02-01 (audio capture, cargo build passes without whisper feature)
 
 Progress: [███░░░░░░░] 14%
 
@@ -50,6 +50,7 @@ Progress: [███░░░░░░░] 14%
 | Phase 01-foundation P01 | 22 | 1 tasks | 23 files |
 | Phase 01-foundation P02 | 5 | 1 tasks | 4 files |
 | Phase 01-foundation P03 | 4 | 1 tasks | 7 files |
+| Phase 02-audio-whisper P01 | 14 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,9 @@ Recent decisions affecting current work:
 - [Phase 02-audio-whisper 02-02]: whisper-rs cuda feature requires CUDA_PATH env var at build time — CUDA Toolkit must be installed (not just drivers)
 - [Phase 02-audio-whisper 02-02]: WhisperState uses Option<Arc<WhisperContext>> so app starts without model, logs warning with download instructions
 - [Phase 02-audio-whisper 02-02]: CMAKE_CUDA_ARCHITECTURES=61 must be set before build for Pascal arch (P2000) — silent CPU fallback if omitted
+- [Phase 02-audio-whisper 02-01]: cpal 0.17 SampleRate is type alias u32, not tuple struct — access directly without .0 field
+- [Phase 02-audio-whisper 02-01]: whisper-rs requires LIBCLANG_PATH even without cuda feature (bindgen generates C FFI) — make optional behind Cargo feature flag when env not available
+- [Phase 02-audio-whisper 02-01]: try_lock() not lock() in cpal audio callbacks — lock() can deadlock the callback thread (cpal issue #970)
 
 ### Pending Todos
 
@@ -90,6 +94,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Phase 2 Plan 02 — whisper-rs CUDA module committed (1e13ccd), awaiting CUDA environment setup and GPU verification
-Resume signal: After CUDA Toolkit installed, LIBCLANG_PATH set, CMAKE_CUDA_ARCHITECTURES=61 set, and model downloaded — run `cargo build` then `cargo tauri dev` to verify GPU, then approve checkpoint
+Stopped at: Completed 02-01-PLAN.md — audio capture module done, cargo build passes
+Resume signal: Install LIBCLANG_PATH (LLVM) + CUDA Toolkit 11.7 to unblock Plan 02-02 whisper build; after env setup run `cargo build --features whisper` to verify
 Resume file: .planning/phases/02-audio-whisper/02-02-SUMMARY.md
