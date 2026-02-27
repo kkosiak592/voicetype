@@ -46,12 +46,12 @@ Plans:
   1. App captures microphone audio via WASAPI and saves a WAV file that plays back correctly at 16kHz
   2. App transcribes a test WAV file using whisper-rs and prints the result to console in under 500ms on the NVIDIA P2000 (verified via Task Manager GPU utilization, not assumed)
   3. On a machine with no NVIDIA GPU, the app falls back to CPU inference using the small model and completes transcription (latency is acceptable; GPU speed is not required on CPU machines)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: Audio capture — integrate cpal WASAPI, implement resampling to 16kHz (rubato), send samples via mpsc channel, write WAV output for verification
-- [ ] 02-02: Whisper integration — build whisper-rs with CUDA 11.7 Pascal flags (CMAKE_CUDA_ARCHITECTURES=61), load model, run inference in spawn_blocking, verify GPU utilization
-- [ ] 02-03: CPU fallback — implement GPU detection logic, wire model size selection (large-v3-turbo-q5_0 vs small), verify fallback inference completes
+- [ ] 02-01-PLAN.md — Persistent audio capture via cpal WASAPI with rubato resampling to 16kHz mono, WAV output for verification
+- [ ] 02-02-PLAN.md — Whisper-rs with CUDA 11.7 Pascal build, model loading, GPU inference, Task Manager GPU verification
+- [ ] 02-03-PLAN.md — GPU detection via nvml-wrapper, model size selection (large-v3-turbo vs small.en), CPU fallback verification
 
 ### Phase 3: Core Pipeline
 **Goal**: A working end-to-end hold-to-talk dictation loop — hold hotkey, speak, release, see text appear at the cursor — proven before any UI or polish is added on top
