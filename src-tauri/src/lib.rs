@@ -1,12 +1,22 @@
+mod audio;
 mod tray;
+
+// transcribe.rs requires whisper-rs which needs LIBCLANG_PATH + optional CUDA.
+// Gate it behind the "whisper" Cargo feature so the project builds without
+// LLVM installed (audio-only verification, Phase 2 Plan 01).
+#[cfg(feature = "whisper")]
 mod transcribe;
 
+#[cfg(feature = "whisper")]
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
 use tray::build_tray;
+
+// WhisperState and related types are only available with the whisper feature.
+#[cfg(feature = "whisper")]
 use whisper_rs::WhisperContext;
 
-/// Tauri managed state holding the loaded WhisperContext (if the model file was found).
+#[cfg(feature = "whisper")]
 pub struct WhisperState(pub Option<Arc<WhisperContext>>);
 
 /// Read the saved hotkey from settings.json in the app data directory.
@@ -45,13 +55,55 @@ fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<
     Ok(())
 }
 
-/// Tauri command for testing whisper inference on a WAV file.
+/// Start recording: clears the audio buffer and sets the recording flag.
+///
+/// Audio captured after this call is accumulated in memory at 16kHz mono.
+#[tauri::command]
+fn start_recording(state: tauri::State<'_, audio::AudioCapture>) -> Result<(), String> {
+    state.clear_buffer();
+    state.recording.store(true, std::sync::atomic::Ordering::Relaxed);
+    log::info!("Recording started");
+    Ok(())
+}
+
+/// Stop recording: clears the recording flag, flushes the resampler,
+/// and returns the number of 16kHz samples captured.
+#[tauri::command]
+fn stop_recording(state: tauri::State<'_, audio::AudioCapture>) -> Result<usize, String> {
+    let n = state.flush_and_stop();
+    let seconds = n as f32 / 16000.0;
+    log::info!("Recording stopped: {} samples ({:.1}s)", n, seconds);
+    Ok(n)
+}
+
+/// Save the captured audio buffer to a WAV file in test-fixtures/.
+///
+/// Returns the file path on success.
+#[tauri::command]
+fn save_test_wav(state: tauri::State<'_, audio::AudioCapture>) -> Result<String, String> {
+    let samples = state.get_buffer();
+    let path = "test-fixtures/capture-test.wav".to_string();
+
+    audio::write_wav(&path, &samples).map_err(|e| e.to_string())?;
+
+    log::info!(
+        "WAV saved: {} ({} samples, {:.1}s)",
+        path,
+        samples.len(),
+        samples.len() as f32 / 16000.0
+    );
+
+    Ok(path)
+}
+
+/// Test whisper inference on a WAV file.
 ///
 /// Reads the WAV at `path`, normalises samples to f32, and runs transcription
 /// using the GPU-accelerated WhisperContext stored in managed state.
-/// Returns the transcription text and duration in milliseconds.
+/// Returns the transcription text prefixed with duration in milliseconds.
 ///
-/// If the model was not loaded at startup (missing model file), returns an error.
+/// Only available when compiled with the "whisper" feature flag.
+#[cfg(feature = "whisper")]
 #[tauri::command]
 async fn transcribe_test_file(
     app: tauri::AppHandle,
@@ -95,7 +147,6 @@ async fn transcribe_test_file(
                 .samples::<f32>()
                 .collect::<Result<_, _>>()
                 .map_err(|e| format!("Failed to read WAV samples: {}", e))?;
-            // Downmix to mono by averaging channels
             samples
                 .chunks(channels)
                 .map(|ch| ch.iter().sum::<f32>() / channels as f32)
@@ -107,7 +158,6 @@ async fn transcribe_test_file(
                 .samples::<i32>()
                 .collect::<Result<_, _>>()
                 .map_err(|e| format!("Failed to read WAV samples: {}", e))?;
-            // Downmix to mono and normalise to [-1.0, 1.0]
             samples
                 .chunks(channels)
                 .map(|ch| {
@@ -140,7 +190,10 @@ async fn transcribe_test_file(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    env_logger::init();
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("info"),
+    )
+    .init();
 
     tauri::Builder::default()
         // single-instance MUST be registered first (before setup)
@@ -153,7 +206,14 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_autostart::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![rebind_hotkey, transcribe_test_file])
+        .invoke_handler(tauri::generate_handler![
+            rebind_hotkey,
+            start_recording,
+            stop_recording,
+            save_test_wav,
+            #[cfg(feature = "whisper")]
+            transcribe_test_file,
+        ])
         .setup(|app| {
             build_tray(app)?;
 
@@ -178,28 +238,43 @@ pub fn run() {
                     .build(),
             )?;
 
-            // Attempt to load the whisper model — app continues even if model is missing
-            let whisper_ctx = match transcribe::resolve_model_path() {
-                Ok(model_path) => {
-                    let model_str = model_path.to_string_lossy().to_string();
-                    match transcribe::load_whisper_context(&model_str) {
-                        Ok(ctx) => {
-                            log::info!("CUDA whisper context initialized successfully");
-                            Some(Arc::new(ctx))
-                        }
-                        Err(e) => {
-                            log::error!("Whisper model not loaded: {}", e);
-                            None
-                        }
-                    }
+            // Start persistent audio capture stream.
+            // App continues even if microphone is unavailable.
+            match audio::start_persistent_stream() {
+                Ok(capture) => {
+                    log::info!("Audio capture initialized successfully");
+                    app.manage(capture);
                 }
                 Err(e) => {
-                    log::warn!("Whisper model not loaded: {}", e);
-                    None
+                    log::error!("Audio capture failed to initialize: {} — recording commands will not function", e);
                 }
-            };
+            }
 
-            app.manage(WhisperState(whisper_ctx));
+            // Load whisper model (only when compiled with "whisper" feature).
+            #[cfg(feature = "whisper")]
+            {
+                let whisper_ctx = match transcribe::resolve_model_path() {
+                    Ok(model_path) => {
+                        let model_str = model_path.to_string_lossy().to_string();
+                        match transcribe::load_whisper_context(&model_str) {
+                            Ok(ctx) => {
+                                log::info!("CUDA whisper context initialized successfully");
+                                Some(Arc::new(ctx))
+                            }
+                            Err(e) => {
+                                log::error!("Whisper model not loaded: {}", e);
+                                None
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!("Whisper model not loaded: {}", e);
+                        None
+                    }
+                };
+
+                app.manage(WhisperState(whisper_ctx));
+            }
 
             Ok(())
         })
