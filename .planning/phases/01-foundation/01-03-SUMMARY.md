@@ -61,7 +61,7 @@ completed: 2026-02-27
 - **Duration:** ~4 min
 - **Started:** 2026-02-27T15:57:25Z
 - **Completed:** 2026-02-27T16:00:46Z
-- **Tasks:** 1 completed (Task 2 is human-verify checkpoint, pending)
+- **Tasks:** 2 completed (1 auto + 1 human-verify checkpoint — all 13 checks passed)
 - **Files modified:** 7
 
 ## Accomplishments
@@ -80,6 +80,7 @@ completed: 2026-02-27
 Each task was committed atomically:
 
 1. **Task 1: Settings store, hotkey restore on startup, and settings UI** - `ba52dee` (feat)
+2. **Task 2: Verify full Phase 1 functionality** - Checkpoint approved — all 13 verification checks passed (no code commit)
 
 ## Files Created/Modified
 
@@ -102,9 +103,9 @@ Each task was committed atomically:
 
 None - plan executed exactly as written.
 
-## Checkpoint Status
+## Checkpoint Outcome
 
-**Task 2 (human-verify):** Awaiting manual verification of full Phase 1 functionality. See verification steps in 01-03-PLAN.md Task 2.
+**Task 2 (human-verify):** All 13 verification checks passed. Phase 1 success criteria fully satisfied.
 
 ---
 
@@ -122,4 +123,4 @@ None - plan executed exactly as written.
 
 ---
 *Phase: 01-foundation*
-*Completed: 2026-02-27 (checkpoint pending human verify)*
+*Completed: 2026-02-27*
