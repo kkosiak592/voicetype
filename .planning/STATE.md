@@ -123,6 +123,7 @@ None yet.
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
 | 1 | Premium pill UI rework — monochrome luxury redesign | 2026-02-28 | 52d726c | Verified | [1-premium-pill-ui-rework-monochrome-luxury](./quick/1-premium-pill-ui-rework-monochrome-luxury/) |
+| 2 | Fix pill rounded corner haziness via set_shadow | 2026-02-28 | 527b0f9 | Awaiting verification | [2-fix-pill-rounded-corner-haziness-via-set](./quick/2-fix-pill-rounded-corner-haziness-via-set/) |
 
 ### Blockers/Concerns
 
@@ -135,6 +136,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Plan 04.1-02 complete — Pill.tsx animation orchestrator wired with all premium components, user-approved.
+Stopped at: Quick task 2 — fix pill corner haziness — task 1 committed (527b0f9), awaiting human verification of visual result.
 Resume signal: Phase 04.1 fully complete. Execute Phase 05 (VAD — Voice Activity Detection).
 Resume file: .planning/phases/05-vad/ (plan TBD)
