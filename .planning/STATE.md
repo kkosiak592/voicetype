@@ -8,7 +8,7 @@ progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-27)
 
 **Core value:** Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** Phase 2 — Audio + Whisper
+**Current focus:** Phase 3 — Core Pipeline
 
 ## Current Position
 
-Phase: 2 of 7 (Audio + Whisper) — COMPLETE
-Plan: 3 of 3 in phase 02 (all plans complete — audio capture, GPU whisper, GPU detection + CPU fallback)
-Status: Plan 02-03 complete — GPU detection via nvml-wrapper, ModelMode selection, force_cpu_transcribe command added. Phase 2 complete, Phase 3 (pipeline) next.
-Last activity: 2026-02-28 — Executed Plan 02-03 (GPU detection + CPU fallback)
+Phase: 3 of 7 (Core Pipeline) — IN PROGRESS
+Plan: 1 of 3 in phase 03 complete — text injection (inject.rs) + tray icon state switching
+Status: Plan 03-01 complete — inject_text() with clipboard save/restore, set_tray_state() with three icon states. Plan 03-02 (pipeline orchestration) next.
+Last activity: 2026-02-28 — Executed Plan 03-01 (text injection + tray state)
 
-Progress: [█████░░░░░] 29%
+Progress: [██████░░░░] 38%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [█████░░░░░] 29%
 | Phase 01-foundation P03 | 4 | 1 tasks | 7 files |
 | Phase 02-audio-whisper P01 | 14 | 2 tasks | 3 files |
 | Phase 02-audio-whisper P03 | 14 | 1 tasks | 4 files |
+| Phase 03-core-pipeline P01 | 35 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,9 @@ Recent decisions affecting current work:
 - [Phase 02-audio-whisper 02-03]: detect_gpu() falls back to Cpu on any NVML error (no GPU, no drivers, init failure) — safe default
 - [Phase 02-audio-whisper 02-03]: force_cpu_transcribe creates fresh WhisperContext per call with use_gpu(false) — not stored in managed state, Phase 2 test-only command
 - [Phase 02-audio-whisper 02-03]: LIBCLANG_PATH/BINDGEN_EXTRA_CLANG_ARGS Windows user env vars don't propagate to bash shell — build must run via PowerShell (build-whisper.ps1)
+- [Phase 03-core-pipeline 03-01]: tauri::image::Image::from_bytes is gated behind image-png (or image-ico) Cargo feature — must add "image-png" to tauri features for runtime icon loading
+- [Phase 03-core-pipeline 03-01]: TrayIconBuilder::with_id(id) takes only the ID string — icon set via separate .icon() chain; verified from tauri 2.10.2 source
+- [Phase 03-core-pipeline 03-01]: PNG format accepted for tray icons when image-png feature enabled — no need for ICO conversion
 
 ### Pending Todos
 
@@ -99,6 +103,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Plan 02-03 complete — GPU detection + CPU fallback added. Phase 2 all plans complete.
-Resume signal: Execute Phase 3 (pipeline) — Phase 3 plans already created at .planning/phases/03-core-pipeline/
-Resume file: .planning/phases/03-core-pipeline/ (plans 01+ available)
+Stopped at: Plan 03-01 complete — inject.rs + tray state switching. Phase 3 Plan 1 of 3 done.
+Resume signal: Execute Plan 03-02 — pipeline orchestration (hold-to-talk hotkey, AtomicU8 state machine, run_pipeline)
+Resume file: .planning/phases/03-core-pipeline/03-02-PLAN.md

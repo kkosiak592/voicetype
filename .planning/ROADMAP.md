@@ -138,7 +138,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | Complete   | 2026-02-27 |
 | 2. Audio + Whisper | 3/3 | Complete   | 2026-02-28 |
-| 3. Core Pipeline | 0/2 | Not started | - |
+| 3. Core Pipeline | 1/2 | In Progress | - |
 | 4. Pill Overlay | 0/2 | Not started | - |
 | 5. VAD + Toggle Mode | 0/2 | Not started | - |
 | 6. Vocabulary + Settings | 0/3 | Not started | - |
