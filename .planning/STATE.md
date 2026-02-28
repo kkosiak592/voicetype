@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T20:53:55.323Z"
+last_updated: "2026-02-28T21:30:01.796Z"
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 4
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 12
+  completed_plans: 11
 ---
 
 # Project State
@@ -55,6 +55,7 @@ Progress: [██████████] 100%
 | Phase 03-core-pipeline P01 | 35 | 2 tasks | 7 files |
 | Phase 03-core-pipeline P02 | 2 | 2 tasks | 2 files |
 | Phase 04-pill-overlay P02 | 60 | 3 tasks | 8 files |
+| Phase 04.1 P01 | 3 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,9 @@ Recent decisions affecting current work:
 - [Phase 04-pill-overlay]: tokio added as explicit dep with time feature — tauri re-exports its runtime but tokio crate not directly available for tokio::time::sleep
 - [Phase 04-pill-overlay]: ignore idle pill-state event in Pill.tsx — pill-hide from reset_to_idle() handles hidden transition, preventing race where idle clears success/error flash before animation completes
 - [Phase 04-pill-overlay 04-02]: core:window:allow-show, allow-hide, allow-set-position must be explicitly granted in capabilities — not included in core:default (same pattern as allow-set-focusable from 04-01)
+- [Phase 04.1-01]: No backdrop-filter in pill.css — Windows WebView2 transparent window bug #4945 makes it silently fail
+- [Phase 04.1-01]: FrequencyBars reads level via useRef in RAF loop — prevents restarting animation on every audio update
+- [Phase 04.1-01]: Gaussian bell curve replaces BAND_MULTIPLIERS for bar height distribution — 12 fixed bars, more natural center-tall waveform
 
 ### Roadmap Evolution
 
@@ -120,6 +124,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Plan 04-02 complete — pill visualizer + pipeline state display verified end-to-end.
-Resume signal: Phase 04 complete. Begin Phase 05 planning (VAD — voice activity detection).
-Resume file: .planning/phases/05-vad/ (to be created)
+Stopped at: Plan 04.1-01 complete — glassmorphism CSS foundation, ProcessingDots, CheckmarkIcon, FrequencyBars RAF rewrite.
+Resume signal: Phase 04.1 Plan 01 complete. Execute Phase 04.1 Plan 02 (wire components into Pill.tsx state machine).
+Resume file: .planning/phases/04.1-premium-pill-overlay-ui-polish/04.1-02-PLAN.md
