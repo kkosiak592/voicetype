@@ -8,7 +8,8 @@
     "linux"
   ],
   "windows": [
-    "settings"
+    "settings",
+    "pill"
   ],
   "permissions": [
     "global-shortcut:allow-is-registered",

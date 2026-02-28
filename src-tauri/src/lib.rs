@@ -304,6 +304,32 @@ pub fn run() {
         .setup(|app| {
             build_tray(app)?;
 
+            // Configure pill overlay: no focus steal + restore saved position
+            if let Some(pill_window) = app.get_webview_window("pill") {
+                // focusable(false) prevents WS_EX_NOACTIVATE — pill never steals focus
+                let _ = pill_window.set_focusable(false);
+
+                // Restore saved pill position from settings.json (sync read — same pattern as read_saved_hotkey)
+                let data_dir = app.path().app_data_dir().ok();
+                if let Some(dir) = data_dir {
+                    let settings_path = dir.join("settings.json");
+                    if let Ok(contents) = std::fs::read_to_string(&settings_path) {
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents) {
+                            if let Some(pos) = json.get("pill-position") {
+                                if let (Some(x), Some(y)) = (
+                                    pos.get("x").and_then(|v| v.as_f64()),
+                                    pos.get("y").and_then(|v| v.as_f64()),
+                                ) {
+                                    let _ = pill_window.set_position(tauri::PhysicalPosition::new(x as i32, y as i32));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                log::info!("Pill overlay window configured (focusable=false)");
+            }
+
             // Determine hotkey to register: use saved setting if present, else default
             let hotkey = read_saved_hotkey(app)
                 .unwrap_or_else(|| "ctrl+shift+space".to_owned());

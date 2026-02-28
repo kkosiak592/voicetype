@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "default permissions for VoiceType settings window",
-  "windows": ["settings"],
+  "windows": ["settings", "pill"],
   "permissions": [
     "core:default",
     "store:default",

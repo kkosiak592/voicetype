@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+/* Pill window has transparent background — all color comes from React components */
+html, body, #pill-root {
+  background: transparent !important;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
