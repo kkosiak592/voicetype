@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-02-27)
 Phase: 4.1 of 7 (Premium Pill Overlay UI Polish) — COMPLETE
 Plan: 2 of 2 in phase 04.1 complete — premium pill overlay visually verified and approved
 Status: Plan 04.1-02 complete — Pill.tsx rewritten with dual-state animation orchestrator (animState + displayState), FrequencyBars/ProcessingDots/CheckmarkIcon wired, 160x48 window, all transitions user-approved. Phase 04.1 done. Phase 05 (VAD) next.
-Last activity: 2026-02-28 — Executed Plan 04.1-02 (premium pill integration), user visually verified all state transitions
+Last activity: 2026-02-28 - Completed quick task 1: Premium pill UI rework — monochrome luxury redesign
 
 Progress: [██████████] 100%
 
@@ -117,6 +117,12 @@ Recent decisions affecting current work:
 ### Pending Todos
 
 None yet.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 1 | Premium pill UI rework — monochrome luxury redesign | 2026-02-28 | 52d726c | Verified | [1-premium-pill-ui-rework-monochrome-luxury](./quick/1-premium-pill-ui-rework-monochrome-luxury/) |
 
 ### Blockers/Concerns
 
