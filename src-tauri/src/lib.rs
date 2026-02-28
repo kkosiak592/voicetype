@@ -1,5 +1,6 @@
 mod audio;
 mod inject;
+mod pipeline;
 mod tray;
 
 // transcribe.rs requires whisper-rs which needs LIBCLANG_PATH + optional CUDA.
@@ -286,6 +287,9 @@ pub fn run() {
                 .unwrap_or_else(|| "ctrl+shift+space".to_owned());
 
             log::info!("Registering hotkey: {}", hotkey);
+
+            // Register pipeline state machine BEFORE hotkey handler
+            app.manage(pipeline::PipelineState::new());
 
             // Register global hotkey plugin (desktop only — no Android/iOS support)
             #[cfg(desktop)]
