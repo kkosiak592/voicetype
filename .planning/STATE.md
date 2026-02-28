@@ -101,6 +101,10 @@ Recent decisions affecting current work:
 - [Phase 04-pill-overlay]: ignore idle pill-state event in Pill.tsx — pill-hide from reset_to_idle() handles hidden transition, preventing race where idle clears success/error flash before animation completes
 - [Phase 04-pill-overlay 04-02]: core:window:allow-show, allow-hide, allow-set-position must be explicitly granted in capabilities — not included in core:default (same pattern as allow-set-focusable from 04-01)
 
+### Roadmap Evolution
+
+- Phase 04.1 inserted after Phase 04: Premium pill overlay UI polish (URGENT) — fix outline frame, premium waveform visualizer, modern aesthetic
+
 ### Pending Todos
 
 None yet.
