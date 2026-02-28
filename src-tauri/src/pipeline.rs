@@ -70,7 +70,7 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
 
     // 3. Run whisper inference (blocking — whisper-rs is sync)
     #[cfg(feature = "whisper")]
-    let transcription = {
+    let transcription: String = {
         let whisper_state = app.state::<crate::WhisperState>();
         let ctx = match &whisper_state.0 {
             Some(ctx) => ctx.clone(),
@@ -80,7 +80,7 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
                 return;
             }
         };
-        match tokio::task::spawn_blocking(move || {
+        match tauri::async_runtime::spawn_blocking(move || {
             crate::transcribe::transcribe_audio(&ctx, &samples)
         })
         .await
@@ -132,7 +132,7 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
         );
 
         // 5. Inject text (blocking — arboard + enigo are sync)
-        match tokio::task::spawn_blocking(move || crate::inject::inject_text(&to_inject)).await {
+        match tauri::async_runtime::spawn_blocking(move || crate::inject::inject_text(&to_inject)).await {
             Ok(Ok(())) => {
                 log::info!("Pipeline: injection complete");
                 // Tray tooltip for development debugging: show last transcription
