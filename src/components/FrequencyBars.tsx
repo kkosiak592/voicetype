@@ -4,10 +4,10 @@ interface FrequencyBarsProps {
   level: number; // 0.0 - 1.0 normalized RMS from backend
 }
 
-const BAR_COUNT = 12;
+const BAR_COUNT = 24;
 
-// Per-bar sinusoidal frequencies (Hz) — spread across 1.2–3.0 Hz range
-const BAR_FREQS = [1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0, 2.7, 2.4, 2.1, 1.8, 1.5];
+// Per-bar sinusoidal frequencies (Hz) — mirrored pattern: ascending first 12, descending last 12
+const BAR_FREQS = [1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.3, 2.6, 2.9, 3.2, 3.4, 3.5, 3.5, 3.4, 3.2, 2.9, 2.6, 2.3, 2.0, 1.8, 1.6, 1.4, 1.2, 1.0];
 
 // Per-bar phase offsets — spread evenly across 2π so bars wave in sequence
 const BAR_PHASES = BAR_FREQS.map((_, i) => (i / BAR_COUNT) * Math.PI * 2);
@@ -40,10 +40,9 @@ export function FrequencyBars({ level }: FrequencyBarsProps) {
     const bars: HTMLDivElement[] = [];
     for (let i = 0; i < BAR_COUNT; i++) {
       const bar = document.createElement("div");
-      bar.style.width = "3px";
+      bar.style.width = "4px";
       bar.style.borderRadius = "9999px";
-      bar.style.background = "linear-gradient(to top, #6366f1, #c084fc)";
-      bar.style.transition = "height 40ms ease-out";
+      bar.style.background = "white";
       bar.style.flexShrink = "0";
       container.appendChild(bar);
       bars.push(bar);
@@ -63,10 +62,12 @@ export function FrequencyBars({ level }: FrequencyBarsProps) {
         const activeHeight = lv * BELL[i] * ((wave + 1) / 2);
         // Idle wave: always running so bars are never fully flat
         const idleWave = 0.08 * BELL[i] * ((Math.sin(2 * Math.PI * 1.2 * t + BAR_PHASES[i]) + 1) / 2);
-        // Composite height as fraction of container (0–1), then to px (container is 22px)
+        // Composite height as fraction of container (0–1), then to px (container is 36px)
         const fraction = Math.max(0.05, activeHeight + idleWave);
-        const heightPx = Math.round(fraction * 22);
+        const heightPx = Math.round(fraction * 36);
         bars[i].style.height = `${heightPx}px`;
+        // Opacity scaling: shorter bars are more transparent, taller bars are opaque
+        bars[i].style.opacity = String(0.4 + fraction * 0.6);
       }
 
       rafRef.current = requestAnimationFrame(tick);
@@ -85,8 +86,8 @@ export function FrequencyBars({ level }: FrequencyBarsProps) {
   return (
     <div
       ref={containerRef}
-      className="flex items-end gap-[2px]"
-      style={{ height: "22px" }}
+      className="flex items-center gap-[2px]"
+      style={{ height: "36px" }}
     />
   );
 }

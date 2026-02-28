@@ -4,8 +4,8 @@ export function ProcessingDots() {
       {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="w-[5px] h-[5px] rounded-full bg-indigo-400 pill-dot-bounce"
-          style={{ animationDelay: `${i * 120}ms` }}
+          className="w-[6px] h-[6px] rounded-full bg-white pill-dot-pulse"
+          style={{ animationDelay: `${i * 200}ms` }}
         />
       ))}
     </div>
