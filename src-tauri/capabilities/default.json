@@ -5,6 +5,8 @@
   "windows": ["settings", "pill"],
   "permissions": [
     "core:default",
+    "core:window:allow-set-focusable",
+    "core:window:allow-start-dragging",
     "store:default",
     "autostart:allow-enable",
     "autostart:allow-disable",

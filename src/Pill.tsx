@@ -49,13 +49,12 @@ export function Pill() {
     return () => unlisteners.forEach((u) => u());
   }, []);
 
-  // Drag handling: startDragging on mousedown, save position on mouseup
+  // Drag handling: temporarily enable focusable for drag, restore after
   const handleMouseDown = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault();
+    await appWindow.setFocusable(true);
     await appWindow.startDragging();
-  }, []);
-
-  const handleMouseUp = useCallback(async () => {
+    // startDragging resolves after drop — save position and restore no-focus-steal
     try {
       const pos = await appWindow.outerPosition();
       const store = await load("settings.json");
@@ -64,12 +63,12 @@ export function Pill() {
     } catch (e) {
       console.warn("Failed to save pill position:", e);
     }
+    await appWindow.setFocusable(false);
   }, []);
 
   return (
     <div
       onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
       className={`
         w-[120px] h-[40px] rounded-full
         bg-black/75 backdrop-blur-sm

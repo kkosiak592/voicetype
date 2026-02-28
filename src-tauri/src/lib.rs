@@ -306,7 +306,9 @@ pub fn run() {
 
             // Configure pill overlay: no focus steal + restore saved position
             if let Some(pill_window) = app.get_webview_window("pill") {
-                // focusable(false) prevents WS_EX_NOACTIVATE — pill never steals focus
+                log::info!("Pill window found — applying configuration");
+
+                // focusable(false) sets WS_EX_NOACTIVATE — pill never steals focus
                 let _ = pill_window.set_focusable(false);
 
                 // Restore saved pill position from settings.json (sync read — same pattern as read_saved_hotkey)
@@ -321,13 +323,14 @@ pub fn run() {
                                     pos.get("y").and_then(|v| v.as_f64()),
                                 ) {
                                     let _ = pill_window.set_position(tauri::PhysicalPosition::new(x as i32, y as i32));
+                                    log::info!("Pill position restored to ({}, {})", x, y);
                                 }
                             }
                         }
                     }
                 }
 
-                log::info!("Pill overlay window configured (focusable=false)");
+                log::info!("Pill overlay window configured (focusable=false, position restored)");
             }
 
             // Determine hotkey to register: use saved setting if present, else default
