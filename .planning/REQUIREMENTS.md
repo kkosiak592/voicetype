@@ -27,8 +27,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **UI-01**: A floating pill-shaped overlay appears on screen during recording (always-on-top, transparent, frameless)
 - [ ] **UI-02**: The pill overlay does not steal focus from the active application (Win32 WS_EX_NOACTIVATE)
-- [ ] **UI-03**: The pill displays an audio visualizer with frequency bars showing mic input levels
-- [ ] **UI-04**: The pill shows recording state (idle/recording/processing)
+- [x] **UI-03**: The pill displays an audio visualizer with frequency bars showing mic input levels
+- [x] **UI-04**: The pill shows recording state (idle/recording/processing)
 - [x] **UI-05**: App runs in the system tray with a context menu (Settings, Quit, version info)
 
 ### Vocabulary & Corrections
@@ -111,8 +111,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REC-04 | Phase 5 | Pending |
 | UI-01 | Phase 4 | Pending |
 | UI-02 | Phase 4 | Pending |
-| UI-03 | Phase 4 | Pending |
-| UI-04 | Phase 4 | Pending |
+| UI-03 | Phase 4 | Complete |
+| UI-04 | Phase 4 | Complete |
 | UI-05 | Phase 1 | Complete |
 | VOC-01 | Phase 6 | Pending |
 | VOC-02 | Phase 6 | Pending |

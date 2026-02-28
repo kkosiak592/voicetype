@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T14:38:54.619Z"
+last_updated: "2026-02-28T20:37:30.003Z"
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
+  total_phases: 4
+  completed_phases: 4
+  total_plans: 10
+  completed_plans: 10
 ---
 
 # Project State
@@ -96,6 +96,8 @@ Recent decisions affecting current work:
 - [Phase 04-pill-overlay 04-01]: core:window:allow-set-focusable and core:window:allow-start-dragging must be added explicitly to capabilities — not granted by core:default
 - [Phase 04-pill-overlay 04-01]: data-tauri-drag-region does not work on unfocusable windows — use startDragging() API for all overlay drag
 - [Phase 04-pill-overlay 04-01]: pill.html has no devUrl — dist/ must be pre-built before npx tauri dev; run npx vite build first
+- [Phase 04-pill-overlay]: tokio added as explicit dep with time feature — tauri re-exports its runtime but tokio crate not directly available for tokio::time::sleep
+- [Phase 04-pill-overlay]: ignore idle pill-state event in Pill.tsx — pill-hide from reset_to_idle() handles hidden transition, preventing race where idle clears success/error flash before animation completes
 
 ### Pending Todos
 
