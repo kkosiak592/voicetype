@@ -11,99 +11,97 @@ html, body, #pill-root {
 }
 
 /* ==========================================================================
-   Glassmorphism base class
+   Monochrome luxury glass base class
    NOTE: backdrop-filter: blur() intentionally omitted — silently fails on
    Windows WebView2 transparent windows (confirmed Microsoft bug #4945).
    ========================================================================== */
 
 .pill-glass {
-  background: rgba(15, 10, 30, 0.82);
-  border: 1px solid rgba(99, 102, 241, 0.28);
+  background: rgba(10, 10, 10, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 9999px;
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.10),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.20);
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 /* ==========================================================================
-   Entrance / exit keyframes
+   Entrance / exit keyframes — float-up entrance, sink-down exit
    ========================================================================== */
 
 @keyframes pill-enter {
   from {
     opacity: 0;
-    transform: scale(0.15);
+    transform: scale(0.85) translateY(8px);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateY(0);
   }
 }
 
 @keyframes pill-exit {
   from {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateY(0);
   }
   to {
     opacity: 0;
-    transform: scale(0.15);
+    transform: scale(0.92) translateY(6px);
   }
 }
 
 .pill-entering {
-  animation: pill-enter 220ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: pill-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
   transform-origin: center;
 }
 
 .pill-exiting {
-  animation: pill-exit 180ms ease-in forwards;
+  animation: pill-exit 200ms ease-in forwards;
   transform-origin: center;
 }
 
 /* ==========================================================================
-   Processing state — indigo glow pulse (replaces conic-gradient border)
+   Processing state — shimmer sweep pseudo-element (replaces indigo glow)
    ========================================================================== */
 
-@keyframes indigo-glow-pulse {
-  0%, 100% {
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.5),
-      inset 0 1px 0 rgba(255, 255, 255, 0.10),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.20);
-  }
-  50% {
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.5),
-      0 0 14px 4px rgba(99, 102, 241, 0.45),
-      inset 0 1px 0 rgba(255, 255, 255, 0.10),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.20);
-  }
+@keyframes shimmer-sweep {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
 }
 
 .pill-processing {
-  border: 1px solid rgba(99, 102, 241, 0.5);
-  animation: indigo-glow-pulse 1.8s ease-in-out infinite;
+  position: relative;
+  overflow: hidden;
+}
+
+.pill-processing::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.06) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer-sweep 2s ease-in-out infinite;
 }
 
 /* ==========================================================================
-   Dot bounce animation (ProcessingDots component)
+   Dot pulse animation (ProcessingDots component)
    ========================================================================== */
 
-@keyframes dot-bounce {
-  0%, 80%, 100% {
-    transform: translateY(0);
-    opacity: 0.5;
+@keyframes dot-pulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.85);
   }
-  40% {
-    transform: translateY(-5px);
+  50% {
     opacity: 1;
+    transform: scale(1);
   }
 }
 
-.pill-dot-bounce {
-  animation: dot-bounce 900ms ease-in-out infinite;
+.pill-dot-pulse {
+  animation: dot-pulse 1000ms ease-in-out infinite;
 }
 
 /* ==========================================================================
@@ -111,8 +109,8 @@ html, body, #pill-root {
    ========================================================================== */
 
 .pill-checkmark-draw {
-  stroke-dasharray: 22;
-  stroke-dashoffset: 22;
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
   animation: draw-check 280ms ease-out 40ms forwards;
 }
 
