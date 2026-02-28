@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T21:30:01.796Z"
+last_updated: "2026-02-28T23:09:42.120Z"
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
 ---
 
 # Project State
@@ -22,10 +22,10 @@ See: .planning/PROJECT.md (updated 2026-02-27)
 
 ## Current Position
 
-Phase: 4 of 7 (Pill Overlay) — COMPLETE
-Plan: 2 of 2 in phase 04 complete — pill visualizer + pipeline state display APPROVED
-Status: Plan 04-02 complete — frequency bar visualizer, animated pill states (recording/processing/success/error), and full backend event wiring verified end-to-end. Phase 04 done. Phase 05 (VAD) next.
-Last activity: 2026-02-28 — Executed Plan 04-02 (pill visualizer + state display), verified end-to-end with no-focus-steal confirmed
+Phase: 4.1 of 7 (Premium Pill Overlay UI Polish) — COMPLETE
+Plan: 2 of 2 in phase 04.1 complete — premium pill overlay visually verified and approved
+Status: Plan 04.1-02 complete — Pill.tsx rewritten with dual-state animation orchestrator (animState + displayState), FrequencyBars/ProcessingDots/CheckmarkIcon wired, 160x48 window, all transitions user-approved. Phase 04.1 done. Phase 05 (VAD) next.
+Last activity: 2026-02-28 — Executed Plan 04.1-02 (premium pill integration), user visually verified all state transitions
 
 Progress: [██████████] 100%
 
@@ -56,6 +56,7 @@ Progress: [██████████] 100%
 | Phase 03-core-pipeline P02 | 2 | 2 tasks | 2 files |
 | Phase 04-pill-overlay P02 | 60 | 3 tasks | 8 files |
 | Phase 04.1 P01 | 3 | 2 tasks | 4 files |
+| Phase 04.1 P02 | 25 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,10 @@ Recent decisions affecting current work:
 - [Phase 04.1-01]: No backdrop-filter in pill.css — Windows WebView2 transparent window bug #4945 makes it silently fail
 - [Phase 04.1-01]: FrequencyBars reads level via useRef in RAF loop — prevents restarting animation on every audio update
 - [Phase 04.1-01]: Gaussian bell curve replaces BAND_MULTIPLIERS for bar height distribution — 12 fixed bars, more natural center-tall waveform
+- [Phase 04.1-02]: animState ref (not state) separates entrance/exit lifecycle from displayState — prevents content flash during scale-down exit
+- [Phase 04.1-02]: Error dismiss is silent — no displayState change, previous content scales away with pill per "no visual punishment" design principle
+- [Phase 04.1-02]: Success auto-dismiss: 600ms hold (280ms draw + 320ms hold), then exit animation, then window hide
+- [Phase 04.1-02]: pill window expanded 120x40 → 160x48 for FrequencyBars clearance and indigo glow room
 
 ### Roadmap Evolution
 
@@ -124,6 +129,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Plan 04.1-01 complete — glassmorphism CSS foundation, ProcessingDots, CheckmarkIcon, FrequencyBars RAF rewrite.
-Resume signal: Phase 04.1 Plan 01 complete. Execute Phase 04.1 Plan 02 (wire components into Pill.tsx state machine).
-Resume file: .planning/phases/04.1-premium-pill-overlay-ui-polish/04.1-02-PLAN.md
+Stopped at: Plan 04.1-02 complete — Pill.tsx animation orchestrator wired with all premium components, user-approved.
+Resume signal: Phase 04.1 fully complete. Execute Phase 05 (VAD — Voice Activity Detection).
+Resume file: .planning/phases/05-vad/ (plan TBD)
