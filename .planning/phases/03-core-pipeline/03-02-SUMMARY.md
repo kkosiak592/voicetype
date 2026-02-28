@@ -27,9 +27,10 @@ tech-stack:
   patterns:
     - PipelineState uses AtomicU8 compare_exchange (SeqCst) to prevent concurrent recordings
     - run_pipeline called via tauri::async_runtime::spawn from Released handler closure
-    - Whisper inference and inject_text both wrapped in tokio::task::spawn_blocking (both are sync)
+    - Blocking work (whisper inference + inject_text) wrapped in tauri::async_runtime::spawn_blocking — NOT tokio::task::spawn_blocking (tokio is not a direct dependency)
     - Every early-return path in run_pipeline calls reset_to_idle() — no stuck states by design
     - use tauri::Manager must be imported in pipeline.rs to call app.state() on AppHandle
+    - cfg blocks on let-bindings require explicit type annotations to satisfy type inference
 
 key-files:
   created:
@@ -39,25 +40,27 @@ key-files:
 
 key-decisions:
   - "use tauri::Manager required in pipeline.rs — app.state() on AppHandle is gated behind Manager trait (discovered via E0599 on first cargo check)"
+  - "tauri::async_runtime::spawn_blocking not tokio::task::spawn_blocking — tokio is not a direct dependency; tauri re-exports its own runtime API"
+  - "let transcription: String explicit annotation required — cfg blocks across two #[cfg(feature = 'whisper')] blocks confuse Rust type inference without explicit annotation"
   - "Emitter import removed from lib.rs — app.emit('hotkey-triggered') fully replaced by backend pipeline; no frontend emit needed"
   - "Tray tooltip set on successful injection for development debugging — shows last transcription text"
   - "reset_to_idle also sets tray tooltip to 'VoiceType — idle' for clear state feedback during development"
 
 # Metrics
-duration: 2min
+duration: 10min
 completed: 2026-02-28
 ---
 
 # Phase 03 Plan 02: Hold-to-Talk Pipeline Orchestration Summary
 
-**PipelineState AtomicU8 state machine + run_pipeline async orchestration wiring audio, whisper, and injection into the full hold-to-talk pipeline**
+**PipelineState AtomicU8 state machine + run_pipeline async orchestration wiring audio, whisper, and injection into the full hold-to-talk pipeline — verified end-to-end**
 
 ## Performance
 
-- **Duration:** 2 min
+- **Duration:** ~10 min (including post-checkpoint compile fixes and verification)
 - **Started:** 2026-02-28T14:19:01Z
-- **Completed:** 2026-02-28T14:21:21Z
-- **Tasks:** 2 of 3 (paused at Task 3: human verification checkpoint)
+- **Completed:** 2026-02-28T14:30:00Z
+- **Tasks:** 3 of 3 (including human-verify checkpoint — APPROVED)
 - **Files modified:** 2 (1 created, 1 modified)
 
 ## Accomplishments
@@ -71,6 +74,7 @@ completed: 2026-02-28
 - rebind_hotkey updated to use same pipeline-aware handler pattern
 - Removed app.emit("hotkey-triggered") — pipeline is fully backend-driven
 - Removed unused tauri::Emitter import from lib.rs
+- End-to-end dictation verified: hold hotkey -> speak -> release -> text appears at cursor
 
 ## Task Commits
 
@@ -78,8 +82,8 @@ Each task was committed atomically:
 
 1. **Task 1: Create pipeline.rs state machine and run_pipeline orchestration** - `e821d65` (feat)
 2. **Task 2: Refactor hotkey handler for hold-to-talk (Pressed + Released)** - `7e2de73` (feat)
-
-**Paused at Task 3: checkpoint:human-verify** — end-to-end dictation verification required.
+3. **Task 3 (post-checkpoint compile fixes)** - `8cd2850` (fix)
+4. **Task 3 (docs/state)** - to be committed below (docs)
 
 ## Files Created/Modified
 
@@ -89,6 +93,8 @@ Each task was committed atomically:
 ## Decisions Made
 
 - use tauri::Manager required in pipeline.rs — app.state() is gated behind Manager trait; discovered via E0599 on first cargo check, fixed inline (Rule 1)
+- tauri::async_runtime::spawn_blocking not tokio::task — tokio is not a direct project dependency; tauri re-exports its own runtime API that wraps tokio
+- Explicit `: String` type annotation on `transcription` — two separate `#[cfg(feature = "whisper")]` blocks using the same binding confused Rust's type inference; annotation resolves it
 - Emitter import removed — app.emit("hotkey-triggered") fully replaced by backend pipeline; frontend no longer receives hotkey events for pipeline control (Pitfall 2 from RESEARCH.md)
 - Tray tooltip set after successful injection (last transcription text) — useful for development debugging without opening logs
 - reset_to_idle() sets tooltip to "VoiceType — idle" to provide clear idle state feedback during verification
@@ -99,37 +105,49 @@ Each task was committed atomically:
 
 **1. [Rule 1 - Bug] Added `use tauri::Manager` to pipeline.rs**
 - **Found during:** Task 1 (first cargo check)
-- **Issue:** `app.state::<PipelineState>()` requires the Manager trait to be in scope. pipeline.rs did not import it, causing E0599 "no method named `state`".
+- **Issue:** `app.state::<PipelineState>()` requires the Manager trait in scope. pipeline.rs did not import it, causing E0599 "no method named `state`".
 - **Fix:** Added `use tauri::Manager;` at the top of pipeline.rs
 - **Files modified:** src-tauri/src/pipeline.rs
 - **Commit:** `e821d65` (included in Task 1 commit)
 
+**2. [Rule 1 - Bug] Replaced `tokio::task::spawn_blocking` with `tauri::async_runtime::spawn_blocking`**
+- **Found during:** Task 3 (post-checkpoint build for verification)
+- **Issue:** `tokio` is not a direct dependency of the project — it is used transitively via tauri. Referencing `tokio::task::spawn_blocking` directly caused a compile error. Tauri exposes `tauri::async_runtime::spawn_blocking` as the correct API.
+- **Fix:** Replaced both `tokio::task::spawn_blocking` call sites in pipeline.rs with `tauri::async_runtime::spawn_blocking`
+- **Files modified:** src-tauri/src/pipeline.rs
+- **Commit:** `8cd2850`
+
+**3. [Rule 1 - Bug] Added `: String` type annotation to `transcription` binding**
+- **Found during:** Task 3 (post-checkpoint build for verification)
+- **Issue:** The `transcription` let-binding under `#[cfg(feature = "whisper")]` was referenced in a second `#[cfg(feature = "whisper")]` block further down. The cfg-gated multi-block structure confused Rust's type inference, requiring an explicit `: String` annotation.
+- **Fix:** Changed `let transcription = {` to `let transcription: String = {`
+- **Files modified:** src-tauri/src/pipeline.rs
+- **Commit:** `8cd2850`
+
 ---
 
-**Total deviations:** 1 auto-fixed (Rule 1 - missing trait import causing compile error)
-**Impact on plan:** Required for correctness. Manager is the standard Tauri 2 trait for state access; no scope creep.
+**Total deviations:** 3 auto-fixed (all Rule 1 — compile errors)
+**Impact on plan:** Required for correctness; no scope creep. The spawn_blocking API change is a project-level pattern to document for future plans.
 
-## Issues Encountered
+## Verification Result
 
-- Plan template did not include `use tauri::Manager` in the pipeline.rs imports — standard Tauri 2 pattern, same as discovered in Phase 1 (noted in STATE.md decisions).
+**Task 3 checkpoint:human-verify — APPROVED**
 
-## Checkpoint Status
-
-**Paused at:** Task 3 — `checkpoint:human-verify`
-**What was built:** Full hold-to-talk pipeline backend wired together. Hotkey Pressed starts recording, Released stops and fires run_pipeline which transcribes via Whisper and injects text via clipboard paste.
-**What needs verification:** Build with whisper feature, test in Notepad/VS Code/Chrome, verify tray state transitions, verify clipboard restore, verify blocking during processing.
-
-## Next Steps After Verification
-
-- Resume signal: "approved" (or describe issues for debugging)
-- If approved: proceed to Plan 03-03 (if exists) or mark phase complete
+User confirmed end-to-end dictation works:
+- Hold hotkey -> tray turns red (recording)
+- Release -> tray turns orange (processing)
+- Text appears at cursor with trailing space
+- Clipboard restored after injection
+- Pipeline blocked during processing (no double-starts)
+- Tray returns to idle after completion
 
 ## Self-Check: PASSED
 
 - pipeline.rs: FOUND
 - 03-02-SUMMARY.md: FOUND
-- Commit e821d65: FOUND
-- Commit 7e2de73: FOUND
+- Commit e821d65 (Task 1): FOUND
+- Commit 7e2de73 (Task 2): FOUND
+- Commit 8cd2850 (Task 3 fixes): FOUND
 
 ---
 *Phase: 03-core-pipeline*

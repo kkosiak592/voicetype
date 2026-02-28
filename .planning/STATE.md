@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T14:22:35.505Z"
+last_updated: "2026-02-28T14:38:54.619Z"
 progress:
   total_phases: 3
   completed_phases: 3
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-02-27)
 
 ## Current Position
 
-Phase: 3 of 7 (Core Pipeline) — IN PROGRESS (checkpoint)
-Plan: 2 of 3 in phase 03 complete (tasks 1-2) — paused at checkpoint:human-verify Task 3
-Status: Plan 03-02 tasks 1-2 complete — PipelineState AtomicU8 + run_pipeline + hold-to-talk hotkey handler. Awaiting human verification of end-to-end dictation before proceeding.
-Last activity: 2026-02-28 — Executed Plan 03-02 tasks 1-2 (pipeline.rs + hotkey refactor)
+Phase: 3 of 7 (Core Pipeline) — IN PROGRESS
+Plan: 2 of 3 in phase 03 complete — hold-to-talk pipeline orchestration (pipeline.rs + hotkey refactor) APPROVED
+Status: Plan 03-02 complete — PipelineState AtomicU8 + run_pipeline + hold-to-talk verified end-to-end. Plan 03-03 next (if exists).
+Last activity: 2026-02-28 — Executed Plan 03-02 (pipeline orchestration), verified end-to-end dictation
 
-Progress: [███████░░░] 45%
+Progress: [████████░░] 50%
 
 ## Performance Metrics
 
@@ -90,6 +90,8 @@ Recent decisions affecting current work:
 - [Phase 03-core-pipeline 03-01]: PNG format accepted for tray icons when image-png feature enabled — no need for ICO conversion
 - [Phase 03-core-pipeline]: use tauri::Manager required in pipeline.rs — app.state() on AppHandle is gated behind Manager trait (same pattern as Phase 01)
 - [Phase 03-core-pipeline]: Emitter import removed from lib.rs — hotkey pipeline is fully backend-driven; frontend no longer receives hotkey events for pipeline control
+- [Phase 03-core-pipeline 03-02]: tauri::async_runtime::spawn_blocking not tokio::task::spawn_blocking — tokio is not a direct project dep; tauri re-exports its own runtime API wrapping tokio
+- [Phase 03-core-pipeline 03-02]: cfg-gated let-bindings require explicit type annotation — two #[cfg(feature = 'whisper')] blocks using same binding confuse Rust type inference; use 'let x: Type = {' pattern
 
 ### Pending Todos
 
@@ -106,6 +108,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Plan 03-02 Task 3 checkpoint:human-verify — pipeline.rs + hotkey handler complete, awaiting end-to-end dictation verification.
-Resume signal: After user verifies hold-to-talk works end-to-end ("approved"), continue to Plan 03-03 (if exists) or mark phase complete.
-Resume file: .planning/phases/03-core-pipeline/03-02-PLAN.md (Task 3 — checkpoint:human-verify)
+Stopped at: Plan 03-02 complete — pipeline orchestration verified end-to-end (hold-to-talk dictation works in Notepad/VS Code/Chrome).
+Resume signal: Execute Plan 03-03 (if exists) or declare Phase 3 complete.
+Resume file: .planning/phases/03-core-pipeline/ (check for 03-03-PLAN.md)
