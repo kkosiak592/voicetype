@@ -18,7 +18,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Recording Modes
 
-- [ ] **REC-01**: User can hold the hotkey to record and release to transcribe (hold-to-talk mode)
+- [x] **REC-01**: User can hold the hotkey to record and release to transcribe (hold-to-talk mode)
 - [ ] **REC-02**: User can tap the hotkey to start recording and tap again to stop (toggle mode)
 - [ ] **REC-03**: In toggle mode, Silero VAD automatically detects silence and stops recording
 - [ ] **REC-04**: User can switch between hold-to-talk and toggle mode in settings
@@ -105,7 +105,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CORE-04 | Phase 2 | Complete |
 | CORE-05 | Phase 3 | Complete |
 | CORE-06 | Phase 3 | Complete |
-| REC-01 | Phase 3 | Pending |
+| REC-01 | Phase 3 | Complete |
 | REC-02 | Phase 5 | Pending |
 | REC-03 | Phase 5 | Pending |
 | REC-04 | Phase 5 | Pending |

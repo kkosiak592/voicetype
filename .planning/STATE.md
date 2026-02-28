@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T13:59:38.079Z"
+last_updated: "2026-02-28T14:22:35.505Z"
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-02-27)
 
 ## Current Position
 
-Phase: 3 of 7 (Core Pipeline) — IN PROGRESS
-Plan: 1 of 3 in phase 03 complete — text injection (inject.rs) + tray icon state switching
-Status: Plan 03-01 complete — inject_text() with clipboard save/restore, set_tray_state() with three icon states. Plan 03-02 (pipeline orchestration) next.
-Last activity: 2026-02-28 — Executed Plan 03-01 (text injection + tray state)
+Phase: 3 of 7 (Core Pipeline) — IN PROGRESS (checkpoint)
+Plan: 2 of 3 in phase 03 complete (tasks 1-2) — paused at checkpoint:human-verify Task 3
+Status: Plan 03-02 tasks 1-2 complete — PipelineState AtomicU8 + run_pipeline + hold-to-talk hotkey handler. Awaiting human verification of end-to-end dictation before proceeding.
+Last activity: 2026-02-28 — Executed Plan 03-02 tasks 1-2 (pipeline.rs + hotkey refactor)
 
-Progress: [██████░░░░] 38%
+Progress: [███████░░░] 45%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [██████░░░░] 38%
 | Phase 02-audio-whisper P01 | 14 | 2 tasks | 3 files |
 | Phase 02-audio-whisper P03 | 14 | 1 tasks | 4 files |
 | Phase 03-core-pipeline P01 | 35 | 2 tasks | 7 files |
+| Phase 03-core-pipeline P02 | 2 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,8 @@ Recent decisions affecting current work:
 - [Phase 03-core-pipeline 03-01]: tauri::image::Image::from_bytes is gated behind image-png (or image-ico) Cargo feature — must add "image-png" to tauri features for runtime icon loading
 - [Phase 03-core-pipeline 03-01]: TrayIconBuilder::with_id(id) takes only the ID string — icon set via separate .icon() chain; verified from tauri 2.10.2 source
 - [Phase 03-core-pipeline 03-01]: PNG format accepted for tray icons when image-png feature enabled — no need for ICO conversion
+- [Phase 03-core-pipeline]: use tauri::Manager required in pipeline.rs — app.state() on AppHandle is gated behind Manager trait (same pattern as Phase 01)
+- [Phase 03-core-pipeline]: Emitter import removed from lib.rs — hotkey pipeline is fully backend-driven; frontend no longer receives hotkey events for pipeline control
 
 ### Pending Todos
 
@@ -103,6 +106,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Plan 03-01 complete — inject.rs + tray state switching. Phase 3 Plan 1 of 3 done.
-Resume signal: Execute Plan 03-02 — pipeline orchestration (hold-to-talk hotkey, AtomicU8 state machine, run_pipeline)
-Resume file: .planning/phases/03-core-pipeline/03-02-PLAN.md
+Stopped at: Plan 03-02 Task 3 checkpoint:human-verify — pipeline.rs + hotkey handler complete, awaiting end-to-end dictation verification.
+Resume signal: After user verifies hold-to-talk works end-to-end ("approved"), continue to Plan 03-03 (if exists) or mark phase complete.
+Resume file: .planning/phases/03-core-pipeline/03-02-PLAN.md (Task 3 — checkpoint:human-verify)
