@@ -1,4 +1,5 @@
 mod audio;
+mod inject;
 mod tray;
 
 // transcribe.rs requires whisper-rs which needs LIBCLANG_PATH + optional CUDA.
