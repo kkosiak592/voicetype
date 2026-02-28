@@ -3,15 +3,39 @@ import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { PhysicalPosition } from "@tauri-apps/api/dpi";
 import { load } from "@tauri-apps/plugin-store";
 import { FrequencyBars } from "./components/FrequencyBars";
+import { ProcessingDots } from "./components/ProcessingDots";
+import { CheckmarkIcon } from "./components/CheckmarkIcon";
 
 const appWindow = getCurrentWebviewWindow();
 
 type PillDisplayState = "hidden" | "recording" | "processing" | "success" | "error";
+type AnimState = "hidden" | "entering" | "visible" | "exiting";
 
 export function Pill() {
   const [displayState, setDisplayState] = useState<PillDisplayState>("hidden");
+  const [animState, setAnimState] = useState<AnimState>("hidden");
   const [level, setLevel] = useState(0);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Timers for animation sequencing
+  const enterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clears all pending animation timers
+  function clearAllTimers() {
+    if (enterTimerRef.current) {
+      clearTimeout(enterTimerRef.current);
+      enterTimerRef.current = null;
+    }
+    if (exitTimerRef.current) {
+      clearTimeout(exitTimerRef.current);
+      exitTimerRef.current = null;
+    }
+    if (successTimerRef.current) {
+      clearTimeout(successTimerRef.current);
+      successTimerRef.current = null;
+    }
+  }
 
   // Position to bottom center on first load if no saved position
   useEffect(() => {
@@ -22,8 +46,8 @@ export function Pill() {
         if (!saved) {
           const screenW = window.screen.width;
           const screenH = window.screen.height;
-          const x = Math.round((screenW - 120) / 2);
-          const y = screenH - 40 - 60;
+          const x = Math.round((screenW - 160) / 2);
+          const y = screenH - 48 - 60;
           await appWindow.setPosition(new PhysicalPosition(x, y));
         }
       } catch (e) {
@@ -37,22 +61,29 @@ export function Pill() {
   useEffect(() => {
     const unlisteners: Array<() => void> = [];
 
-    // pill-show: make visible (state set by pill-state event)
+    // pill-show: make visible with entrance animation
     appWindow.listen("pill-show", () => {
-      if (hideTimerRef.current) {
-        clearTimeout(hideTimerRef.current);
-        hideTimerRef.current = null;
-      }
+      clearAllTimers();
       appWindow.show();
+      setAnimState("entering");
+      // After entrance animation completes (220ms), transition to visible
+      enterTimerRef.current = setTimeout(() => {
+        setAnimState("visible");
+        enterTimerRef.current = null;
+      }, 220);
     }).then((u) => unlisteners.push(u));
 
-    // pill-hide: fade out then hide window
+    // pill-hide: exit animation then hide window
     appWindow.listen("pill-hide", () => {
-      setDisplayState("hidden");
-      hideTimerRef.current = setTimeout(() => {
+      clearAllTimers();
+      setAnimState("exiting");
+      // After exit animation completes (180ms), hide window and reset state
+      exitTimerRef.current = setTimeout(() => {
         appWindow.hide();
-        hideTimerRef.current = null;
-      }, 350); // slightly longer than 300ms fade transition
+        setAnimState("hidden");
+        setDisplayState("hidden");
+        exitTimerRef.current = null;
+      }, 180);
     }).then((u) => unlisteners.push(u));
 
     // pill-state: update display state
@@ -70,16 +101,38 @@ export function Pill() {
       setLevel(e.payload);
     }).then((u) => unlisteners.push(u));
 
-    // pill-result: success or error flash before hide
+    // pill-result: success shows checkmark then exits; error silently exits
     appWindow.listen<string>("pill-result", (e) => {
       const result = e.payload as "success" | "error";
-      setDisplayState(result);
-      // Flash duration, then pill-hide from backend handles the rest
+
+      if (result === "success") {
+        // Show animated checkmark, then trigger exit after 600ms
+        setDisplayState("success");
+        successTimerRef.current = setTimeout(() => {
+          setAnimState("exiting");
+          successTimerRef.current = null;
+          exitTimerRef.current = setTimeout(() => {
+            appWindow.hide();
+            setAnimState("hidden");
+            setDisplayState("hidden");
+            exitTimerRef.current = null;
+          }, 180);
+        }, 600);
+      } else {
+        // Error: silent dismiss — no "No speech" text, just scale-down exit
+        setAnimState("exiting");
+        exitTimerRef.current = setTimeout(() => {
+          appWindow.hide();
+          setAnimState("hidden");
+          setDisplayState("hidden");
+          exitTimerRef.current = null;
+        }, 180);
+      }
     }).then((u) => unlisteners.push(u));
 
     return () => {
       unlisteners.forEach((u) => u());
-      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      clearAllTimers();
     };
   }, []);
 
@@ -102,54 +155,44 @@ export function Pill() {
     await appWindow.setFocusable(false);
   }, []);
 
-  // Determine CSS classes based on state
-  const isVisible = displayState !== "hidden";
-  const isProcessing = displayState === "processing";
-  const isSuccess = displayState === "success";
-  const isError = displayState === "error";
-
   return (
     <div
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
       className={`
-        w-[120px] h-[40px] rounded-full
+        pill-glass
+        w-[160px] h-[48px] rounded-full
         flex items-center justify-center
         cursor-grab active:cursor-grabbing
         select-none
-        transition-opacity duration-300 ease-in-out
-        ${isVisible ? "opacity-100" : "opacity-0 pointer-events-none"}
-        ${isProcessing ? "pill-processing" : "bg-black/75"}
-        ${isSuccess ? "pill-success" : ""}
-        ${isError ? "pill-error" : ""}
+        ${animState === "entering" ? "pill-entering" : ""}
+        ${animState === "exiting" ? "pill-exiting" : ""}
+        ${animState === "hidden" ? "opacity-0 pointer-events-none" : ""}
+        ${displayState === "processing" ? "pill-processing" : ""}
       `}
     >
-      {/* Recording state: frequency bars + red dot */}
+      {/* Recording state: frequency bars only — no red dot */}
       {displayState === "recording" && (
-        <div className="flex items-center gap-2 px-3">
-          {/* Red recording dot */}
-          <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
-          {/* Frequency bars */}
+        <div className="flex items-center justify-center px-4 pill-content-fade-in">
           <FrequencyBars level={level} />
         </div>
       )}
 
-      {/* Processing state: text indicator (border animation from CSS) */}
+      {/* Processing state: bouncing dots + indigo glow (from pill-processing on container) */}
       {displayState === "processing" && (
-        <span className="text-white/60 text-[10px] font-medium tracking-wider uppercase">
-          Processing
-        </span>
+        <div className="pill-content-fade-in">
+          <ProcessingDots />
+        </div>
       )}
 
-      {/* Success state: text indicator (flash glow from CSS) */}
+      {/* Success state: animated checkmark draws itself, then pill exits */}
       {displayState === "success" && (
-        <span className="text-green-400 text-sm font-bold">Done</span>
+        <div className="pill-content-fade-in">
+          <CheckmarkIcon />
+        </div>
       )}
 
-      {/* Error state: brief text (flash handles the visual) */}
-      {displayState === "error" && (
-        <span className="text-red-400 text-[10px] font-medium">No speech</span>
-      )}
+      {/* Error state: render nothing — pill is already exiting via scale-down */}
     </div>
   );
 }
