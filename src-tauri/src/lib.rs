@@ -339,6 +339,9 @@ pub fn run() {
                 // focusable(false) sets WS_EX_NOACTIVATE — pill never steals focus
                 let _ = pill_window.set_focusable(false);
 
+                // Disable DWM shadow — rectangular shadow doesn't respect CSS border-radius (tauri#11321)
+                let _ = pill_window.set_shadow(false);
+
                 // Restore saved pill position from settings.json (sync read — same pattern as read_saved_hotkey)
                 let data_dir = app.path().app_data_dir().ok();
                 if let Some(dir) = data_dir {

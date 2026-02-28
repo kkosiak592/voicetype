@@ -8,6 +8,7 @@
     "core:window:allow-show",
     "core:window:allow-hide",
     "core:window:allow-set-focusable",
+    "core:window:allow-set-shadow",
     "core:window:allow-set-position",
     "core:window:allow-start-dragging",
     "store:default",
