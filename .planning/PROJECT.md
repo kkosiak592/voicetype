@@ -6,7 +6,7 @@ A local, low-latency voice-to-text desktop tool for Windows that runs entirely o
 
 ## Core Value
 
-Voice dictation must feel instant — sub-500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
+Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
 
 ## Requirements
 

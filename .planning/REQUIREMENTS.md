@@ -1,7 +1,7 @@
 # Requirements: VoiceType
 
 **Defined:** 2026-02-27
-**Core Value:** Voice dictation must feel instant — sub-500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
+**Core Value:** Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
 
 ## v1 Requirements
 

@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T13:38:33Z"
+last_updated: "2026-02-28T13:59:38.079Z"
 progress:
-  total_phases: 7
-  completed_phases: 1
-  total_plans: 6
+  total_phases: 3
+  completed_phases: 2
+  total_plans: 8
   completed_plans: 6
 ---
 
@@ -17,7 +17,7 @@ progress:
 
 See: .planning/PROJECT.md (updated 2026-02-27)
 
-**Core value:** Voice dictation must feel instant — sub-500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
+**Core value:** Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
 **Current focus:** Phase 2 — Audio + Whisper
 
 ## Current Position

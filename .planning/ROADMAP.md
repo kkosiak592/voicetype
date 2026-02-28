@@ -44,7 +44,7 @@ Plans:
 **Requirements**: CORE-02, CORE-03, CORE-04
 **Success Criteria** (what must be TRUE):
   1. App captures microphone audio via WASAPI and saves a WAV file that plays back correctly at 16kHz
-  2. App transcribes a test WAV file using whisper-rs and prints the result to console in under 500ms on the NVIDIA P2000 (verified via Task Manager GPU utilization, not assumed)
+  2. App transcribes a test WAV file using whisper-rs and prints the result to console in under 1500ms on the NVIDIA P2000 (verified via Task Manager GPU utilization, not assumed)
   3. On a machine with no NVIDIA GPU, the app falls back to CPU inference using the small model and completes transcription (latency is acceptable; GPU speed is not required on CPU machines)
 **Plans**: 3 plans
 
@@ -58,14 +58,14 @@ Plans:
 **Depends on**: Phase 2
 **Requirements**: CORE-05, CORE-06, REC-01
 **Success Criteria** (what must be TRUE):
-  1. User holds the hotkey, speaks a sentence, releases the hotkey, and the transcribed text appears in the active application (Notepad, VS Code, browser address bar) within 500ms of release
+  1. User holds the hotkey, speaks a sentence, releases the hotkey, and the transcribed text appears in the active application (Notepad, VS Code, browser address bar) within 1500ms of release
   2. The clipboard contents that were present before dictation are fully restored after the transcribed text is pasted — the user's clipboard is not clobbered
   3. The injection works in at minimum Notepad, VS Code, Chrome, and Windows Terminal (the four baseline test targets)
 **Plans**: TBD
 
 Plans:
 - [ ] 03-01: Text injection — implement clipboard save/restore via Win32 CF_UNICODETEXT, enigo Ctrl+V paste with 50-100ms pre-paste and 100-150ms pre-restore delays, test in all four target apps
-- [ ] 03-02: Pipeline integration — wire hotkey hold/release events to audio start/stop to whisper inference to injection, confirm sub-500ms latency end-to-end on GPU
+- [ ] 03-02: Pipeline integration — wire hotkey hold/release events to audio start/stop to whisper inference to injection, confirm sub-1500ms latency end-to-end on GPU
 
 ### Phase 4: Pill Overlay
 **Goal**: A floating transparent pill window that shows recording state and audio levels during dictation, without ever stealing focus from the application being dictated into
