@@ -16,6 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Audio + Whisper** - Microphone capture pipeline and GPU-verified whisper transcription (completed 2026-02-28)
 - [x] **Phase 3: Core Pipeline** - End-to-end hold-to-talk: hotkey to audio to transcription to text injection (completed 2026-02-28)
 - [x] **Phase 4: Pill Overlay** - Floating transparent overlay with visualizer and no-focus-steal guarantee (completed 2026-02-28)
+- [ ] **Phase 4.1: Premium Pill UI** - Glassmorphism, sinusoidal bars, animated state transitions (INSERTED)
 - [ ] **Phase 5: VAD + Toggle Mode** - Silero VAD silence detection and toggle recording mode
 - [ ] **Phase 6: Vocabulary + Settings** - Word corrections, vocabulary profiles, and full settings UI
 - [ ] **Phase 7: Distribution** - First-run model download, GPU auto-detection, and NSIS installer
@@ -82,6 +83,24 @@ Plans:
 - [ ] 04-01: Pill window setup — create frameless transparent always-on-top Tauri window, apply Win32 WS_EX_NOACTIVATE extended style via Rust window builder, verify no focus steal against all four target apps
 - [ ] 04-02: Visualizer and state display — wire audio level data via channel to React frequency bar component, implement recording/processing/idle state transitions in Pill.tsx
 
+### Phase 04.1: Premium pill overlay UI polish (INSERTED)
+
+**Goal:** Transform the MVP pill overlay into a premium glassmorphism widget with sinusoidal frequency bars, animated state transitions (scale entrance/exit, cross-fade content), animated checkmark success, and silent error dismiss
+**Requirements**: PILL-GLASS, PILL-BARS, PILL-PROC, PILL-CHECK, PILL-ENTRANCE, PILL-EXIT, PILL-CROSSFADE, PILL-SUCCESS, PILL-ERROR, PILL-DIMENSIONS
+**Depends on:** Phase 4
+**Success Criteria** (what must be TRUE):
+  1. Pill has glassmorphism appearance (dark semi-transparent background, indigo border, layered shadows) — not flat black
+  2. Frequency bars undulate as smooth sinusoidal waves with indigo-to-purple gradients — not random jitter
+  3. Pill scales up from a dot on entrance and scales down to a dot on exit — not opacity-only fade
+  4. Processing state shows pulsing indigo glow and bouncing dots — not text or spinning border
+  5. Success shows self-drawing checkmark icon — not "Done" text
+  6. Error silently dismisses — no "No speech" text or red flash
+**Plans:** 2 plans
+
+Plans:
+- [ ] 04.1-01-PLAN.md — Glassmorphism CSS, sinusoidal FrequencyBars, ProcessingDots, CheckmarkIcon components
+- [ ] 04.1-02-PLAN.md — Pill.tsx animation orchestration, state transition wiring, dimension update, visual verification
+
 ### Phase 5: VAD + Toggle Mode
 **Goal**: Silero VAD silence detection enables toggle mode — tap to start, auto-stop on silence — and gates whisper against hallucination on empty audio buffers
 **Depends on**: Phase 4
@@ -132,7 +151,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 4.1 -> 5 -> 6 -> 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -140,6 +159,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 2. Audio + Whisper | 3/3 | Complete   | 2026-02-28 |
 | 3. Core Pipeline | 2/2 | Complete   | 2026-02-28 |
 | 4. Pill Overlay | 2/2 | Complete   | 2026-02-28 |
+| 4.1 Premium Pill UI | 0/2 | Not started | - |
 | 5. VAD + Toggle Mode | 0/2 | Not started | - |
 | 6. Vocabulary + Settings | 0/3 | Not started | - |
 | 7. Distribution | 0/3 | Not started | - |
