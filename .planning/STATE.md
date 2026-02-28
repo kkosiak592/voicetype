@@ -18,14 +18,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-27)
 
 **Core value:** Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** Phase 3 — Core Pipeline
+**Current focus:** Phase 4 — Pill Overlay
 
 ## Current Position
 
-Phase: 3 of 7 (Core Pipeline) — IN PROGRESS
-Plan: 2 of 3 in phase 03 complete — hold-to-talk pipeline orchestration (pipeline.rs + hotkey refactor) APPROVED
-Status: Plan 03-02 complete — PipelineState AtomicU8 + run_pipeline + hold-to-talk verified end-to-end. Plan 03-03 next (if exists).
-Last activity: 2026-02-28 — Executed Plan 03-02 (pipeline orchestration), verified end-to-end dictation
+Phase: 4 of 7 (Pill Overlay) — IN PROGRESS
+Plan: 1 of 2 in phase 04 complete — pill window infrastructure (no-focus-steal + drag + position persistence) APPROVED
+Status: Plan 04-01 complete — frameless transparent pill window with verified no-focus-steal guarantee and drag/persistence. Plan 04-02 next (visualizer + state display).
+Last activity: 2026-02-28 — Executed Plan 04-01 (pill overlay infrastructure), verified end-to-end with no-focus-steal fix
 
 Progress: [████████░░] 50%
 
@@ -92,6 +92,10 @@ Recent decisions affecting current work:
 - [Phase 03-core-pipeline]: Emitter import removed from lib.rs — hotkey pipeline is fully backend-driven; frontend no longer receives hotkey events for pipeline control
 - [Phase 03-core-pipeline 03-02]: tauri::async_runtime::spawn_blocking not tokio::task::spawn_blocking — tokio is not a direct project dep; tauri re-exports its own runtime API wrapping tokio
 - [Phase 03-core-pipeline 03-02]: cfg-gated let-bindings require explicit type annotation — two #[cfg(feature = 'whisper')] blocks using same binding confuse Rust type inference; use 'let x: Type = {' pattern
+- [Phase 04-pill-overlay 04-01]: set_focusable(false) blocks startDragging on Windows — must toggle focusable(true) before startDragging(), restore focusable(false) on mouseup
+- [Phase 04-pill-overlay 04-01]: core:window:allow-set-focusable and core:window:allow-start-dragging must be added explicitly to capabilities — not granted by core:default
+- [Phase 04-pill-overlay 04-01]: data-tauri-drag-region does not work on unfocusable windows — use startDragging() API for all overlay drag
+- [Phase 04-pill-overlay 04-01]: pill.html has no devUrl — dist/ must be pre-built before npx tauri dev; run npx vite build first
 
 ### Pending Todos
 
@@ -108,6 +112,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Plan 03-02 complete — pipeline orchestration verified end-to-end (hold-to-talk dictation works in Notepad/VS Code/Chrome).
-Resume signal: Execute Plan 03-03 (if exists) or declare Phase 3 complete.
-Resume file: .planning/phases/03-core-pipeline/ (check for 03-03-PLAN.md)
+Stopped at: Plan 04-01 complete — pill overlay window infrastructure verified (no-focus-steal + drag + position persistence).
+Resume signal: Execute Plan 04-02 (visualizer + pipeline state display in pill window).
+Resume file: .planning/phases/04-pill-overlay/04-02-PLAN.md
