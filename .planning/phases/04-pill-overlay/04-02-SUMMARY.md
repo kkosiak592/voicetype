@@ -50,23 +50,26 @@ key-decisions:
   - "load() called without options in Pill.tsx — autoSave: false is not a valid StoreOptions shape in this plugin version (requires defaults field)"
   - "idle pill-state event ignored in Pill.tsx — pill-hide from reset_to_idle() handles hidden transition, preventing race where idle clears success/error flash"
   - "try_lock() used in compute_rms — audio callback thread holds buffer lock briefly; lock() would deadlock the tokio worker thread"
+  - "core:window:allow-show, allow-hide, allow-set-position must be explicitly granted in capabilities — not included in core:default (same pattern as allow-set-focusable from 04-01)"
+
+requirements-completed: [UI-03, UI-04]
 
 # Metrics
-duration: ~30 minutes
+duration: ~60 minutes
 completed: 2026-02-28
 ---
 
 # Phase 4 Plan 02: Pill Visualizer + Pipeline State Display Summary
 
-**RMS level streaming loop in Rust + FrequencyBars visualizer + full pill state machine (recording/processing/success/error) wired to the hold-to-talk pipeline**
+**RMS level streaming loop in Rust + FrequencyBars visualizer + full pill state machine (recording/processing/success/error) wired to the hold-to-talk pipeline — verified end-to-end with no-focus-steal confirmed**
 
 ## Performance
 
-- **Duration:** ~30 min
+- **Duration:** ~60 min
 - **Started:** 2026-02-28
 - **Completed:** 2026-02-28
-- **Tasks:** 2 auto tasks complete, 1 human-verify checkpoint pending
-- **Files modified:** 7
+- **Tasks:** 3 (2 auto + 1 human-verify checkpoint, all complete)
+- **Files modified:** 8
 
 ## Accomplishments
 
@@ -76,6 +79,7 @@ completed: 2026-02-28
 - Created `FrequencyBars.tsx` with 15 animated vertical bars, center bars taller (simulates speech frequency energy distribution), 2px min height, jitter variation per render
 - Updated `pill.css` with CSS `@property --border-angle` animated gradient border (indigo/purple/cyan, 2s rotation) for processing state, plus success-flash (300ms green glow) and error-flash (500ms red glow)
 - Replaced Pill.tsx placeholder with full state machine: 5 states (hidden/recording/processing/success/error), all 5 event listeners, hideTimerRef for race-condition-free transitions
+- End-to-end verification APPROVED: all visual states confirmed, frequency bars respond to voice, no-focus-steal maintained with Notepad/VS Code/Chrome
 
 ## Task Commits
 
@@ -83,6 +87,9 @@ Each task was committed atomically:
 
 1. **Task 1: Create pill.rs RMS streaming + emit pill events from backend** - `2639be8` (feat)
 2. **Task 2: Build frequency bars component + pill state rendering with CSS animations** - `0cdb625` (feat)
+3. **Task 3: End-to-end pill overlay verification** - APPROVED by user (no separate commit — verification only)
+
+**Deviation fix:** `02edda4` — add window show/hide/set-position capability permissions (required for pill to appear at all)
 
 ## Files Created/Modified
 
@@ -90,6 +97,7 @@ Each task was committed atomically:
 - `src-tauri/src/lib.rs` — Added mod pill, LevelStreamActive managed state, pill events in both hotkey handlers, Arc/AtomicBool imports unconditional
 - `src-tauri/src/pipeline.rs` — Added use tauri::Emitter, pill-result events on all paths, pill-state:idle + pill-hide in reset_to_idle()
 - `src-tauri/Cargo.toml` — Added tokio = { version = "1", features = ["time"] }
+- `src-tauri/capabilities/default.json` — Added core:window:allow-show, allow-hide, allow-set-position
 - `src/components/FrequencyBars.tsx` — New component: 15 bars, BAND_MULTIPLIERS array, jitter, transition-[height] animation
 - `src/Pill.tsx` — Full state machine replacing placeholder, 5 event listeners, hideTimerRef, drag handling preserved
 - `src/pill.css` — CSS @property animated border, success-flash, error-flash keyframes
@@ -100,6 +108,7 @@ Each task was committed atomically:
 - **load() without options:** `{ autoSave: false }` is not a valid `StoreOptions` shape — the type requires a `defaults` field. Using `load("settings.json")` without options (same as original Pill.tsx).
 - **Ignore idle pill-state event:** Backend emits pill-state:idle then pill-hide in reset_to_idle(). If pill-state:idle set displayState to hidden, it would cancel the success/error flash CSS animation before it completes. Solution: ignore "idle" from pill-state, let pill-hide handle the hidden transition.
 - **try_lock() in compute_rms:** Audio callback thread can hold the buffer Mutex briefly during sample writes. Using try_lock() and returning 0.0 on contention avoids deadlock on the tokio worker thread. Same pattern as Phase 02 cpal callbacks.
+- **Capability permissions for show/hide/set-position:** Same pattern as Plan 04-01 where allow-set-focusable and allow-start-dragging were missing. Every window API call in Tauri 2 requires an explicit allow-* grant in capabilities/default.json — core:default does not cover these operations.
 
 ## Deviations from Plan
 
@@ -126,24 +135,31 @@ Each task was committed atomically:
 - **Files modified:** src/Pill.tsx
 - **Commit:** 0cdb625
 
+**4. [Rule 2 - Missing Critical] Explicit window capability permissions for show/hide/set-position**
+- **Found during:** Task 3 (end-to-end verification)
+- **Issue:** `appWindow.show()` silently failing — pill never appeared. Tauri 2 requires explicit allow-* grants for every window operation; allow-show, allow-hide, allow-set-position not included in core:default.
+- **Fix:** Added `core:window:allow-show`, `core:window:allow-hide`, `core:window:allow-set-position` to capabilities/default.json
+- **Files modified:** src-tauri/capabilities/default.json
+- **Commit:** 02edda4
+
 ---
 
-**Total deviations:** 3 auto-fixed (1 blocking dependency, 2 TypeScript bugs from plan code)
-**Impact on plan:** All fixes were necessary for compilation. No scope changes.
+**Total deviations:** 4 auto-fixed (1 blocking dependency, 2 TypeScript type bugs, 1 missing critical capability)
+**Impact on plan:** All fixes were necessary for compilation and correct operation. No scope changes.
 
-## Pending Verification
+## Issues Encountered
 
-Task 3 (human-verify checkpoint) is pending end-to-end testing:
-- Frequency bars animate in response to real microphone audio
-- Processing animated border is smooth and visible
-- Success/error flash animations trigger correctly
-- No focus steal during any state transition
-- Visual quality meets CONTEXT.md standards
+None beyond the four auto-fixed deviations documented above.
+
+## User Setup Required
+
+None - no external service configuration required.
 
 ## Next Phase Readiness
 
-- Pill overlay is fully wired to the pipeline — pending visual verification
-- No blockers identified
+- Phase 04 complete — pill overlay is a fully functional live status indicator, verified end-to-end
+- Phase 05 (VAD) can reuse the AtomicBool streaming loop pattern from pill.rs for VAD triggering
+- Pre-Phase 5 blocker remains: silero-vad-rust crate version needs verification on crates.io before writing Cargo.toml
 
 ---
 *Phase: 04-pill-overlay*

@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T20:37:30.003Z"
+last_updated: "2026-02-28T20:49:02.811Z"
 progress:
   total_phases: 4
   completed_phases: 4
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-27)
 
 **Core value:** Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** Phase 4 — Pill Overlay
+**Current focus:** Phase 5 — VAD (Voice Activity Detection)
 
 ## Current Position
 
-Phase: 4 of 7 (Pill Overlay) — IN PROGRESS
-Plan: 1 of 2 in phase 04 complete — pill window infrastructure (no-focus-steal + drag + position persistence) APPROVED
-Status: Plan 04-01 complete — frameless transparent pill window with verified no-focus-steal guarantee and drag/persistence. Plan 04-02 next (visualizer + state display).
-Last activity: 2026-02-28 — Executed Plan 04-01 (pill overlay infrastructure), verified end-to-end with no-focus-steal fix
+Phase: 4 of 7 (Pill Overlay) — COMPLETE
+Plan: 2 of 2 in phase 04 complete — pill visualizer + pipeline state display APPROVED
+Status: Plan 04-02 complete — frequency bar visualizer, animated pill states (recording/processing/success/error), and full backend event wiring verified end-to-end. Phase 04 done. Phase 05 (VAD) next.
+Last activity: 2026-02-28 — Executed Plan 04-02 (pill visualizer + state display), verified end-to-end with no-focus-steal confirmed
 
-Progress: [████████░░] 50%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [████████░░] 50%
 | Phase 02-audio-whisper P03 | 14 | 1 tasks | 4 files |
 | Phase 03-core-pipeline P01 | 35 | 2 tasks | 7 files |
 | Phase 03-core-pipeline P02 | 2 | 2 tasks | 2 files |
+| Phase 04-pill-overlay P02 | 60 | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,7 @@ Recent decisions affecting current work:
 - [Phase 04-pill-overlay 04-01]: pill.html has no devUrl — dist/ must be pre-built before npx tauri dev; run npx vite build first
 - [Phase 04-pill-overlay]: tokio added as explicit dep with time feature — tauri re-exports its runtime but tokio crate not directly available for tokio::time::sleep
 - [Phase 04-pill-overlay]: ignore idle pill-state event in Pill.tsx — pill-hide from reset_to_idle() handles hidden transition, preventing race where idle clears success/error flash before animation completes
+- [Phase 04-pill-overlay 04-02]: core:window:allow-show, allow-hide, allow-set-position must be explicitly granted in capabilities — not included in core:default (same pattern as allow-set-focusable from 04-01)
 
 ### Pending Todos
 
@@ -114,6 +116,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Plan 04-01 complete — pill overlay window infrastructure verified (no-focus-steal + drag + position persistence).
-Resume signal: Execute Plan 04-02 (visualizer + pipeline state display in pill window).
-Resume file: .planning/phases/04-pill-overlay/04-02-PLAN.md
+Stopped at: Plan 04-02 complete — pill visualizer + pipeline state display verified end-to-end.
+Resume signal: Phase 04 complete. Begin Phase 05 planning (VAD — voice activity detection).
+Resume file: .planning/phases/05-vad/ (to be created)
