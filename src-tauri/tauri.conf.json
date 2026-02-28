@@ -19,8 +19,8 @@
       {
         "label": "pill",
         "url": "pill.html",
-        "width": 160,
-        "height": 48,
+        "width": 280,
+        "height": 56,
         "transparent": true,
         "decorations": false,
         "alwaysOnTop": true,

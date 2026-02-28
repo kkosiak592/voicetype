@@ -46,8 +46,8 @@ export function Pill() {
         if (!saved) {
           const screenW = window.screen.width;
           const screenH = window.screen.height;
-          const x = Math.round((screenW - 160) / 2);
-          const y = screenH - 48 - 60;
+          const x = Math.round((screenW - 280) / 2);
+          const y = screenH - 56 - 60;
           await appWindow.setPosition(new PhysicalPosition(x, y));
         }
       } catch (e) {
@@ -66,24 +66,24 @@ export function Pill() {
       clearAllTimers();
       appWindow.show();
       setAnimState("entering");
-      // After entrance animation completes (220ms), transition to visible
+      // After entrance animation completes (260ms), transition to visible
       enterTimerRef.current = setTimeout(() => {
         setAnimState("visible");
         enterTimerRef.current = null;
-      }, 220);
+      }, 260);
     }).then((u) => unlisteners.push(u));
 
     // pill-hide: exit animation then hide window
     appWindow.listen("pill-hide", () => {
       clearAllTimers();
       setAnimState("exiting");
-      // After exit animation completes (180ms), hide window and reset state
+      // After exit animation completes (200ms), hide window and reset state
       exitTimerRef.current = setTimeout(() => {
         appWindow.hide();
         setAnimState("hidden");
         setDisplayState("hidden");
         exitTimerRef.current = null;
-      }, 180);
+      }, 200);
     }).then((u) => unlisteners.push(u));
 
     // pill-state: update display state
@@ -116,7 +116,7 @@ export function Pill() {
             setAnimState("hidden");
             setDisplayState("hidden");
             exitTimerRef.current = null;
-          }, 180);
+          }, 200);
         }, 600);
       } else {
         // Error: silent dismiss — no "No speech" text, just scale-down exit
@@ -126,7 +126,7 @@ export function Pill() {
           setAnimState("hidden");
           setDisplayState("hidden");
           exitTimerRef.current = null;
-        }, 180);
+        }, 200);
       }
     }).then((u) => unlisteners.push(u));
 
@@ -161,7 +161,7 @@ export function Pill() {
       onMouseUp={handleMouseUp}
       className={`
         pill-glass
-        w-[160px] h-[48px] rounded-full
+        w-[280px] h-[56px] rounded-full
         flex items-center justify-center
         cursor-grab active:cursor-grabbing
         select-none
@@ -178,7 +178,7 @@ export function Pill() {
         </div>
       )}
 
-      {/* Processing state: bouncing dots + indigo glow (from pill-processing on container) */}
+      {/* Processing state: shimmer sweep + pulse dots */}
       {displayState === "processing" && (
         <div className="pill-content-fade-in">
           <ProcessingDots />
