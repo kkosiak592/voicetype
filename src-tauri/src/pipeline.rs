@@ -155,8 +155,14 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
                 // Pill: success flash before hide
                 app.emit_to("pill", "pill-result", "success").ok();
             }
-            Ok(Err(e)) => log::error!("Pipeline: injection failed: {}", e),
-            Err(e) => log::error!("Pipeline: injection panicked: {}", e),
+            Ok(Err(e)) => {
+                log::error!("Pipeline: injection failed: {}", e);
+                app.emit_to("pill", "pill-result", "error").ok();
+            }
+            Err(e) => {
+                log::error!("Pipeline: injection panicked: {}", e);
+                app.emit_to("pill", "pill-result", "error").ok();
+            }
         }
 
         // 6. Reset to idle
