@@ -11,7 +11,7 @@ mod transcribe;
 
 #[cfg(feature = "whisper")]
 use std::sync::Arc;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 use tray::build_tray;
 
 // WhisperState and related types are only available with the whisper feature.
@@ -48,8 +48,30 @@ fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<
 
     gs.on_shortcut(new_key.as_str(), |app, _shortcut, event| {
         use tauri_plugin_global_shortcut::ShortcutState;
-        if event.state == ShortcutState::Pressed {
-            let _ = app.emit("hotkey-triggered", ());
+        use std::sync::atomic::Ordering;
+
+        let pipeline = app.state::<pipeline::PipelineState>();
+
+        match event.state {
+            ShortcutState::Pressed => {
+                if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
+                    let audio = app.state::<audio::AudioCapture>();
+                    audio.clear_buffer();
+                    audio.recording.store(true, Ordering::Relaxed);
+                    tray::set_tray_state(app, tray::TrayState::Recording);
+                    log::info!("Pipeline: IDLE -> RECORDING (rebound hotkey)");
+                }
+            }
+            ShortcutState::Released => {
+                if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
+                    tray::set_tray_state(app, tray::TrayState::Processing);
+                    log::info!("Pipeline: RECORDING -> PROCESSING (rebound hotkey)");
+                    let app_handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        pipeline::run_pipeline(app_handle).await;
+                    });
+                }
+            }
         }
     })
     .map_err(|e| e.to_string())?;
@@ -296,11 +318,34 @@ pub fn run() {
             app.handle().plugin(
                 tauri_plugin_global_shortcut::Builder::new()
                     .with_shortcuts([hotkey.as_str()])?
-                    .with_handler(|app, shortcut, event| {
+                    .with_handler(|app, _shortcut, event| {
                         use tauri_plugin_global_shortcut::ShortcutState;
-                        if event.state == ShortcutState::Pressed {
-                            log::info!("Hotkey triggered: {}", shortcut);
-                            let _ = app.emit("hotkey-triggered", ());
+                        use std::sync::atomic::Ordering;
+
+                        let pipeline = app.state::<pipeline::PipelineState>();
+
+                        match event.state {
+                            ShortcutState::Pressed => {
+                                // Only start if idle — blocked if recording or processing
+                                if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
+                                    let audio = app.state::<audio::AudioCapture>();
+                                    audio.clear_buffer();
+                                    audio.recording.store(true, Ordering::Relaxed);
+                                    tray::set_tray_state(app, tray::TrayState::Recording);
+                                    log::info!("Pipeline: IDLE -> RECORDING");
+                                }
+                            }
+                            ShortcutState::Released => {
+                                // Only fire pipeline if we were actually recording
+                                if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
+                                    tray::set_tray_state(app, tray::TrayState::Processing);
+                                    log::info!("Pipeline: RECORDING -> PROCESSING");
+                                    let app_handle = app.clone();
+                                    tauri::async_runtime::spawn(async move {
+                                        pipeline::run_pipeline(app_handle).await;
+                                    });
+                                }
+                            }
                         }
                     })
                     .build(),
