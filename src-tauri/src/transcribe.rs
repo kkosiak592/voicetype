@@ -2,29 +2,91 @@ use std::path::PathBuf;
 use std::time::Instant;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
+/// Inference mode: GPU (CUDA) or CPU fallback.
+///
+/// Determined once at startup via `detect_gpu()`. Controls model selection and
+/// whisper context parameters (use_gpu true/false).
+#[derive(Debug, Clone, Copy)]
+pub enum ModelMode {
+    Gpu,
+    Cpu,
+}
+
 /// Returns the path to the VoiceType models directory in APPDATA.
 pub fn models_dir() -> PathBuf {
     let appdata = std::env::var("APPDATA").expect("APPDATA environment variable not set");
     PathBuf::from(appdata).join("VoiceType").join("models")
 }
 
-/// Resolves and validates the GPU model path.
+/// Detects whether an NVIDIA GPU is available at runtime using NVML.
 ///
-/// Returns the path if the model file exists. Returns a detailed error with download
-/// instructions if the file is missing.
-pub fn resolve_model_path() -> Result<PathBuf, String> {
-    let path = models_dir().join("ggml-large-v3-turbo-q5_0.bin");
+/// Returns ModelMode::Gpu if an NVIDIA GPU is found, ModelMode::Cpu otherwise.
+/// Logs the detection result in both cases.
+///
+/// NVML is the NVIDIA Management Library — it's available whenever NVIDIA drivers
+/// are installed, independent of CUDA. This allows runtime detection even when
+/// shipping a single CUDA-enabled binary.
+pub fn detect_gpu() -> ModelMode {
+    use nvml_wrapper::Nvml;
+
+    match Nvml::init() {
+        Ok(nvml) => match nvml.device_by_index(0) {
+            Ok(device) => {
+                let name = device.name().unwrap_or_else(|_| "Unknown NVIDIA GPU".to_string());
+                log::info!("NVIDIA GPU detected: {}", name);
+                ModelMode::Gpu
+            }
+            Err(e) => {
+                log::info!("NVML init OK but no device at index 0: {} — using CPU mode", e);
+                ModelMode::Cpu
+            }
+        },
+        Err(e) => {
+            log::info!("NVML init failed (no NVIDIA GPU or drivers not installed): {} — using CPU mode", e);
+            ModelMode::Cpu
+        }
+    }
+}
+
+/// Resolves and validates the model path for the given inference mode.
+///
+/// - Gpu: ggml-large-v3-turbo-q5_0.bin (large, fast GPU model)
+/// - Cpu: ggml-small.en-q5_1.bin (small, runs acceptably on CPU)
+///
+/// Returns a detailed error with download instructions if the file is missing.
+pub fn resolve_model_path(mode: &ModelMode) -> Result<PathBuf, String> {
+    let (filename, download_url) = match mode {
+        ModelMode::Gpu => (
+            "ggml-large-v3-turbo-q5_0.bin",
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
+        ),
+        ModelMode::Cpu => (
+            "ggml-small.en-q5_1.bin",
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q5_1.bin",
+        ),
+    };
+
+    let path = models_dir().join(filename);
+
+    log::info!(
+        "Model selection: {:?} mode — looking for '{}'",
+        mode,
+        filename
+    );
 
     if !path.exists() {
         return Err(format!(
-            "Whisper GPU model not found at: {}\n\
+            "Whisper {:?} model not found at: {}\n\
             \n\
             Download it with PowerShell:\n\
-            Invoke-WebRequest -Uri 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin' \
-            -OutFile \"$env:APPDATA\\VoiceType\\models\\ggml-large-v3-turbo-q5_0.bin\"\n\
+            Invoke-WebRequest -Uri '{}' \
+            -OutFile \"$env:APPDATA\\VoiceType\\models\\{}\"\n\
             \n\
             Expected directory: {}",
+            mode,
             path.display(),
+            download_url,
+            filename,
             models_dir().display()
         ));
     }
@@ -39,23 +101,30 @@ pub fn resolve_model_path() -> Result<PathBuf, String> {
     Ok(path)
 }
 
-/// Loads a WhisperContext from the given model path with GPU acceleration enabled.
+/// Loads a WhisperContext from the given model path.
 ///
-/// Logs model load duration and GPU status. Returns an error if the context cannot
-/// be created (e.g. CUDA not available or model file corrupted).
-pub fn load_whisper_context(model_path: &str) -> Result<WhisperContext, String> {
+/// GPU mode enables CUDA acceleration; CPU mode forces software inference.
+/// Logs model load duration and GPU status.
+pub fn load_whisper_context(model_path: &str, mode: &ModelMode) -> Result<WhisperContext, String> {
     let start = Instant::now();
+    let use_gpu = matches!(mode, ModelMode::Gpu);
+
+    log::info!(
+        "Loading whisper model: {} (GPU={})",
+        model_path,
+        use_gpu
+    );
 
     let mut ctx_params = WhisperContextParameters::default();
-    ctx_params.use_gpu(true);
+    ctx_params.use_gpu(use_gpu);
 
     let ctx = WhisperContext::new_with_params(model_path, ctx_params)
         .map_err(|e| format!("Failed to load whisper model from '{}': {}", model_path, e))?;
 
     log::info!(
-        "Whisper model loaded from '{}' with GPU enabled — {}ms",
-        model_path,
-        start.elapsed().as_millis()
+        "Whisper model loaded in {}ms (GPU={})",
+        start.elapsed().as_millis(),
+        use_gpu
     );
 
     Ok(ctx)
@@ -86,14 +155,12 @@ pub fn transcribe_audio(ctx: &WhisperContext, audio: &[f32]) -> Result<String, S
 
     state.full(params, audio).map_err(|e| e.to_string())?;
 
-    let n_segments = state.full_n_segments().map_err(|e| e.to_string())?;
+    let n_segments = state.full_n_segments();
     let mut text = String::new();
     for i in 0..n_segments {
-        text.push_str(
-            &state
-                .full_get_segment_text(i)
-                .map_err(|e| e.to_string())?,
-        );
+        if let Some(segment) = state.get_segment(i) {
+            text.push_str(segment.to_str().map_err(|e| e.to_string())?);
+        }
     }
 
     let result = text.trim().to_string();

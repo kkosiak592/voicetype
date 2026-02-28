@@ -80,53 +80,33 @@ fn stop_recording(state: tauri::State<'_, audio::AudioCapture>) -> Result<usize,
 ///
 /// Returns the file path on success.
 #[tauri::command]
-fn save_test_wav(state: tauri::State<'_, audio::AudioCapture>) -> Result<String, String> {
+fn save_test_wav(app: tauri::AppHandle, state: tauri::State<'_, audio::AudioCapture>) -> Result<String, String> {
     let samples = state.get_buffer();
-    let path = "test-fixtures/capture-test.wav".to_string();
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let wav_dir = data_dir.join("test-fixtures");
+    std::fs::create_dir_all(&wav_dir).map_err(|e| e.to_string())?;
+    let path = wav_dir.join("capture-test.wav");
+    let path_str = path.to_string_lossy().to_string();
 
-    audio::write_wav(&path, &samples).map_err(|e| e.to_string())?;
+    audio::write_wav(&path_str, &samples).map_err(|e| e.to_string())?;
 
     log::info!(
         "WAV saved: {} ({} samples, {:.1}s)",
-        path,
+        path_str,
         samples.len(),
         samples.len() as f32 / 16000.0
     );
 
-    Ok(path)
+    Ok(path_str)
 }
 
-/// Test whisper inference on a WAV file.
+/// Reads a WAV file and decodes it to mono f32 samples.
 ///
-/// Reads the WAV at `path`, normalises samples to f32, and runs transcription
-/// using the GPU-accelerated WhisperContext stored in managed state.
-/// Returns the transcription text prefixed with duration in milliseconds.
-///
-/// Only available when compiled with the "whisper" feature flag.
+/// Supports float and integer WAV formats. Downmixes multi-channel audio to mono.
+/// Shared by transcribe_test_file and force_cpu_transcribe.
 #[cfg(feature = "whisper")]
-#[tauri::command]
-async fn transcribe_test_file(
-    app: tauri::AppHandle,
-    path: String,
-) -> Result<String, String> {
-    use std::time::Instant;
-
-    let start = Instant::now();
-
-    // Get the WhisperContext from managed state
-    let state = app.state::<WhisperState>();
-    let ctx = match &state.0 {
-        Some(ctx) => Arc::clone(ctx),
-        None => {
-            return Err(
-                "Whisper model not loaded. Check startup logs for the download instructions."
-                    .to_string(),
-            );
-        }
-    };
-
-    // Read the WAV file
-    let mut reader = hound::WavReader::open(&path)
+fn read_wav_to_f32(path: &str) -> Result<(Vec<f32>, u32), String> {
+    let mut reader = hound::WavReader::open(path)
         .map_err(|e| format!("Failed to open WAV file '{}': {}", path, e))?;
 
     let spec = reader.spec();
@@ -139,7 +119,6 @@ async fn transcribe_test_file(
         spec.sample_format
     );
 
-    // Decode samples to f32, downmixing to mono
     let channels = spec.channels as usize;
     let audio_f32: Vec<f32> = match spec.sample_format {
         hound::SampleFormat::Float => {
@@ -175,17 +154,99 @@ async fn transcribe_test_file(
         audio_f32.len() as f32 / spec.sample_rate as f32
     );
 
+    Ok((audio_f32, spec.sample_rate))
+}
+
+/// Test whisper inference on a WAV file.
+///
+/// Reads the WAV at `path`, normalises samples to f32, and runs transcription
+/// using the WhisperContext stored in managed state (GPU or CPU depending on detected mode).
+/// Returns the transcription text prefixed with duration in milliseconds.
+///
+/// Only available when compiled with the "whisper" feature flag.
+#[cfg(feature = "whisper")]
+#[tauri::command]
+async fn transcribe_test_file(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<String, String> {
+    use std::time::Instant;
+
+    let start = Instant::now();
+
+    // Get the WhisperContext from managed state
+    let state = app.state::<WhisperState>();
+    let ctx = match &state.0 {
+        Some(ctx) => Arc::clone(ctx),
+        None => {
+            return Err(
+                "Whisper model not loaded. Check startup logs for the download instructions."
+                    .to_string(),
+            );
+        }
+    };
+
+    let (audio_f32, _sample_rate) = read_wav_to_f32(&path)?;
+
     // Run inference on a blocking thread to avoid stalling the Tauri async runtime
-    let result = tokio::task::spawn_blocking(move || {
-        transcribe::transcribe_audio(&ctx, &audio_f32)
-    })
-    .await
-    .map_err(|e| format!("Blocking task panicked: {}", e))??;
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(transcribe::transcribe_audio(&ctx, &audio_f32));
+    });
+    let result = rx.recv()
+        .map_err(|e| format!("Inference thread failed: {}", e))?
+        .map_err(|e| e.to_string())?;
 
     let total_ms = start.elapsed().as_millis();
     log::info!("transcribe_test_file completed in {}ms: '{}'", total_ms, result);
 
     Ok(format!("[{}ms] {}", total_ms, result))
+}
+
+/// Force CPU inference on a WAV file for testing the CPU fallback path.
+///
+/// Loads the small.en CPU model with use_gpu(false) regardless of whether a GPU
+/// is present. This allows verifying CORE-04 (CPU fallback) on the dev machine
+/// (which has a Quadro P2000). CPU inference on the small model typically takes
+/// 2-10s for a 5s clip — this is acceptable per Phase 2 success criteria.
+///
+/// Only available when compiled with the "whisper" feature flag.
+/// Phase 2 verification command — will be removed or hidden in later phases.
+#[cfg(feature = "whisper")]
+#[tauri::command]
+async fn force_cpu_transcribe(path: String) -> Result<String, String> {
+    use std::time::Instant;
+
+    let start = Instant::now();
+    log::info!("force_cpu_transcribe: loading CPU model for path '{}'", path);
+
+    // Resolve the CPU model path (ggml-small.en-q5_1.bin)
+    let cpu_mode = transcribe::ModelMode::Cpu;
+    let model_path = transcribe::resolve_model_path(&cpu_mode)?;
+    let model_str = model_path.to_string_lossy().to_string();
+
+    // Load CPU model with use_gpu(false) on a blocking thread
+    let (audio_f32, _sample_rate) = read_wav_to_f32(&path)?;
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let ctx_result = transcribe::load_whisper_context(&model_str, &cpu_mode);
+        let result = ctx_result.and_then(|ctx| transcribe::transcribe_audio(&ctx, &audio_f32));
+        let _ = tx.send(result);
+    });
+
+    let result = rx.recv()
+        .map_err(|e| format!("CPU inference thread failed: {}", e))?
+        .map_err(|e| e.to_string())?;
+
+    let total_ms = start.elapsed().as_millis();
+    log::info!(
+        "force_cpu_transcribe completed in {}ms (GPU=false): '{}'",
+        total_ms,
+        result
+    );
+
+    Ok(format!("[{}ms CPU] {}", total_ms, result))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -213,6 +274,8 @@ pub fn run() {
             save_test_wav,
             #[cfg(feature = "whisper")]
             transcribe_test_file,
+            #[cfg(feature = "whisper")]
+            force_cpu_transcribe,
         ])
         .setup(|app| {
             build_tray(app)?;
@@ -253,12 +316,16 @@ pub fn run() {
             // Load whisper model (only when compiled with "whisper" feature).
             #[cfg(feature = "whisper")]
             {
-                let whisper_ctx = match transcribe::resolve_model_path() {
+                // Detect GPU presence at runtime — selects large-v3-turbo (GPU) or small.en (CPU)
+                let mode = transcribe::detect_gpu();
+                log::info!("Inference mode selected: {:?}", mode);
+
+                let whisper_ctx = match transcribe::resolve_model_path(&mode) {
                     Ok(model_path) => {
                         let model_str = model_path.to_string_lossy().to_string();
-                        match transcribe::load_whisper_context(&model_str) {
+                        match transcribe::load_whisper_context(&model_str, &mode) {
                             Ok(ctx) => {
-                                log::info!("CUDA whisper context initialized successfully");
+                                log::info!("Whisper context initialized successfully ({:?} mode)", mode);
                                 Some(Arc::new(ctx))
                             }
                             Err(e) => {
