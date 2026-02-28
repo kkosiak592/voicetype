@@ -5040,6 +5040,7 @@ dependencies = [
  "tauri-plugin-global-shortcut",
  "tauri-plugin-single-instance",
  "tauri-plugin-store",
+ "tokio",
  "whisper-rs",
 ]
 

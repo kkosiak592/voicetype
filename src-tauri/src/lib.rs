@@ -1,5 +1,6 @@
 mod audio;
 mod inject;
+mod pill;
 mod pipeline;
 mod tray;
 
@@ -9,10 +10,14 @@ mod tray;
 #[cfg(feature = "whisper")]
 mod transcribe;
 
-#[cfg(feature = "whisper")]
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use tauri::Manager;
 use tray::build_tray;
+
+/// Control flag for the RMS level streaming loop. Stored as managed state
+/// so both the setup() and rebind_hotkey() hotkey handlers can access it.
+pub struct LevelStreamActive(pub Arc<AtomicBool>);
 
 // WhisperState and related types are only available with the whisper feature.
 #[cfg(feature = "whisper")]
@@ -49,6 +54,7 @@ fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<
     gs.on_shortcut(new_key.as_str(), |app, _shortcut, event| {
         use tauri_plugin_global_shortcut::ShortcutState;
         use std::sync::atomic::Ordering;
+        use tauri::Emitter;
 
         let pipeline = app.state::<pipeline::PipelineState>();
 
@@ -59,11 +65,33 @@ fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<
                     audio.clear_buffer();
                     audio.recording.store(true, Ordering::Relaxed);
                     tray::set_tray_state(app, tray::TrayState::Recording);
+
+                    // Pill: show and set recording state
+                    app.emit_to("pill", "pill-show", ()).ok();
+                    app.emit_to("pill", "pill-state", "recording").ok();
+
+                    // Start RMS level stream
+                    let stream_active = app.state::<LevelStreamActive>();
+                    stream_active.0.store(true, Ordering::Relaxed);
+                    let audio_for_pill = app.state::<audio::AudioCapture>();
+                    pill::start_level_stream(
+                        app.clone(),
+                        audio_for_pill.buffer.clone(),
+                        stream_active.0.clone(),
+                    );
+
                     log::info!("Pipeline: IDLE -> RECORDING (rebound hotkey)");
                 }
             }
             ShortcutState::Released => {
                 if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
+                    // Stop RMS level stream BEFORE transitioning to processing
+                    let stream_active = app.state::<LevelStreamActive>();
+                    stream_active.0.store(false, Ordering::Relaxed);
+
+                    // Pill: switch to processing state (bars stop, animated border starts)
+                    app.emit_to("pill", "pill-state", "processing").ok();
+
                     tray::set_tray_state(app, tray::TrayState::Processing);
                     log::info!("Pipeline: RECORDING -> PROCESSING (rebound hotkey)");
                     let app_handle = app.clone();
@@ -342,6 +370,10 @@ pub fn run() {
             // Register pipeline state machine BEFORE hotkey handler
             app.manage(pipeline::PipelineState::new());
 
+            // Register RMS level stream control flag (starts false, toggled in hotkey handler)
+            let level_stream_active = Arc::new(AtomicBool::new(false));
+            app.manage(LevelStreamActive(level_stream_active));
+
             // Register global hotkey plugin (desktop only — no Android/iOS support)
             #[cfg(desktop)]
             app.handle().plugin(
@@ -350,6 +382,7 @@ pub fn run() {
                     .with_handler(|app, _shortcut, event| {
                         use tauri_plugin_global_shortcut::ShortcutState;
                         use std::sync::atomic::Ordering;
+                        use tauri::Emitter;
 
                         let pipeline = app.state::<pipeline::PipelineState>();
 
@@ -361,12 +394,34 @@ pub fn run() {
                                     audio.clear_buffer();
                                     audio.recording.store(true, Ordering::Relaxed);
                                     tray::set_tray_state(app, tray::TrayState::Recording);
+
+                                    // Pill: show and set recording state
+                                    app.emit_to("pill", "pill-show", ()).ok();
+                                    app.emit_to("pill", "pill-state", "recording").ok();
+
+                                    // Start RMS level stream
+                                    let stream_active = app.state::<LevelStreamActive>();
+                                    stream_active.0.store(true, Ordering::Relaxed);
+                                    let audio_for_pill = app.state::<audio::AudioCapture>();
+                                    pill::start_level_stream(
+                                        app.clone(),
+                                        audio_for_pill.buffer.clone(),
+                                        stream_active.0.clone(),
+                                    );
+
                                     log::info!("Pipeline: IDLE -> RECORDING");
                                 }
                             }
                             ShortcutState::Released => {
                                 // Only fire pipeline if we were actually recording
                                 if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
+                                    // Stop RMS level stream BEFORE transitioning to processing
+                                    let stream_active = app.state::<LevelStreamActive>();
+                                    stream_active.0.store(false, Ordering::Relaxed);
+
+                                    // Pill: switch to processing state (bars stop, animated border starts)
+                                    app.emit_to("pill", "pill-state", "processing").ok();
+
                                     tray::set_tray_state(app, tray::TrayState::Processing);
                                     log::info!("Pipeline: RECORDING -> PROCESSING");
                                     let app_handle = app.clone();

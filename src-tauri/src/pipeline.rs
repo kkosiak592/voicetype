@@ -1,4 +1,5 @@
 use std::sync::atomic::{AtomicU8, Ordering};
+use tauri::Emitter;
 use tauri::Manager;
 
 pub const IDLE: u8 = 0;
@@ -57,6 +58,8 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
             samples.len(),
             samples.len() as f32 / 16.0
         );
+        // Pill: error flash — user held hotkey but got no usable audio
+        app.emit_to("pill", "pill-result", "error").ok();
         reset_to_idle(&app);
         return;
     }
@@ -76,6 +79,8 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
             Some(ctx) => ctx.clone(),
             None => {
                 log::error!("Pipeline: whisper model not loaded");
+                // Pill: error flash — model not available
+                app.emit_to("pill", "pill-result", "error").ok();
                 reset_to_idle(&app);
                 return;
             }
@@ -88,11 +93,15 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
             Ok(Ok(text)) => text,
             Ok(Err(e)) => {
                 log::error!("Pipeline: whisper inference error: {}", e);
+                // Pill: error flash — inference failed
+                app.emit_to("pill", "pill-result", "error").ok();
                 reset_to_idle(&app);
                 return;
             }
             Err(e) => {
                 log::error!("Pipeline: spawn_blocking panicked: {}", e);
+                // Pill: error flash — spawn_blocking panicked
+                app.emit_to("pill", "pill-result", "error").ok();
                 reset_to_idle(&app);
                 return;
             }
@@ -103,6 +112,8 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
     #[cfg(not(feature = "whisper"))]
     {
         log::warn!("Pipeline: whisper feature not enabled, cannot transcribe");
+        // Pill: error flash — no transcription possible
+        app.emit_to("pill", "pill-result", "error").ok();
         reset_to_idle(&app);
         return;
     }
@@ -116,6 +127,8 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
         let trimmed = transcription.trim_start();
         if trimmed.is_empty() || trimmed.chars().all(|c| c.is_whitespace()) {
             log::info!("Pipeline: empty transcription, discarding");
+            // Pill: error flash — no speech detected
+            app.emit_to("pill", "pill-result", "error").ok();
             reset_to_idle(&app);
             return;
         }
@@ -139,6 +152,8 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
                 if let Some(tray) = app.tray_by_id("tray") {
                     let _ = tray.set_tooltip(Some(&format!("VoiceType — last: {}", trimmed)));
                 }
+                // Pill: success flash before hide
+                app.emit_to("pill", "pill-result", "success").ok();
             }
             Ok(Err(e)) => log::error!("Pipeline: injection failed: {}", e),
             Err(e) => log::error!("Pipeline: injection panicked: {}", e),
@@ -159,4 +174,7 @@ fn reset_to_idle(app: &tauri::AppHandle) {
     if let Some(tray) = app.tray_by_id("tray") {
         let _ = tray.set_tooltip(Some("VoiceType — idle"));
     }
+    // Pill: transition to idle and hide
+    app.emit_to("pill", "pill-state", "idle").ok();
+    app.emit_to("pill", "pill-hide", ()).ok();
 }
