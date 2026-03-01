@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Dark indigo rounded square background -->
+  <rect x="0" y="0" width="1024" height="1024" rx="200" ry="200" fill="#312E81"/>
+
+  <!-- Microphone capsule head (oval) -->
+  <rect x="362" y="180" width="300" height="400" rx="150" ry="150" fill="white"/>
+
+  <!-- Microphone stand arm (U-shaped cradle) - drawn as a thick arc -->
+  <!-- Left arm -->
+  <rect x="282" y="500" width="80" height="220" rx="40" ry="40" fill="white"/>
+  <!-- Right arm -->
+  <rect x="662" y="500" width="80" height="220" rx="40" ry="40" fill="white"/>
+  <!-- Bottom of U arc -->
+  <rect x="282" y="680" width="460" height="80" rx="40" ry="40" fill="white"/>
+
+  <!-- Vertical stand below U -->
+  <rect x="472" y="740" width="80" height="140" rx="40" ry="40" fill="white"/>
+
+  <!-- Base stand horizontal bar -->
+  <rect x="312" y="840" width="400" height="80" rx="40" ry="40" fill="white"/>
+</svg>
