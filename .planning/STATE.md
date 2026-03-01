@@ -4,12 +4,12 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 06-vocabulary-settings
 status: In Progress
-last_updated: "2026-03-01T02:53:55Z"
+last_updated: "2026-03-01T03:02:23Z"
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 14
-  completed_plans: 14
+  completed_plans: 15
 ---
 
 # Session State
@@ -22,10 +22,10 @@ See: .planning/PROJECT.md
 
 **Milestone:** v1.0 milestone
 **Current phase:** 06-vocabulary-settings
-**Current plan:** 06-02 (next)
+**Current plan:** 06-03 (next)
 **Status:** In Progress
 
-Last activity: 2026-03-01 - Completed 06-01: Corrections engine and vocabulary profile system (corrections.rs, profiles.rs, pipeline integration, 5 Tauri commands)
+Last activity: 2026-03-01 - Completed 06-02: AudioCaptureMutex + WhisperStateMutex refactor, 4 new Tauri commands (list_input_devices, set_microphone, list_models, set_model), runtime device/model switching (commit 8031dee)
 
 ## Session Log
 
@@ -34,6 +34,7 @@ Last activity: 2026-03-01 - Completed 06-01: Corrections engine and vocabulary p
 - 2026-03-01: Quick task 4 verified and completed
 - 2026-03-01: Quick task 6 (remove checkmark from pill) — completed (commit 8bb5ed5)
 - 2026-03-01: 06-01 (corrections engine + profiles) — completed (commits 3fcffd7, 58531c9)
+- 2026-03-01: 06-02 (AudioCaptureMutex + WhisperStateMutex + 4 Tauri commands) — completed (commit 8031dee)
 
 ## Decisions
 
@@ -41,6 +42,10 @@ Last activity: 2026-03-01 - Completed 06-01: Corrections engine and vocabulary p
 - 06-vocabulary-settings: set_no_context(false) when initial_prompt is non-empty — whisper silently suppresses prompt otherwise
 - 06-vocabulary-settings: sequential rule application in CorrectionsEngine (Vec<Rule>) acceptable for v1 dictionary size
 - 06-vocabulary-settings: ProfileInfo excludes corrections dict from get_profiles — UI only needs id/name/active
+- 06-vocabulary-settings: AudioCaptureMutex outer Mutex for replacement; inner Mutex inside AudioCapture for buffer callback — two separate non-nesting locks
+- 06-vocabulary-settings: build_stream_from_device() extracted to share stream logic between start_persistent_stream and start_persistent_stream_with_device
+- 06-vocabulary-settings: GPU mode determined by model_id (large-v3-turbo -> Gpu, others -> Cpu) in set_model command
+- 06-vocabulary-settings: startup model loading tries saved whisper_model_id first, falls back to GPU auto-detect if file missing
 
 ### Roadmap Evolution
 
