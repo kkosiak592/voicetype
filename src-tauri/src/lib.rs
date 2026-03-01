@@ -493,12 +493,12 @@ fn get_corrections(app: tauri::AppHandle) -> std::collections::HashMap<String, S
 /// Save user corrections for the active profile. Merges with defaults and rebuilds engine.
 /// Persists to settings.json under `corrections.{profile_id}`.
 #[tauri::command]
-fn save_corrections(app: tauri::AppHandle, corrections_map: std::collections::HashMap<String, String>) -> Result<(), String> {
+fn save_corrections(app: tauri::AppHandle, corrections: std::collections::HashMap<String, String>) -> Result<(), String> {
     let profile_id = {
         let state = app.state::<profiles::ActiveProfile>();
         let mut guard = state.0.lock().unwrap();
         // Merge user corrections into profile
-        guard.corrections.extend(corrections_map.clone());
+        guard.corrections.extend(corrections.clone());
         guard.id.clone()
     };
 
@@ -523,7 +523,7 @@ fn save_corrections(app: tauri::AppHandle, corrections_map: std::collections::Ha
         .unwrap_or_else(|| serde_json::json!({}));
 
     let key = format!("corrections.{}", profile_id);
-    json[&key] = serde_json::to_value(&corrections_map).unwrap();
+    json[&key] = serde_json::to_value(&corrections).unwrap();
     std::fs::write(&settings_path, serde_json::to_string_pretty(&json).unwrap())
         .map_err(|e| e.to_string())?;
 
