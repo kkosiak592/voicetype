@@ -4,12 +4,12 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 06-vocabulary-settings
 status: In Progress
-last_updated: "2026-03-01T03:02:23Z"
+last_updated: "2026-03-01T03:11:30Z"
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 14
-  completed_plans: 15
+  completed_plans: 16
 ---
 
 # Session State
@@ -22,10 +22,10 @@ See: .planning/PROJECT.md
 
 **Milestone:** v1.0 milestone
 **Current phase:** 06-vocabulary-settings
-**Current plan:** 06-03 (next)
+**Current plan:** 06-03 (complete) — next: 06.1-fix-duplicate-tray-icons
 **Status:** In Progress
 
-Last activity: 2026-03-01 - Completed 06-02: AudioCaptureMutex + WhisperStateMutex refactor, 4 new Tauri commands (list_input_devices, set_microphone, list_models, set_model), runtime device/model switching (commit 8031dee)
+Last activity: 2026-03-01 - Completed 06-03: Sidebar-nav settings panel with ProfileSwitcher, DictionaryEditor, ModelSelector, MicrophoneSection — all Phase 6 backend commands wired to UI (commits 70ca534, 1d7b85e)
 
 ## Session Log
 
@@ -35,6 +35,7 @@ Last activity: 2026-03-01 - Completed 06-02: AudioCaptureMutex + WhisperStateMut
 - 2026-03-01: Quick task 6 (remove checkmark from pill) — completed (commit 8bb5ed5)
 - 2026-03-01: 06-01 (corrections engine + profiles) — completed (commits 3fcffd7, 58531c9)
 - 2026-03-01: 06-02 (AudioCaptureMutex + WhisperStateMutex + 4 Tauri commands) — completed (commit 8031dee)
+- 2026-03-01: 06-03 (sidebar-nav settings UI, ProfileSwitcher, DictionaryEditor, ModelSelector, MicrophoneSection) — completed (commits 70ca534, 1d7b85e)
 
 ## Decisions
 
@@ -46,6 +47,9 @@ Last activity: 2026-03-01 - Completed 06-02: AudioCaptureMutex + WhisperStateMut
 - 06-vocabulary-settings: build_stream_from_device() extracted to share stream logic between start_persistent_stream and start_persistent_stream_with_device
 - 06-vocabulary-settings: GPU mode determined by model_id (large-v3-turbo -> Gpu, others -> Cpu) in set_model command
 - 06-vocabulary-settings: startup model loading tries saved whisper_model_id first, falls back to GPU auto-detect if file missing
+- 06-vocabulary-settings: profile descriptions hard-coded in ProfileSwitcher PROFILE_DESCRIPTIONS map — ProfileInfo only carries id/name/active from backend
+- 06-vocabulary-settings: DictionaryEditor saves on blur not on keystroke — prevents excessive save_corrections calls while typing
+- 06-vocabulary-settings: each section component owns its own useEffect + invoke data fetching, not App.tsx coordination
 
 ### Roadmap Evolution
 

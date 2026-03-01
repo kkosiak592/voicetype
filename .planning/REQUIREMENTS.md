@@ -42,7 +42,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Settings & Configuration
 
-- [ ] **SET-01**: App has a settings panel UI for configuring hotkeys, model, microphone, profiles, and corrections
+- [x] **SET-01**: App has a settings panel UI for configuring hotkeys, model, microphone, profiles, and corrections
 - [x] **SET-02**: User can configure the global hotkey binding (choose any key or key combo)
 - [x] **SET-03**: User can select which whisper model to use (large-v3-turbo for GPU, small for CPU, medium as alternative)
 - [x] **SET-04**: User can select which microphone to use from available input devices
@@ -120,7 +120,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VOC-04 | Phase 6 | Complete |
 | VOC-05 | Phase 6 | Complete |
 | VOC-06 | Phase 6 | Complete |
-| SET-01 | Phase 6 | Pending |
+| SET-01 | Phase 6 | Complete |
 | SET-02 | Phase 1 | Complete |
 | SET-03 | Phase 6 | Complete |
 | SET-04 | Phase 6 | Complete |
