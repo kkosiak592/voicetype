@@ -136,13 +136,20 @@ Plans:
 
 ### Phase 06.2: Premium waveform visualization upgrade (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
+**Goal:** Replace 24-bar DOM-based FrequencyBars with a Canvas2D neon waveform visualization featuring 3 layered bezier curves with bloom effects, 16-bin FFT frequency data from Rust backend, and cyan-to-purple JARVIS-style aesthetic
+**Requirements**: None (inserted phase — no formal requirement IDs)
 **Depends on:** Phase 6
-**Plans:** 4/4 plans complete
+**Success Criteria** (what must be TRUE):
+  1. Pill shows 3 layered neon bezier curves with cyan-to-purple gradient and additive bloom glow during recording
+  2. Waveform reacts to voice — FFT frequency bins drive per-control-point amplitude, making speech formants visible
+  3. Bell-curve envelope shapes waveform (center peaks tallest, edges taper)
+  4. Recording border uses cyan-purple palette (not rainbow)
+  5. No visual regression in processing, entrance, or exit animations
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 06.2 to break down)
+- [ ] 06.2-01-PLAN.md — Backend FFT + WaveformCanvas component + Pill.tsx integration + CSS border update
+- [ ] 06.2-02-PLAN.md — Human visual verification of waveform quality and voice reactivity
 
 ### Phase 06.1: Fix duplicate tray icons and replace default square icon with proper app icon (INSERTED)
 
