@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 08-add-parakeet-tdt-model-and-optimize-transcription-latency
-current_plan: 08-02 complete
+current_plan: 08-03 checkpoint (human-verify pending)
 status: executing
-last_updated: "2026-03-01T17:36:00Z"
+last_updated: "2026-03-01T17:47:00Z"
 progress:
   total_phases: 10
   completed_phases: 9
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md
 **Current plan:** 08-01 complete
 **Status:** Executing
 
-Last activity: 2026-03-01 - 08-02 (engine dispatch + VAD bypass + managed state + get/set engine commands) — completed (commits bbe3a58, d8307d2)
+Last activity: 2026-03-01 - 08-03 (Parakeet frontend: 3-card FirstRun, engine selector in ModelSection) — Task 1 complete (commit 9b430b8), awaiting human verification at Task 2 checkpoint
 
 ## Session Log
 
@@ -47,6 +47,7 @@ Last activity: 2026-03-01 - 08-02 (engine dispatch + VAD bypass + managed state 
 - 2026-03-01: 07-03 (NSIS installer) — tauri.conf.json with currentUser NSIS config, installer built (~9 MB, no models bundled), Defender scan passed; 3 serde/UI bugs fixed in verification (commits a41d8ab, cf2c04e)
 - 2026-03-01: 08-01 (Parakeet TDT inference wrapper + download infrastructure) — transcribe_parakeet.rs with load_parakeet/transcribe_with_parakeet; parakeet-rs 0.1.9 optional dep; download_parakeet_model 5-file command with cumulative progress (commits d47e8b6, f585fa1)
 - 2026-03-01: 08-02 (engine dispatch + VAD bypass + managed state) — TranscriptionEngine enum, ActiveEngine/ParakeetStateMutex managed states, get_engine/set_engine commands with persistence, pipeline engine dispatch, hold-to-talk VAD bypass (commits bbe3a58, d8307d2)
+- 2026-03-01: 08-03 (Parakeet frontend integration) — Task 1: 3-card GPU model selection in FirstRun, Fastest badge, Parakeet download routing, set_engine on complete; engine selector + Parakeet download section in ModelSection settings (commit 9b430b8); awaiting human verification
 
 ## Decisions
 
@@ -85,6 +86,9 @@ Last activity: 2026-03-01 - 08-02 (engine dispatch + VAD bypass + managed state 
 - [Phase 08-parakeet]: ActiveEngine registered on Builder before setup() — webview2 COM init can pump Win32 message loop before setup() fires
 - [Phase 08-parakeet]: load_parakeet called with use_cuda=false on startup/switch — CUDA EP deferred until deployment environment confirmed
 - [Phase 08-parakeet]: hold-to-talk bypasses Silero VAD entirely (4800-sample minimum only) — saves 20-30ms; toggle mode retains full VAD for auto-stop accuracy
+- [08-03-frontend]: GPU presence in ModelSection detected by checking list_models for large-v3-turbo or parakeet-tdt-v2 — avoids new Tauri command
+- [08-03-frontend]: whisperModels filtered before passing to ModelSelector — Parakeet entry excluded from Whisper model list
+- [08-03-frontend]: set_engine('parakeet') called automatically after Parakeet FirstRun download — implicit engine activation on model choice
 
 ### Roadmap Evolution
 
