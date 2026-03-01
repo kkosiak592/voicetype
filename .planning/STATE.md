@@ -26,7 +26,7 @@ See: .planning/PROJECT.md
 **Current plan:** pending
 **Status:** In progress
 
-Last activity: 2026-03-01 - Quick task 8 (fix pill position to bottom-center above taskbar + multi-monitor) — tasks 1-2 complete (commits 69f28ea, 000463d), awaiting human visual verification (task 3)
+Last activity: 2026-03-01 - Quick task 8 (fix pill position to bottom-center above taskbar + multi-monitor) — completed (commits 69f28ea, 000463d, human verified)
 
 ## Session Log
 
@@ -41,7 +41,7 @@ Last activity: 2026-03-01 - Quick task 8 (fix pill position to bottom-center abo
 - 2026-03-01: 06.1-01 (fix duplicate tray icons + VoiceType app icon) — SVG source icon, bundle icons regenerated, tray PNGs redesigned as microphone silhouettes, tray.rs fixed to use Image::from_bytes(ICON_IDLE) in build_tray(), tooltip support added (commits ed7be05, 2fc9aa9)
 - 2026-03-01: 06.1-02 (human verification) — all five visual checks passed: single tray icon, VoiceType microphone design, state color transitions, tooltip text, taskbar/title-bar icon confirmed
 - 2026-03-01: 06.2-01 (neon waveform visualization) — REVERTED: code didn't meet quality bar, restored FrequencyBars.tsx (reverts 5343619, a605af6)
-- 2026-03-01: Quick task 8 (fix pill position bottom-center + multi-monitor) — tasks 1-2 done (commits 69f28ea, 000463d), awaiting visual verify
+- 2026-03-01: Quick task 8 (fix pill position bottom-center + multi-monitor) — completed (commits 69f28ea, 000463d, human verified)
 
 ## Decisions
 

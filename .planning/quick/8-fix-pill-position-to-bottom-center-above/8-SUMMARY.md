@@ -23,7 +23,7 @@ decisions:
 metrics:
   duration: ~10 minutes
   completed_date: "2026-03-01"
-  tasks_completed: 2
+  tasks_completed: 3
   tasks_total: 3
   files_modified: 3
 ---
@@ -42,7 +42,7 @@ Multi-monitor aware pill positioning: a new `show_pill()` Rust function detects 
 |---|------|--------|--------|
 | 1 | Add show_pill() with multi-monitor positioning, replace all call sites | 69f28ea | Done |
 | 2 | Remove drag logic and fixed-position init from Pill.tsx | 000463d | Done |
-| 3 | Human verify pill positioning and multi-monitor behavior | — | Pending checkpoint |
+| 3 | Human verify pill positioning and multi-monitor behavior | — | Verified (user approved) |
 
 ## Key Changes
 
