@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Pill Overlay** - Floating transparent overlay with visualizer and no-focus-steal guarantee (completed 2026-02-28)
 - [ ] **Phase 4.1: Premium Pill UI** - Glassmorphism, sinusoidal bars, animated state transitions (INSERTED)
 - [x] **Phase 5: VAD + Toggle Mode** - Silero VAD silence detection and toggle recording mode (completed 2026-03-01)
-- [ ] **Phase 6: Vocabulary + Settings** - Word corrections, vocabulary profiles, and full settings UI
+- [x] **Phase 6: Vocabulary + Settings** - Word corrections, vocabulary profiles, and full settings UI (completed 2026-02-28)
 - [ ] **Phase 7: Distribution** - First-run model download, GPU auto-detection, and NSIS installer
 
 ## Phase Details
@@ -126,7 +126,7 @@ Plans:
   3. With ALL CAPS mode enabled on a profile, all injected text is uppercased — enabling engineering drawing annotation and PDF markup workflows
   4. User can select which microphone and which whisper model to use from the settings panel; selections persist across restarts
   5. Settings panel opens from the system tray context menu and provides access to all configurable options: hotkey, profile, model, microphone, and correction dictionary editor
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 - [ ] 06-01-PLAN.md — Corrections engine + profile system backend (corrections.rs, profiles.rs, pipeline integration, initial_prompt)
@@ -179,5 +179,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 4.1 -> 5 -> 6 -> 7
 | 4. Pill Overlay | 2/2 | Complete   | 2026-02-28 |
 | 4.1 Premium Pill UI | 0/2 | Not started | - |
 | 5. VAD + Toggle Mode | 2/2 | Complete   | 2026-03-01 |
-| 6. Vocabulary + Settings | 3/4 | In Progress|  |
+| 6. Vocabulary + Settings | 4/4 | Complete   | 2026-02-28 |
 | 7. Distribution | 0/3 | Not started | - |

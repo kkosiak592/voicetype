@@ -4,12 +4,12 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 06-vocabulary-settings
 status: In Progress
-last_updated: "2026-03-01T03:11:30Z"
+last_updated: "2026-02-28T22:35:00Z"
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 14
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # Session State
@@ -22,10 +22,10 @@ See: .planning/PROJECT.md
 
 **Milestone:** v1.0 milestone
 **Current phase:** 06-vocabulary-settings
-**Current plan:** 06-03 (complete) — next: 06.1-fix-duplicate-tray-icons
+**Current plan:** 06-04 (complete) — Phase 06 complete, next phase: 06.1-fix-duplicate-tray-icons
 **Status:** In Progress
 
-Last activity: 2026-03-01 - Completed 06-03: Sidebar-nav settings panel with ProfileSwitcher, DictionaryEditor, ModelSelector, MicrophoneSection — all Phase 6 backend commands wired to UI (commits 70ca534, 1d7b85e)
+Last activity: 2026-02-28 - Completed 06-04: End-to-end verification of Phase 6; two bugs fixed — content pane overflow-hidden clipping and ProfilesSection not calling set_active_profile on backend (commit d024c13)
 
 ## Session Log
 
@@ -36,6 +36,7 @@ Last activity: 2026-03-01 - Completed 06-03: Sidebar-nav settings panel with Pro
 - 2026-03-01: 06-01 (corrections engine + profiles) — completed (commits 3fcffd7, 58531c9)
 - 2026-03-01: 06-02 (AudioCaptureMutex + WhisperStateMutex + 4 Tauri commands) — completed (commit 8031dee)
 - 2026-03-01: 06-03 (sidebar-nav settings UI, ProfileSwitcher, DictionaryEditor, ModelSelector, MicrophoneSection) — completed (commits 70ca534, 1d7b85e)
+- 2026-02-28: 06-04 (end-to-end Phase 6 verification) — all 10 scenarios pass; fixed content pane clipping and profile backend sync (commit d024c13)
 
 ## Decisions
 
@@ -50,6 +51,8 @@ Last activity: 2026-03-01 - Completed 06-03: Sidebar-nav settings panel with Pro
 - 06-vocabulary-settings: profile descriptions hard-coded in ProfileSwitcher PROFILE_DESCRIPTIONS map — ProfileInfo only carries id/name/active from backend
 - 06-vocabulary-settings: DictionaryEditor saves on blur not on keystroke — prevents excessive save_corrections calls while typing
 - 06-vocabulary-settings: each section component owns its own useEffect + invoke data fetching, not App.tsx coordination
+- 06-vocabulary-settings: overflow-y-auto on settings content pane — overflow-hidden clips long sections like the corrections dictionary
+- 06-vocabulary-settings: ProfilesSection must call set_active_profile on initial load — backend corrections engine has no implicit knowledge of which profile is active on restart
 
 ### Roadmap Evolution
 
