@@ -33,6 +33,10 @@ Last activity: 2026-03-01 - Completed quick task 6: Remove checkmark from pill a
 - 2026-03-01: Quick task 4 verified and completed
 - 2026-03-01: Quick task 6 (remove checkmark from pill) — completed (commit 8bb5ed5)
 
+### Roadmap Evolution
+
+- Phase 06.1 inserted after Phase 6: Fix duplicate tray icons and replace default square icon with proper app icon (URGENT)
+
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
