@@ -11,8 +11,8 @@
       {
         "label": "settings",
         "title": "VoiceType Settings",
-        "width": 480,
-        "height": 400,
+        "width": 720,
+        "height": 500,
         "resizable": false,
         "visible": false
       },
