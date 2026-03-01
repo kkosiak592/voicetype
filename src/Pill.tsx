@@ -4,11 +4,10 @@ import { PhysicalPosition } from "@tauri-apps/api/dpi";
 import { load } from "@tauri-apps/plugin-store";
 import { FrequencyBars } from "./components/FrequencyBars";
 import { ProcessingDots } from "./components/ProcessingDots";
-import { CheckmarkIcon } from "./components/CheckmarkIcon";
 
 const appWindow = getCurrentWebviewWindow();
 
-type PillDisplayState = "hidden" | "recording" | "processing" | "success" | "error";
+type PillDisplayState = "hidden" | "recording" | "processing" | "error";
 type AnimState = "hidden" | "entering" | "visible" | "exiting";
 
 export function Pill() {
@@ -19,7 +18,6 @@ export function Pill() {
   // Timers for animation sequencing
   const enterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clears all pending animation timers
   function clearAllTimers() {
@@ -30,10 +28,6 @@ export function Pill() {
     if (exitTimerRef.current) {
       clearTimeout(exitTimerRef.current);
       exitTimerRef.current = null;
-    }
-    if (successTimerRef.current) {
-      clearTimeout(successTimerRef.current);
-      successTimerRef.current = null;
     }
   }
 
@@ -101,33 +95,15 @@ export function Pill() {
       setLevel(e.payload);
     }).then((u) => unlisteners.push(u));
 
-    // pill-result: success shows checkmark then exits; error silently exits
-    appWindow.listen<string>("pill-result", (e) => {
-      const result = e.payload as "success" | "error";
-
-      if (result === "success") {
-        // Show animated checkmark, then trigger exit after 600ms
-        setDisplayState("success");
-        successTimerRef.current = setTimeout(() => {
-          setAnimState("exiting");
-          successTimerRef.current = null;
-          exitTimerRef.current = setTimeout(() => {
-            appWindow.hide();
-            setAnimState("hidden");
-            setDisplayState("hidden");
-            exitTimerRef.current = null;
-          }, 200);
-        }, 600);
-      } else {
-        // Error: silent dismiss — no "No speech" text, just scale-down exit
-        setAnimState("exiting");
-        exitTimerRef.current = setTimeout(() => {
-          appWindow.hide();
-          setAnimState("hidden");
-          setDisplayState("hidden");
-          exitTimerRef.current = null;
-        }, 200);
-      }
+    // pill-result: trigger exit animation on result
+    appWindow.listen<string>("pill-result", () => {
+      setAnimState("exiting");
+      exitTimerRef.current = setTimeout(() => {
+        appWindow.hide();
+        setAnimState("hidden");
+        setDisplayState("hidden");
+        exitTimerRef.current = null;
+      }, 200);
     }).then((u) => unlisteners.push(u));
 
     return () => {
@@ -183,13 +159,6 @@ export function Pill() {
       {displayState === "processing" && (
         <div className="pill-content-fade-in">
           <ProcessingDots />
-        </div>
-      )}
-
-      {/* Success state: animated checkmark draws itself, then pill exits */}
-      {displayState === "success" && (
-        <div className="pill-content-fade-in">
-          <CheckmarkIcon />
         </div>
       )}
 

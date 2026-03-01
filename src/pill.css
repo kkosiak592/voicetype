@@ -279,22 +279,6 @@ html, body, #pill-root {
 /* (Dot animations removed — replaced by orbiting plasma orbs above) */
 
 /* ==========================================================================
-   Checkmark draw animation (CheckmarkIcon component)
-   ========================================================================== */
-
-.pill-checkmark-draw {
-  stroke-dasharray: 30;
-  stroke-dashoffset: 30;
-  animation: draw-check 280ms ease-out 40ms forwards;
-}
-
-@keyframes draw-check {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-/* ==========================================================================
    Content cross-fade helpers (recording → processing transition)
    ========================================================================== */
 
