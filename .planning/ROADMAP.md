@@ -134,6 +134,16 @@ Plans:
 - [ ] 06-03-PLAN.md — Settings panel UI rebuild (sidebar-nav layout, ProfileSwitcher, DictionaryEditor, ModelSelector, MicrophoneSection)
 - [ ] 06-04-PLAN.md — End-to-end verification checkpoint (human-verify all Phase 6 features)
 
+### Phase 06.2: Premium waveform visualization upgrade (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 6
+**Plans:** 4/4 plans complete
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 06.2 to break down)
+
 ### Phase 06.1: Fix duplicate tray icons and replace default square icon with proper app icon (INSERTED)
 
 **Goal:** Eliminate duplicate tray icons, replace all Tauri default icons with a custom VoiceType microphone icon, redesign tray state icons, and add tooltip showing app name + current state

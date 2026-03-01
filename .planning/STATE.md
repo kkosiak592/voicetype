@@ -3,13 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 06-vocabulary-settings
-status: In Progress
-last_updated: "2026-02-28T22:35:00Z"
+current_plan: "06-04 (complete) — Phase 06 complete, next phase: 06.1-fix-duplicate-tray-icons"
+status: planning
+last_updated: "2026-03-01T03:38:27.178Z"
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 14
-  completed_plans: 17
+  total_phases: 9
+  completed_phases: 7
+  total_plans: 20
+  completed_plans: 18
 ---
 
 # Session State
@@ -23,7 +24,7 @@ See: .planning/PROJECT.md
 **Milestone:** v1.0 milestone
 **Current phase:** 06-vocabulary-settings
 **Current plan:** 06-04 (complete) — Phase 06 complete, next phase: 06.1-fix-duplicate-tray-icons
-**Status:** In Progress
+**Status:** Ready to plan
 
 Last activity: 2026-02-28 - Completed 06-04: End-to-end verification of Phase 6; two bugs fixed — content pane overflow-hidden clipping and ProfilesSection not calling set_active_profile on backend (commit d024c13)
 
@@ -57,6 +58,7 @@ Last activity: 2026-02-28 - Completed 06-04: End-to-end verification of Phase 6;
 ### Roadmap Evolution
 
 - Phase 06.1 inserted after Phase 6: Fix duplicate tray icons and replace default square icon with proper app icon (URGENT)
+- Phase 06.2 inserted after Phase 6: Premium waveform visualization upgrade (URGENT)
 
 ### Quick Tasks Completed
 
