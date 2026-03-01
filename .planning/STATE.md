@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 06.2-premium-waveform-visualization-upgrade
-current_plan: "06.2-01 (complete) — Canvas2D neon waveform with 16-bin FFT shipped"
+current_phase: 07-distribution
+current_plan: pending
 status: in_progress
-last_updated: "2026-03-01T13:08:57Z"
+last_updated: "2026-03-01T13:40:00Z"
 progress:
-  total_phases: 9
-  completed_phases: 8
-  total_plans: 22
-  completed_plans: 22
+  total_phases: 8
+  completed_phases: 7
+  total_plans: 20
+  completed_plans: 20
 ---
 
 # Session State
@@ -22,11 +22,11 @@ See: .planning/PROJECT.md
 ## Position
 
 **Milestone:** v1.0 milestone
-**Current phase:** 06.2-premium-waveform-visualization-upgrade
-**Current plan:** 06.2-01 (complete) — Canvas2D neon waveform with 16-bin FFT shipped
+**Current phase:** 07-distribution
+**Current plan:** pending
 **Status:** In progress
 
-Last activity: 2026-03-01 - Completed 06.2-01: WaveformCanvas.tsx with 3 layered bezier curves + bloom, FFT in pill.rs, cyan-purple border. FrequencyBars.tsx deleted (commits bb14eef, 896cd3d)
+Last activity: 2026-03-01 - Quick task 7 (remove rainbow border from pill recording state) — completed (commit 8d36805)
 
 ## Session Log
 
@@ -40,7 +40,7 @@ Last activity: 2026-03-01 - Completed 06.2-01: WaveformCanvas.tsx with 3 layered
 - 2026-02-28: 06-04 (end-to-end Phase 6 verification) — all 10 scenarios pass; fixed content pane clipping and profile backend sync (commit d024c13)
 - 2026-03-01: 06.1-01 (fix duplicate tray icons + VoiceType app icon) — SVG source icon, bundle icons regenerated, tray PNGs redesigned as microphone silhouettes, tray.rs fixed to use Image::from_bytes(ICON_IDLE) in build_tray(), tooltip support added (commits ed7be05, 2fc9aa9)
 - 2026-03-01: 06.1-02 (human verification) — all five visual checks passed: single tray icon, VoiceType microphone design, state color transitions, tooltip text, taskbar/title-bar icon confirmed
-- 2026-03-01: 06.2-01 (neon waveform visualization) — WaveformCanvas.tsx with 3 bezier curves + 3 bloom passes, 16-bin FFT in pill.rs, cyan-purple border, FrequencyBars.tsx deleted (commits bb14eef, 896cd3d)
+- 2026-03-01: 06.2-01 (neon waveform visualization) — REVERTED: code didn't meet quality bar, restored FrequencyBars.tsx (reverts 5343619, a605af6)
 
 ## Decisions
 
@@ -59,14 +59,11 @@ Last activity: 2026-03-01 - Completed 06.2-01: WaveformCanvas.tsx with 3 layered
 - 06-vocabulary-settings: ProfilesSection must call set_active_profile on initial load — backend corrections engine has no implicit knowledge of which profile is active on restart
 - 06.1-fix-duplicate-tray: Image::from_bytes(ICON_IDLE) in build_tray() instead of default_window_icon() — aligns icon source with set_tray_state() so Windows registers one HICON entry not two
 - 06.1-fix-duplicate-tray: tray-icon.png deleted — was unused (not referenced in any include_bytes! or tauri.conf.json config)
-- 06.2-neon-waveform: FftPlanner cached outside async loop, Arc<dyn Fft<f32>> moved into spawn closure — avoids per-tick re-planning (critical perf decision)
-- 06.2-neon-waveform: RMS gate at 0.02 zeroes all FFT bins below threshold — prevents ambient mic noise from triggering waveform visual activity
-- 06.2-neon-waveform: 3 bloom passes with globalCompositeOperation: lighter for additive blending — JARVIS neon halo effect on waveform curves
 
 ### Roadmap Evolution
 
 - Phase 06.1 inserted after Phase 6: Fix duplicate tray icons and replace default square icon with proper app icon (URGENT)
-- Phase 06.2 inserted after Phase 6: Premium waveform visualization upgrade (URGENT)
+- Phase 06.2 inserted then REVERTED: Premium waveform visualization didn't meet quality bar
 
 ### Quick Tasks Completed
 
@@ -75,6 +72,7 @@ Last activity: 2026-03-01 - Completed 06.2-01: WaveformCanvas.tsx with 3 layered
 | 4 | Make waveform bars in pill bounce more prominently | 2026-03-01 | 78d2835 | [4-make-waveform-bars-in-pill-bounce-more-p](./quick/4-make-waveform-bars-in-pill-bounce-more-p/) |
 | 5 | Apply pipeline latency optimizations: greedy decoding, flash attention, whisper parameter tuning, and injection delay reduction | 2026-03-01 | 72ea1fd | [5-apply-pipeline-latency-optimizations-gre](./quick/5-apply-pipeline-latency-optimizations-gre/) |
 | 6 | Remove checkmark from pill after successful processing — immediate exit identical to error path | 2026-03-01 | 8bb5ed5 | [6-remove-checkmark-from-pill-after-process](./quick/6-remove-checkmark-from-pill-after-process/) |
+| 7 | Remove rainbow rotating border from pill recording state — dark glass + waveform bars only | 2026-03-01 | 8d36805 | [7-remove-rainbow-startup-animation-from-pi](./quick/7-remove-rainbow-startup-animation-from-pi/) |
 
 ## Accumulated Context
 
