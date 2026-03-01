@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 07-distribution
-current_plan: 01-complete
+current_plan: 02-complete
 status: in_progress
-last_updated: "2026-03-01T14:40:04Z"
+last_updated: "2026-03-01T14:46:11Z"
 progress:
   total_phases: 8
   completed_phases: 7
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 **Milestone:** v1.0 milestone
 **Current phase:** 07-distribution
-**Current plan:** 07-01 complete
+**Current plan:** 07-02 complete
 **Status:** In progress
 
-Last activity: 2026-03-01 - 07-01 (distribution backend: download.rs, check_first_run, enable_autostart, medium model removed) — completed (commits 672e0e1, ff5355f)
+Last activity: 2026-03-01 - 07-02 (distribution frontend: FirstRun.tsx, App.tsx first-run gate, ModelSelector download, ModelSection refresh) — completed (commits 328e8c7, ec2f7bd)
 
 ## Session Log
 
@@ -43,6 +43,7 @@ Last activity: 2026-03-01 - 07-01 (distribution backend: download.rs, check_firs
 - 2026-03-01: 06.2-01 (neon waveform visualization) — REVERTED: code didn't meet quality bar, restored FrequencyBars.tsx (reverts 5343619, a605af6)
 - 2026-03-01: Quick task 8 (fix pill position bottom-center + multi-monitor) — completed (commits 69f28ea, 000463d, human verified)
 - 2026-03-01: 07-01 (distribution backend) — download.rs with reqwest streaming + SHA256, check_first_run, enable_autostart, medium model removed (commits 672e0e1, ff5355f)
+- 2026-03-01: 07-02 (distribution frontend) — FirstRun.tsx with GPU badge + model cards + Channel progress + autostart; App.tsx first-run gate; ModelSelector download + progress; ModelSection refresh (commits 328e8c7, ec2f7bd)
 
 ## Decisions
 
@@ -65,6 +66,9 @@ Last activity: 2026-03-01 - 07-01 (distribution backend: download.rs, check_firs
 - 07-distribution: download_model and enable_autostart not whisper-gated; check_first_run is whisper-gated (calls detect_gpu/models_dir from transcribe)
 - 07-distribution: SHA256 checksums + expected sizes hardcoded in model_info(); content_length() fallback for progress denominator
 - 07-distribution: .tmp-then-rename atomic write; .tmp deleted on mismatch/error so next launch re-shows first-run flow
+- 07-distribution-frontend: ModelSection auto-selects freshly downloaded model after list_models refresh — eliminates extra user click
+- 07-distribution-frontend: FirstRun uses hardcoded MODELS array (not list_models) — needs size/quality/hardware labels absent from ModelInfo
+- 07-distribution-frontend: cancelledRef pattern for cancel button — Rust download continues to overwrite .tmp, frontend ignores subsequent Channel events
 
 ### Roadmap Evolution
 
