@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { PhysicalPosition } from "@tauri-apps/api/dpi";
 import { load } from "@tauri-apps/plugin-store";
-import { FrequencyBars } from "./components/FrequencyBars";
+import { WaveformCanvas } from "./components/WaveformCanvas";
 import { ProcessingDots } from "./components/ProcessingDots";
 
 const appWindow = getCurrentWebviewWindow();
@@ -14,6 +14,7 @@ export function Pill() {
   const [displayState, setDisplayState] = useState<PillDisplayState>("hidden");
   const [animState, setAnimState] = useState<AnimState>("hidden");
   const [level, setLevel] = useState(0);
+  const [bins, setBins] = useState<number[]>(new Array(16).fill(0));
 
   // Timers for animation sequencing
   const enterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -90,9 +91,11 @@ export function Pill() {
       setDisplayState(e.payload as PillDisplayState);
     }).then((u) => unlisteners.push(u));
 
-    // pill-level: update RMS level for frequency bars
-    appWindow.listen<number>("pill-level", (e) => {
-      setLevel(e.payload);
+    // pill-level: update RMS level and FFT bins for waveform canvas
+    type PillLevelPayload = { rms: number; bins: number[] };
+    appWindow.listen<PillLevelPayload>("pill-level", (e) => {
+      setLevel(e.payload.rms);
+      setBins(e.payload.bins);
     }).then((u) => unlisteners.push(u));
 
     // pill-result: trigger exit animation on result
@@ -151,7 +154,7 @@ export function Pill() {
       {/* Recording state: frequency bars only — no red dot */}
       {displayState === "recording" && (
         <div className="flex items-center justify-center px-3 pill-content-fade-in">
-          <FrequencyBars level={level} />
+          <WaveformCanvas level={level} bins={bins} />
         </div>
       )}
 
