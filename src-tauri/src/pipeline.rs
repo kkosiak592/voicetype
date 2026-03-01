@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicU8, Ordering};
 use tauri::Emitter;
 use tauri::Manager;
+use crate::vad;
 
 pub const IDLE: u8 = 0;
 pub const RECORDING: u8 = 1;
@@ -38,7 +39,7 @@ impl PipelineState {
 ///
 /// Steps:
 ///   1. Stop recording, get audio buffer
-///   2. Minimum audio gate (< 100ms = 1600 samples at 16kHz → discard)
+///   2. VAD speech gate (Silero V5 neural model, ~300ms minimum speech)
 ///   3. Whisper inference in spawn_blocking
 ///   4. Text formatting (trim_start + trailing space)
 ///   5. Inject text via clipboard paste
@@ -51,14 +52,24 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
     let sample_count = audio_state.flush_and_stop();
     let samples = audio_state.get_buffer();
 
-    // 2. Minimum audio gate: < 100ms at 16kHz = 1600 samples — discard silently
-    if samples.len() < 1600 {
+    // 2. VAD speech gate: run Silero VAD post-hoc on completed buffer.
+    //    Fast-path: buffer too small for even one VAD chunk (512 samples = 32ms).
+    if samples.len() < 512 {
+        log::info!("Pipeline: audio too short for VAD ({} samples), discarding", samples.len());
+        app.emit_to("pill", "pill-result", "error").ok();
+        reset_to_idle(&app);
+        return;
+    }
+    //    Full VAD speech gate:
+    //    Replaces the crude 1600-sample (100ms) minimum check.
+    //    Requires >= 9 chunks (~300ms) classified as speech by the neural model.
+    //    Prevents whisper hallucination on silence, coughs, clicks, breathing.
+    if !vad::vad_gate_check(&samples) {
         log::info!(
-            "Pipeline: audio too short ({} samples, {:.0}ms), discarding",
+            "Pipeline: VAD gate rejected — insufficient speech in {} samples ({:.1}s audio)",
             samples.len(),
-            samples.len() as f32 / 16.0
+            samples.len() as f32 / 16000.0
         );
-        // Pill: error flash — user held hotkey but got no usable audio
         app.emit_to("pill", "pill-result", "error").ok();
         reset_to_idle(&app);
         return;
