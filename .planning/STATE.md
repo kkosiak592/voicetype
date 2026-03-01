@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-01T01:47:30.455Z"
+last_updated: "2026-03-01T01:56:42.701Z"
 progress:
   total_phases: 6
   completed_phases: 6
@@ -22,10 +22,10 @@ See: .planning/PROJECT.md (updated 2026-02-27)
 
 ## Current Position
 
-Phase: 5 of 7 (VAD + Toggle Mode) — IN PROGRESS
-Plan: 1 of 2 in phase 05 complete — Silero VAD dependency added, vad.rs created, pipeline VAD gate wired
-Status: Plan 05-01 complete — voice_activity_detector@0.2.1 added, vad.rs with VadWorker/VadWorkerHandle/vad_gate_check created, run_pipeline() VAD gate replaces 1600-sample check. Plan 05-02 (toggle mode hotkey handler) next.
-Last activity: 2026-03-01 - Completed plan 05-01: Silero VAD integration (vad.rs + pipeline gate)
+Phase: 5 of 7 (VAD + Toggle Mode) — COMPLETE
+Plan: 2 of 2 in phase 05 complete — toggle mode hotkey handler, RecordingMode state, VadWorker wiring, settings UI, silence timeout 3.0s
+Status: Plan 05-02 complete — RecordingMode/VadWorkerState managed state, mode-aware hotkey handlers, RecordingModeToggle UI, settings persistence. SILENCE_FRAMES_THRESHOLD=94 (3.0s). Phase 06 next.
+Last activity: 2026-02-28 - Completed plan 05-02: toggle mode end-to-end verified, silence timeout adjusted to 3.0s
 
 Progress: [██████████] 100%
 
@@ -58,6 +58,7 @@ Progress: [██████████] 100%
 | Phase 04.1 P01 | 3 | 2 tasks | 4 files |
 | Phase 04.1 P02 | 25 | 2 tasks | 2 files |
 | Phase 05-vad-toggle-mode P01 | 884 | 2 tasks | 4 files |
+| Phase 05-vad-toggle-mode P02 | 1200 | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -111,9 +112,10 @@ Recent decisions affecting current work:
 - [Phase 04.1-02]: Success auto-dismiss: 600ms hold (280ms draw + 320ms hold), then exit animation, then window hide
 - [Phase 04.1-02]: pill window expanded 120x40 → 160x48 for FrequencyBars clearance and indigo glow room
 - [Phase 05-01]: No use crate::pipeline; import in vad.rs — pipeline referenced via inline crate::pipeline:: paths to avoid circular module coupling
-- [Phase 05-01]: VAD constants: SPEECH_PROBABILITY_THRESHOLD=0.5 (Silero default), SILENCE_FRAMES_THRESHOLD=47 (~1.5s), MIN_SPEECH_FRAMES=9 (~300ms), MAX_RECORDING_FRAMES=1875 (60s cap)
+- [Phase 05-01]: VAD constants: SPEECH_PROBABILITY_THRESHOLD=0.5 (Silero default), SILENCE_FRAMES_THRESHOLD=94 (~3.0s, updated in 05-02), MIN_SPEECH_FRAMES=9 (~300ms), MAX_RECORDING_FRAMES=1875 (60s cap)
 - [Phase 05-02]: cancel_stale_vad_worker extracted as separate fn in pipeline.rs to avoid State borrow lifetime issue (E0597)
 - [Phase 05-02]: let result = ...; result pattern in MutexGuard operations forces temporary drop before State binding scope ends (compiler-suggested E0597 fix)
+- [Phase 05-02]: SILENCE_FRAMES_THRESHOLD increased from 47 to 94 (1.5s -> 3.0s) — user feedback: 1.5s auto-stop too aggressive during natural speech pauses
 
 ### Roadmap Evolution
 
@@ -141,7 +143,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-01
-Stopped at: Plan 05-01 complete — vad.rs created (VadWorker, VadWorkerHandle, vad_gate_check), pipeline VAD gate wired. Commits: 720b0f0, f59658a.
-Resume signal: Phase 05 plan 01 complete. Execute Phase 05 Plan 02 (toggle mode — hotkey handler, RecordingMode state, VadWorker managed state).
-Resume file: .planning/phases/05-vad-toggle-mode/05-02-PLAN.md
+Last session: 2026-02-28
+Stopped at: Plan 05-02 complete — toggle mode verified end-to-end. Commits: 81c40fe, 648e52a, 725e792. Phase 05 fully complete.
+Resume signal: Phase 05 complete (both plans done). Execute Phase 06 (Win32 focus isolation / WS_EX_NOACTIVATE).
+Resume file: .planning/phases/ (Phase 06 not yet planned)

@@ -12,86 +12,67 @@ tech_stack:
   patterns: [AtomicU8-backed-mode-state, CAS-based-pipeline-transition, radio-card-UI, settings-persistence-merge-pattern]
 key_files:
   created: [src/components/RecordingModeToggle.tsx]
-  modified: [src-tauri/src/lib.rs, src-tauri/src/pipeline.rs, src/App.tsx, src/lib/store.ts]
-decisions:
+  modified: [src-tauri/src/lib.rs, src-tauri/src/pipeline.rs, src/App.tsx, src/lib/store.ts, src-tauri/src/vad.rs]
+key-decisions:
   - "cancel_stale_vad_worker extracted as separate fn in pipeline.rs — avoids State borrow lifetime issue (E0597) when inlining the block in run_pipeline()"
   - "let result = ...; result pattern in cancel_stale_vad_worker forces MutexGuard temporary to drop before State binding goes out of scope (compiler-suggested fix)"
   - "RecordingModeToggle uses radio-card UI (not toggle switch) — two cards with descriptions, indigo border for selected"
   - "set_recording_mode persists to settings.json via serde_json merge — same pattern as hotkey persistence"
+  - "SILENCE_FRAMES_THRESHOLD increased from 47 to 94 (1.5s -> 3.0s) — user feedback: 1.5s auto-stop too aggressive during natural speech pauses"
+requirements-completed: [REC-02, REC-04]
 metrics:
-  duration: "410 seconds (~7 minutes)"
-  completed: "2026-03-01"
-  tasks_completed: 2
+  duration: "~20 minutes (including checkpoint and continuation)"
+  completed: "2026-02-28"
+  tasks_completed: 3
   tasks_total: 3
-  files_changed: 5
-  checkpoint: "Paused at Task 3 (human-verify)"
+  files_changed: 6
 ---
 
 # Phase 05 Plan 02: Toggle Recording Mode Summary
 
-**One-liner:** Toggle mode hotkey handler with VAD auto-stop on ~1.5s silence, second tap for instant stop, RecordingMode managed state, settings persistence, and radio-card settings UI.
+**Toggle mode hotkey handler with VAD auto-stop on 3.0s silence, second tap for instant stop, RecordingMode managed state, settings persistence, radio-card settings UI — fully verified end-to-end with real hardware.**
 
-**Status:** Tasks 1-2 complete. Paused at Task 3 (human verification checkpoint).
+## Performance
 
-## What Was Built
+- **Duration:** ~20 minutes (including checkpoint and continuation)
+- **Completed:** 2026-02-28
+- **Tasks:** 3/3
+- **Files modified:** 6
 
-### Task 1: RecordingMode state, mode-aware hotkey handlers, VadWorker wiring
+## Accomplishments
 
-**In `src-tauri/src/lib.rs`:**
+- Toggle recording mode: tap hotkey to start, VAD auto-stops after 3.0s silence (increased from 1.5s on user feedback), second tap for instant hard stop
+- RecordingMode managed state backed by AtomicU8, persisted to settings.json across restarts
+- Mode-aware hotkey handlers in setup() and rebind_hotkey() — hold-to-talk behavior unchanged (no regression)
+- RecordingModeToggle radio-card UI in settings panel with indigo-highlighted selected state
+- VAD worker cancellation on second tap prevents double-transcription
 
-Added `Mode` enum (`HoldToTalk = 0`, `Toggle = 1`) and `RecordingMode` struct backed by `AtomicU8`. The `RecordingMode::get()` / `set()` methods use `Relaxed` ordering — acceptable since mode changes are low-frequency user actions, not synchronization primitives.
+## Task Commits
 
-Added `VadWorkerState(pub std::sync::Mutex<Option<vad::VadWorkerHandle>>)` managed state. The `Mutex<Option<...>>` pattern lets the handle be taken (replaced with `None`) by any cancellation path without cloning.
+Each task was committed atomically:
 
-Added `read_saved_mode(app: &tauri::App) -> Mode` — reads `"recording_mode"` key from `settings.json`, returns `Mode::HoldToTalk` on any error (hold-to-talk is the default per CONTEXT.md).
+1. **Task 1: RecordingMode state, mode-aware hotkey handlers, VadWorker wiring** - `81c40fe` (feat)
+2. **Task 2: Settings UI toggle for recording mode selection** - `648e52a` (feat)
+3. **Task 3: Verify toggle mode, user feedback — silence timeout 1.5s -> 3.0s** - `725e792` (fix)
 
-Added `set_recording_mode` Tauri command: updates `RecordingMode` managed state atomically, then merges `"recording_mode"` into `settings.json` (same serde_json merge pattern as hotkey persistence). Added `get_recording_mode` command: returns `"toggle"` or `"hold"` string.
+**Plan metadata:** (committed after state update)
 
-Registered both commands in `generate_handler![]`.
+## Files Created/Modified
 
-In `setup()`: reads saved mode via `read_saved_mode()`, manages `RecordingMode::new(saved_mode)` and `VadWorkerState(Mutex::new(None))` after `PipelineState`.
+- `src-tauri/src/lib.rs` - Mode enum, RecordingMode/VadWorkerState managed state, mode-aware hotkey handlers, set_recording_mode/get_recording_mode Tauri commands, read_saved_mode()
+- `src-tauri/src/pipeline.rs` - cancel_stale_vad_worker() helper called at run_pipeline() entry to prevent double-trigger
+- `src-tauri/src/vad.rs` - SILENCE_FRAMES_THRESHOLD: 47 -> 94 (1.5s -> 3.0s)
+- `src/lib/store.ts` - recordingMode field in AppSettings and DEFAULTS
+- `src/components/RecordingModeToggle.tsx` - Created: radio-card toggle for mode selection, invokes set_recording_mode Tauri command
+- `src/App.tsx` - Imports RecordingModeToggle, loads recordingMode from store, adds Recording Mode settings section
 
-**Hotkey handler rewrite (both `setup()` and `rebind_hotkey()`):**
+## Decisions Made
 
-`ShortcutState::Pressed`:
-- `HoldToTalk`: unchanged — CAS IDLE→RECORDING, start audio + level stream
-- `Toggle`:
-  - First tap (IDLE→RECORDING): start audio + level stream + spawn VAD worker, store handle in `VadWorkerState`
-  - Second tap (RECORDING→PROCESSING): take + cancel VAD worker, stop level stream, emit pill-state processing, update tray, spawn `run_pipeline()`
-  - PROCESSING state: ignored (CAS fails silently — OS key repeat safe)
-
-`ShortcutState::Released`:
-- `HoldToTalk`: unchanged — CAS RECORDING→PROCESSING, stop level stream, spawn `run_pipeline()`
-- `Toggle`: no-op (release ignored — VAD or second tap controls stop)
-
-**In `src-tauri/src/pipeline.rs`:**
-
-Added `cancel_stale_vad_worker(app: &tauri::AppHandle)` helper function. Called at the top of `run_pipeline()` before the VAD gate check. Takes the `VadWorkerHandle` out of managed state and cancels it — prevents double-pipeline-trigger if the VAD worker fires just as `run_pipeline()` is entered from a second tap.
-
-Key implementation detail: used `let result = match vad_state.0.lock() { ... }; result` pattern (compiler E0597 fix — forces `MutexGuard` temporary to drop before the `State` binding leaves scope).
-
-### Task 2: Settings UI toggle for recording mode selection
-
-**`src/lib/store.ts`:** Added `recordingMode: 'hold' | 'toggle'` to `AppSettings` interface and `recordingMode: 'hold'` to `DEFAULTS`.
-
-**`src/components/RecordingModeToggle.tsx`:** New component with two radio-card options side by side:
-- "Hold to talk" + "Hold the hotkey while speaking. Release to transcribe."
-- "Toggle" + "Tap to start. Tap again or wait for auto-stop."
-
-Selected card: `border-indigo-500 bg-indigo-50` (light) / `border-indigo-400 bg-indigo-950` (dark). Unselected: `border-gray-200` with hover. On select: `invoke('set_recording_mode', { mode })` then `store.set('recordingMode', mode)`.
-
-**`src/App.tsx`:**
-- Imported `RecordingModeToggle`
-- Added `recordingMode` state initialized to `DEFAULTS.recordingMode`
-- `loadSettings()` reads `recordingMode` from store
-- Recording Mode section added between Hotkey and Appearance sections (with hr dividers)
-
-## Commits
-
-| Task | Commit | Description |
-|------|--------|-------------|
-| 1 | 81c40fe | feat(05-02): add RecordingMode state, mode-aware hotkey handlers, VadWorker wiring |
-| 2 | 648e52a | feat(05-02): add recording mode settings UI — RecordingModeToggle component and App.tsx wiring |
+- `cancel_stale_vad_worker` extracted as a separate fn in pipeline.rs to avoid E0597 borrow lifetime error (State binding dropped while MutexGuard temporary still borrows it — compiler-suggested fix: separate fn forces correct drop order)
+- `let result = ...; result` pattern in MutexGuard operations forces temporary drop before State binding scope ends
+- RecordingModeToggle uses radio-card layout (not toggle switch) — cards with descriptions convey the behavioral difference better than a simple on/off toggle
+- `set_recording_mode` persists via serde_json merge into settings.json — same pattern as hotkey persistence, no extra deps
+- SILENCE_FRAMES_THRESHOLD raised to 94 frames (3.0s) after user verified 1.5s was too aggressive — people naturally pause mid-thought
 
 ## Deviations from Plan
 
@@ -100,13 +81,33 @@ Selected card: `border-indigo-500 bg-indigo-50` (light) / `border-indigo-400 bg-
 **1. [Rule 1 - Bug] Borrow checker E0597: `vad_state` does not live long enough in pipeline.rs**
 - **Found during:** Task 1 cargo check
 - **Issue:** Inlining the VAD cancel block in `run_pipeline()` caused E0597 — `State<'_, VadWorkerState>` binding dropped while `Result<MutexGuard>` temporary still borrows it
-- **Fix:** Extracted `cancel_stale_vad_worker()` as a separate `fn`. Inside, used `let result = match vad_state.0.lock() { ... }; result` to force the `MutexGuard` temporary to drop before `vad_state` goes out of scope (compiler-suggested pattern)
+- **Fix:** Extracted `cancel_stale_vad_worker()` as a separate `fn`. Inside, used `let result = match vad_state.0.lock() { ... }; result` to force the `MutexGuard` temporary to drop before `vad_state` goes out of scope
 - **Files modified:** src-tauri/src/pipeline.rs
 - **Commit:** 81c40fe (fixed before commit)
 
-## Task 3 (Checkpoint — Pending)
+### User Feedback Applied
 
-Task 3 is a `checkpoint:human-verify` — human verification with real hardware required. See checkpoint message below.
+**Silence timeout adjustment (applied at Task 3 verification):**
+- User confirmed toggle mode worked end-to-end but reported 1.5s silence timeout was too aggressive — recordings stopped during natural speech pauses
+- Changed `SILENCE_FRAMES_THRESHOLD` from 47 to 94 (3.0s at 32ms/chunk)
+- Committed: 725e792
+
+## Issues Encountered
+
+None beyond the E0597 borrow checker issue (auto-fixed, documented above).
+
+## User Setup Required
+
+None — no external service configuration required.
+
+## Next Phase Readiness
+
+- Phase 05 complete: Silero VAD integration (Plan 01) and toggle mode (Plan 02) both verified
+- Phase 06 (Win32 WS_EX_NOACTIVATE focus isolation) is next — pre-phase blocker noted in STATE.md: exact Rust API call needs identification from Tauri source
+
+---
+*Phase: 05-vad-toggle-mode*
+*Completed: 2026-02-28*
 
 ## Self-Check: PASSED
 
@@ -115,5 +116,7 @@ Task 3 is a `checkpoint:human-verify` — human verification with real hardware 
 - src/lib/store.ts: FOUND
 - src/components/RecordingModeToggle.tsx: FOUND
 - src/App.tsx: FOUND
+- src-tauri/src/vad.rs: FOUND
 - Commit 81c40fe: FOUND
 - Commit 648e52a: FOUND
+- Commit 725e792: FOUND
