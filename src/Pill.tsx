@@ -46,8 +46,8 @@ export function Pill() {
         if (!saved) {
           const screenW = window.screen.width;
           const screenH = window.screen.height;
-          const x = Math.round((screenW - 200) / 2);
-          const y = screenH - 44 - 60;
+          const x = Math.round((screenW - 178) / 2);
+          const y = screenH - 46 - 60;
           await appWindow.setPosition(new PhysicalPosition(x, y));
         }
       } catch (e) {
@@ -161,7 +161,7 @@ export function Pill() {
       onMouseUp={handleMouseUp}
       className={`
         pill-glass
-        w-[200px] h-[44px] rounded-full
+        w-[170px] h-[38px] rounded-full
         flex items-center justify-center
         cursor-grab active:cursor-grabbing
         select-none

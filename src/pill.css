@@ -10,6 +10,13 @@ html, body, #pill-root {
   overflow: hidden;
 }
 
+/* Center pill within the slightly oversized window (leaves room for rainbow border) */
+#pill-root {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* ==========================================================================
    Monochrome luxury glass base class
    NOTE: backdrop-filter: blur() intentionally omitted — silently fails on
@@ -60,27 +67,179 @@ html, body, #pill-root {
 }
 
 /* ==========================================================================
-   Processing state — shimmer sweep pseudo-element (replaces indigo glow)
+   Processing state — orbiting plasma orbs with gradient border
    ========================================================================== */
 
-@keyframes shimmer-sweep {
-  from { background-position: 200% 0; }
-  to   { background-position: -200% 0; }
+@property --proc-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes proc-rotate {
+  from { --proc-angle: 0deg; }
+  to   { --proc-angle: 360deg; }
+}
+
+@keyframes proc-glow {
+  0%, 100% { opacity: 0.12; }
+  50%      { opacity: 0.28; }
 }
 
 .pill-processing {
   position: relative;
-  overflow: hidden;
+  border: none !important;
 }
 
+/* Breathing inner atmospheric glow */
 .pill-processing::before {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.06) 50%, transparent 100%);
-  background-size: 200% 100%;
-  animation: shimmer-sweep 2s ease-in-out infinite;
+  background: radial-gradient(ellipse at center, rgba(139, 92, 246, 0.15) 0%, rgba(6, 182, 212, 0.08) 40%, transparent 70%);
+  animation: proc-glow 3s ease-in-out infinite;
+}
+
+/* Rotating gradient border (cyan → violet → pink) */
+.pill-processing::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--proc-angle),
+    #06b6d4, #8b5cf6, #ec4899, #06b6d4
+  );
+  z-index: -1;
+  animation: proc-rotate 2s linear infinite;
+}
+
+/* Orb container — full pill interior for bouncing plasma */
+.pill-orb-field {
+  width: 150px;
+  height: 28px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 9999px;
+}
+
+.pill-orb {
+  position: absolute;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+}
+
+/* Large orbs */
+.pill-orb-lg {
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+}
+
+/* Small orbs */
+.pill-orb-sm {
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+}
+
+.pill-orb-cyan {
+  background: #06b6d4;
+  box-shadow: 0 0 8px #06b6d4, 0 0 20px rgba(6, 182, 212, 0.5);
+}
+
+.pill-orb-violet {
+  background: #8b5cf6;
+  box-shadow: 0 0 8px #8b5cf6, 0 0 20px rgba(139, 92, 246, 0.5);
+}
+
+.pill-orb-pink {
+  background: #ec4899;
+  box-shadow: 0 0 8px #ec4899, 0 0 20px rgba(236, 72, 153, 0.5);
+}
+
+.pill-orb-sky {
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8, 0 0 20px rgba(56, 189, 248, 0.5);
+}
+
+.pill-orb-fuchsia {
+  background: #d946ef;
+  box-shadow: 0 0 8px #d946ef, 0 0 20px rgba(217, 70, 239, 0.5);
+}
+
+.pill-orb-teal {
+  background: #2dd4bf;
+  box-shadow: 0 0 6px #2dd4bf, 0 0 16px rgba(45, 212, 191, 0.4);
+}
+
+.pill-orb-rose {
+  background: #fb7185;
+  box-shadow: 0 0 6px #fb7185, 0 0 16px rgba(251, 113, 133, 0.4);
+}
+
+/* 7 unique orbit paths spanning the full pill area (~±80px horizontal, ±12px vertical) */
+
+@keyframes orb-path-1 {
+  0%   { transform: translate(-63px, 0); }
+  20%  { transform: translate(-24px, -10px); }
+  40%  { transform: translate(20px, 8px); }
+  60%  { transform: translate(60px, -3px); }
+  80%  { transform: translate(16px, 10px); }
+  100% { transform: translate(-63px, 0); }
+}
+
+@keyframes orb-path-2 {
+  0%   { transform: translate(65px, 3px); }
+  20%  { transform: translate(16px, 10px); }
+  40%  { transform: translate(-32px, -8px); }
+  60%  { transform: translate(-60px, 5px); }
+  80%  { transform: translate(-8px, -10px); }
+  100% { transform: translate(65px, 3px); }
+}
+
+@keyframes orb-path-3 {
+  0%   { transform: translate(0, -10px); }
+  16%  { transform: translate(-48px, 6px); }
+  33%  { transform: translate(-16px, 10px); }
+  50%  { transform: translate(32px, -5px); }
+  66%  { transform: translate(56px, 8px); }
+  83%  { transform: translate(24px, -10px); }
+  100% { transform: translate(0, -10px); }
+}
+
+@keyframes orb-path-4 {
+  0%   { transform: translate(-52px, 8px); }
+  25%  { transform: translate(8px, -10px); }
+  50%  { transform: translate(58px, 6px); }
+  75%  { transform: translate(-12px, 10px); }
+  100% { transform: translate(-52px, 8px); }
+}
+
+@keyframes orb-path-5 {
+  0%   { transform: translate(44px, -8px); }
+  20%  { transform: translate(65px, 6px); }
+  40%  { transform: translate(12px, -10px); }
+  60%  { transform: translate(-40px, 8px); }
+  80%  { transform: translate(-63px, -5px); }
+  100% { transform: translate(44px, -8px); }
+}
+
+@keyframes orb-path-6 {
+  0%   { transform: translate(-32px, -6px); }
+  33%  { transform: translate(40px, 10px); }
+  66%  { transform: translate(56px, -8px); }
+  100% { transform: translate(-32px, -6px); }
+}
+
+@keyframes orb-path-7 {
+  0%   { transform: translate(24px, 10px); }
+  25%  { transform: translate(-44px, -6px); }
+  50%  { transform: translate(-65px, 8px); }
+  75%  { transform: translate(48px, -10px); }
+  100% { transform: translate(24px, 10px); }
 }
 
 /* ==========================================================================
@@ -117,41 +276,7 @@ html, body, #pill-root {
   animation: rainbow-rotate 3s linear infinite;
 }
 
-/* ==========================================================================
-   Dot animations (ProcessingDots component)
-   ========================================================================== */
-
-/* Legacy pulse — kept for backward compat (no longer used by ProcessingDots) */
-@keyframes dot-pulse {
-  0%, 100% {
-    opacity: 0.3;
-    transform: scale(0.85);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.pill-dot-pulse {
-  animation: dot-pulse 1000ms ease-in-out infinite;
-}
-
-/* Bouncy vertical animation — active animation for ProcessingDots */
-@keyframes dot-bounce {
-  0%, 100% {
-    transform: translateY(0) scale(1);
-    opacity: 0.5;
-  }
-  50% {
-    transform: translateY(-6px) scale(1.15);
-    opacity: 1;
-  }
-}
-
-.pill-dot-bounce {
-  animation: dot-bounce 800ms ease-in-out infinite;
-}
+/* (Dot animations removed — replaced by orbiting plasma orbs above) */
 
 /* ==========================================================================
    Checkmark draw animation (CheckmarkIcon component)

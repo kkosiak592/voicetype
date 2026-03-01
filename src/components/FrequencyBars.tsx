@@ -62,10 +62,10 @@ export function FrequencyBars({ level }: FrequencyBarsProps) {
         // Active height: level-driven + bell envelope
         const activeHeight = lv * BELL[i] * ((wave + 1) / 2);
         // Idle wave: always running so bars are never fully flat
-        const idleWave = 0.08 * BELL[i] * ((Math.sin(2 * Math.PI * 1.2 * t + BAR_PHASES[i]) + 1) / 2);
-        // Composite height as fraction of container (0–1), then to px (container is 36px)
-        const fraction = Math.max(0.05, activeHeight + idleWave);
-        const heightPx = Math.round(fraction * 28);
+        const idleWave = 0.15 * BELL[i] * ((Math.sin(2 * Math.PI * 1.2 * t + BAR_PHASES[i]) + 1) / 2);
+        // Composite height as fraction of container (0–1), then to px
+        const fraction = Math.max(0.06, activeHeight + idleWave);
+        const heightPx = Math.round(fraction * 30);
         bars[i].style.height = `${heightPx}px`;
         // Opacity scaling: shorter bars are more transparent, taller bars are opaque
         bars[i].style.opacity = String(0.4 + fraction * 0.6);
@@ -88,7 +88,7 @@ export function FrequencyBars({ level }: FrequencyBarsProps) {
     <div
       ref={containerRef}
       className="flex items-center gap-[1.5px]"
-      style={{ height: "28px" }}
+      style={{ height: "30px" }}
     />
   );
 }
