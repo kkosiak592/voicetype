@@ -176,12 +176,12 @@ Plans:
   1. On a fresh install with no model file present, the app detects the missing model, shows a download progress indicator, downloads the appropriate model file, validates its SHA256 checksum, and starts normally — without any manual steps from the user
   2. On a machine with an NVIDIA GPU, the app auto-detects CUDA capability and recommends large-v3-turbo-q5_0; on a CPU-only machine it recommends small — the recommendation is shown before the download begins
   3. The NSIS installer is under 5 MB (models excluded), installs without errors on a fresh Windows 10 machine, and the installed binary passes Windows Defender scan
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 07-01: GPU detection + model recommendation — implement CUDA/GPU capability detection at startup, surface recommendation in first-run UI before download
-- [ ] 07-02: Model download + validation — implement HTTP download with progress events to frontend, SHA256 checksum validation, error recovery on failure
-- [ ] 07-03: NSIS packaging + signing — configure Tauri NSIS builder with models excluded, document code signing process, verify clean Defender scan on clean Windows 10 VM
+- [ ] 07-01-PLAN.md — Backend: download.rs module (reqwest streaming + SHA256), check_first_run command, medium model removal, Cargo deps
+- [ ] 07-02-PLAN.md — Frontend: FirstRun.tsx setup flow (GPU detection + model cards + download progress), App.tsx first-run gate, ModelSelector download buttons
+- [ ] 07-03-PLAN.md — NSIS packaging: tauri.conf.json bundle config, installer build, Defender scan, human verification of full flow
 
 ## Progress
 
