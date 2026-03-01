@@ -49,6 +49,8 @@ tokio = { version = "1", features = ["time"] }
 voice_activity_detector = "0.2.1"
 # Regex engine for word-boundary corrections matching (corrections.rs)
 regex = "1"
+# FFT for 16-bin frequency spectrum in pill waveform visualization
+rustfft = "6"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-global-shortcut = "2"
