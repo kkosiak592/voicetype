@@ -30,9 +30,6 @@ impl PipelineState {
         self.0.store(val, Ordering::SeqCst);
     }
 
-    pub fn get(&self) -> u8 {
-        self.0.load(Ordering::SeqCst)
-    }
 }
 
 /// Core pipeline orchestration — called from the Released hotkey handler.
