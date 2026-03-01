@@ -95,3 +95,4 @@ Last activity: 2026-03-01 - 07-03 (NSIS installer: tauri.conf.json NSIS config, 
 ### Pending Todos
 
 1. Investigate microphone icon persisting in system tray (area: ui)
+2. Implement sub-500ms transcription latency improvements (area: backend)
