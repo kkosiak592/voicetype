@@ -1,5 +1,6 @@
 mod audio;
 mod corrections;
+mod download;
 mod inject;
 mod pill;
 mod pipeline;
@@ -657,7 +658,6 @@ fn model_id_to_path(model_id: &str) -> Result<std::path::PathBuf, String> {
     use crate::transcribe::models_dir;
     let filename = match model_id {
         "large-v3-turbo" => "ggml-large-v3-turbo-q5_0.bin",
-        "medium" => "ggml-medium.bin",
         "small-en" => "ggml-small.en-q5_1.bin",
         _ => return Err(format!("Unknown model id: {}", model_id)),
     };
@@ -687,25 +687,63 @@ fn list_models() -> Result<Vec<ModelInfo>, String> {
         ModelInfo {
             id: "large-v3-turbo".to_string(),
             name: "Large v3 Turbo".to_string(),
-            description: "Best accuracy, requires NVIDIA GPU".to_string(),
+            description: "Best accuracy — 574 MB — requires NVIDIA GPU".to_string(),
             recommended: gpu_mode,
             downloaded: dir.join("ggml-large-v3-turbo-q5_0.bin").exists(),
         },
         ModelInfo {
-            id: "medium".to_string(),
-            name: "Medium".to_string(),
-            description: "Balanced speed and accuracy".to_string(),
-            recommended: false,
-            downloaded: dir.join("ggml-medium.bin").exists(),
-        },
-        ModelInfo {
             id: "small-en".to_string(),
             name: "Small (English)".to_string(),
-            description: "Fastest, works without GPU".to_string(),
+            description: "Fastest — 190 MB — works on any CPU".to_string(),
             recommended: !gpu_mode,
             downloaded: dir.join("ggml-small.en-q5_1.bin").exists(),
         },
     ])
+}
+
+/// Response type for check_first_run — tells the frontend whether setup is needed
+/// and which model to recommend based on GPU detection.
+#[cfg(feature = "whisper")]
+#[derive(serde::Serialize)]
+struct FirstRunStatus {
+    needs_setup: bool,
+    gpu_detected: bool,
+    recommended_model: String,
+}
+
+/// Check whether the app needs first-run model setup.
+///
+/// Returns needs_setup=true when no model file exists in the models directory.
+/// Also surfaces GPU detection so the frontend can pre-select the appropriate model.
+#[cfg(feature = "whisper")]
+#[tauri::command]
+fn check_first_run() -> FirstRunStatus {
+    use crate::transcribe::{detect_gpu, models_dir, ModelMode};
+    let gpu_mode = matches!(detect_gpu(), ModelMode::Gpu);
+    let dir = models_dir();
+    let large_exists = dir.join("ggml-large-v3-turbo-q5_0.bin").exists();
+    let small_exists = dir.join("ggml-small.en-q5_1.bin").exists();
+    FirstRunStatus {
+        needs_setup: !large_exists && !small_exists,
+        gpu_detected: gpu_mode,
+        recommended_model: if gpu_mode {
+            "large-v3-turbo".to_string()
+        } else {
+            "small-en".to_string()
+        },
+    }
+}
+
+/// Register VoiceType in Windows startup via tauri-plugin-autostart.
+///
+/// Called after the user completes the first-run setup flow (per locked decision:
+/// "Auto-start with Windows enabled by default"). The plugin is already registered
+/// in the builder — this command exposes the enable action to the frontend.
+#[tauri::command]
+async fn enable_autostart(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let autostart = app.autolaunch();
+    autostart.enable().map_err(|e| e.to_string())
 }
 
 /// Switch the active whisper model. Reloads the WhisperContext without app restart.
@@ -944,6 +982,10 @@ pub fn run() {
             get_corrections,
             save_corrections,
             set_all_caps,
+            download::download_model,
+            enable_autostart,
+            #[cfg(feature = "whisper")]
+            check_first_run,
             #[cfg(feature = "whisper")]
             list_models,
             #[cfg(feature = "whisper")]

@@ -53,17 +53,11 @@ pub fn detect_gpu() -> ModelMode {
 /// - Gpu: ggml-large-v3-turbo-q5_0.bin (large, fast GPU model)
 /// - Cpu: ggml-small.en-q5_1.bin (small, runs acceptably on CPU)
 ///
-/// Returns a detailed error with download instructions if the file is missing.
+/// Returns Err with a user-friendly message if the file is missing (app handles download).
 pub fn resolve_model_path(mode: &ModelMode) -> Result<PathBuf, String> {
-    let (filename, download_url) = match mode {
-        ModelMode::Gpu => (
-            "ggml-large-v3-turbo-q5_0.bin",
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
-        ),
-        ModelMode::Cpu => (
-            "ggml-small.en-q5_1.bin",
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q5_1.bin",
-        ),
+    let filename = match mode {
+        ModelMode::Gpu => "ggml-large-v3-turbo-q5_0.bin",
+        ModelMode::Cpu => "ggml-small.en-q5_1.bin",
     };
 
     let path = models_dir().join(filename);
@@ -76,18 +70,8 @@ pub fn resolve_model_path(mode: &ModelMode) -> Result<PathBuf, String> {
 
     if !path.exists() {
         return Err(format!(
-            "Whisper {:?} model not found at: {}\n\
-            \n\
-            Download it with PowerShell:\n\
-            Invoke-WebRequest -Uri '{}' \
-            -OutFile \"$env:APPDATA\\VoiceType\\models\\{}\"\n\
-            \n\
-            Expected directory: {}",
-            mode,
-            path.display(),
-            download_url,
-            filename,
-            models_dir().display()
+            "Model file not found: {}. Use the app's Model settings to download.",
+            path.display()
         ));
     }
 
