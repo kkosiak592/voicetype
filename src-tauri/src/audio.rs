@@ -94,18 +94,24 @@ pub struct AudioCapture {
 // the AtomicBool and Mutex-guarded fields are accessed from other threads.
 unsafe impl Sync for AudioCapture {}
 
-/// Start a persistent microphone capture stream.
+/// Mutex wrapper around AudioCapture for runtime device switching.
 ///
-/// The stream runs continuously from app startup. Audio is discarded unless the
-/// `recording` flag is set to `true`. When recording, samples are downmixed to
-/// mono, resampled to 16kHz, and appended to `buffer`.
-pub fn start_persistent_stream(
-) -> Result<AudioCapture, Box<dyn std::error::Error + Send + Sync>> {
-    let host = cpal::default_host();
-    let device = host
-        .default_input_device()
-        .ok_or("No default input device found")?;
+/// The outer Mutex guards the entire AudioCapture for replacement (mic switch).
+/// The inner Mutex inside AudioCapture guards the audio buffer for the callback.
+/// These two locks serve different purposes and do not nest.
+pub struct AudioCaptureMutex(pub std::sync::Mutex<AudioCapture>);
 
+// SAFETY: AudioCaptureMutex wraps AudioCapture (which is already Sync via unsafe impl).
+// The Mutex ensures exclusive access for replacement operations.
+unsafe impl Sync for AudioCaptureMutex {}
+
+/// Internal: build an input stream from a specific device.
+///
+/// Extracted to share logic between `start_persistent_stream` and
+/// `start_persistent_stream_with_device`. Never call with a blocking lock held.
+fn build_stream_from_device(
+    device: cpal::Device,
+) -> Result<AudioCapture, Box<dyn std::error::Error + Send + Sync>> {
     let device_name = device
         .description()
         .map(|d| d.name().to_string())
@@ -173,6 +179,30 @@ pub fn start_persistent_stream(
         buffer,
         resampling,
     })
+}
+
+/// Start a persistent microphone capture stream using the system default device.
+///
+/// The stream runs continuously from app startup. Audio is discarded unless the
+/// `recording` flag is set to `true`. When recording, samples are downmixed to
+/// mono, resampled to 16kHz, and appended to `buffer`.
+pub fn start_persistent_stream(
+) -> Result<AudioCapture, Box<dyn std::error::Error + Send + Sync>> {
+    let host = cpal::default_host();
+    let device = host
+        .default_input_device()
+        .ok_or("No default input device found")?;
+    build_stream_from_device(device)
+}
+
+/// Start a persistent microphone capture stream using a specific device.
+///
+/// Same as `start_persistent_stream()` but accepts a `cpal::Device` directly.
+/// Used by `set_microphone` to restart the stream with a user-selected device.
+pub fn start_persistent_stream_with_device(
+    device: cpal::Device,
+) -> Result<AudioCapture, Box<dyn std::error::Error + Send + Sync>> {
+    build_stream_from_device(device)
 }
 
 /// Write a slice of 32-bit float samples to a WAV file at 16kHz mono.

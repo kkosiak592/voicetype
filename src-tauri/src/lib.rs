@@ -62,8 +62,12 @@ pub struct VadWorkerState(pub std::sync::Mutex<Option<vad::VadWorkerHandle>>);
 #[cfg(feature = "whisper")]
 use whisper_rs::WhisperContext;
 
+/// Mutex-wrapped optional WhisperContext for runtime model switching.
+///
+/// The Mutex allows replacing the inner WhisperContext at runtime when the user
+/// switches models. The Option handles the case where no model is loaded.
 #[cfg(feature = "whisper")]
-pub struct WhisperState(pub Option<Arc<WhisperContext>>);
+pub struct WhisperStateMutex(pub std::sync::Mutex<Option<Arc<WhisperContext>>>);
 
 /// Read the saved hotkey from settings.json in the app data directory.
 /// Returns None on first launch, file missing, or parse error — callers fall back to default.
@@ -160,9 +164,12 @@ fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<
                     Mode::HoldToTalk => {
                         // Existing behavior: start on press (release stops)
                         if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
-                            let audio = app.state::<audio::AudioCapture>();
+                            let audio_mutex = app.state::<audio::AudioCaptureMutex>();
+                            let audio = audio_mutex.0.lock().unwrap();
                             audio.clear_buffer();
                             audio.recording.store(true, Ordering::Relaxed);
+                            let buffer_clone = audio.buffer.clone();
+                            drop(audio);
                             tray::set_tray_state(app, tray::TrayState::Recording);
 
                             // Pill: show and set recording state
@@ -172,10 +179,9 @@ fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<
                             // Start RMS level stream
                             let stream_active = app.state::<LevelStreamActive>();
                             stream_active.0.store(true, Ordering::Relaxed);
-                            let audio_for_pill = app.state::<audio::AudioCapture>();
                             pill::start_level_stream(
                                 app.clone(),
-                                audio_for_pill.buffer.clone(),
+                                buffer_clone,
                                 stream_active.0.clone(),
                             );
 
@@ -185,25 +191,27 @@ fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<
                     Mode::Toggle => {
                         if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
                             // First tap: start recording
-                            let audio = app.state::<audio::AudioCapture>();
+                            let audio_mutex = app.state::<audio::AudioCaptureMutex>();
+                            let audio = audio_mutex.0.lock().unwrap();
                             audio.clear_buffer();
                             audio.recording.store(true, Ordering::Relaxed);
+                            let buffer_clone = audio.buffer.clone();
+                            drop(audio);
                             tray::set_tray_state(app, tray::TrayState::Recording);
                             app.emit_to("pill", "pill-show", ()).ok();
                             app.emit_to("pill", "pill-state", "recording").ok();
                             let stream_active = app.state::<LevelStreamActive>();
                             stream_active.0.store(true, Ordering::Relaxed);
-                            let audio_for_pill = app.state::<audio::AudioCapture>();
                             pill::start_level_stream(
                                 app.clone(),
-                                audio_for_pill.buffer.clone(),
+                                buffer_clone.clone(),
                                 stream_active.0.clone(),
                             );
 
                             // Spawn VAD worker for auto-stop
                             let vad_handle = vad::spawn_vad_worker(
                                 app.clone(),
-                                audio.buffer.clone(),
+                                buffer_clone,
                             );
                             let vad_state = app.state::<VadWorkerState>();
                             if let Ok(mut guard) = vad_state.0.lock() {
@@ -274,9 +282,10 @@ fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<
 ///
 /// Audio captured after this call is accumulated in memory at 16kHz mono.
 #[tauri::command]
-fn start_recording(state: tauri::State<'_, audio::AudioCapture>) -> Result<(), String> {
-    state.clear_buffer();
-    state.recording.store(true, std::sync::atomic::Ordering::Relaxed);
+fn start_recording(state: tauri::State<'_, audio::AudioCaptureMutex>) -> Result<(), String> {
+    let guard = state.0.lock().unwrap();
+    guard.clear_buffer();
+    guard.recording.store(true, std::sync::atomic::Ordering::Relaxed);
     log::info!("Recording started");
     Ok(())
 }
@@ -284,8 +293,9 @@ fn start_recording(state: tauri::State<'_, audio::AudioCapture>) -> Result<(), S
 /// Stop recording: clears the recording flag, flushes the resampler,
 /// and returns the number of 16kHz samples captured.
 #[tauri::command]
-fn stop_recording(state: tauri::State<'_, audio::AudioCapture>) -> Result<usize, String> {
-    let n = state.flush_and_stop();
+fn stop_recording(state: tauri::State<'_, audio::AudioCaptureMutex>) -> Result<usize, String> {
+    let guard = state.0.lock().unwrap();
+    let n = guard.flush_and_stop();
     let seconds = n as f32 / 16000.0;
     log::info!("Recording stopped: {} samples ({:.1}s)", n, seconds);
     Ok(n)
@@ -295,8 +305,8 @@ fn stop_recording(state: tauri::State<'_, audio::AudioCapture>) -> Result<usize,
 ///
 /// Returns the file path on success.
 #[tauri::command]
-fn save_test_wav(app: tauri::AppHandle, state: tauri::State<'_, audio::AudioCapture>) -> Result<String, String> {
-    let samples = state.get_buffer();
+fn save_test_wav(app: tauri::AppHandle, state: tauri::State<'_, audio::AudioCaptureMutex>) -> Result<String, String> {
+    let samples = state.0.lock().unwrap().get_buffer();
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let wav_dir = data_dir.join("test-fixtures");
     std::fs::create_dir_all(&wav_dir).map_err(|e| e.to_string())?;
@@ -547,6 +557,209 @@ fn set_all_caps(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Read the saved microphone device name from settings.json.
+/// Returns None on first launch, file missing, or no saved mic (system default).
+fn read_saved_mic(app: &tauri::App) -> Option<String> {
+    let data_dir = app.path().app_data_dir().ok()?;
+    let settings_path = data_dir.join("settings.json");
+    let contents = std::fs::read_to_string(&settings_path).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&contents).ok()?;
+    json.get("microphone_device")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty() && *s != "System Default")
+        .map(|s| s.to_owned())
+}
+
+/// List available audio input device names.
+///
+/// The first entry is always "System Default" so the UI has a way to revert.
+#[tauri::command]
+fn list_input_devices() -> Result<Vec<String>, String> {
+    use cpal::traits::{DeviceTrait, HostTrait};
+    let host = cpal::default_host();
+    let devices = host.input_devices().map_err(|e| e.to_string())?;
+    let mut names = vec!["System Default".to_string()];
+    for device in devices {
+        if let Ok(desc) = device.description() {
+            names.push(desc.name().to_string());
+        }
+    }
+    Ok(names)
+}
+
+/// Switch the active microphone device. Restarts the audio stream with the new device.
+///
+/// Passing "System Default" or an empty string uses `host.default_input_device()`.
+/// Persists the selection to settings.json so it is restored at next startup.
+#[tauri::command]
+fn set_microphone(app: tauri::AppHandle, device_name: String) -> Result<(), String> {
+    use cpal::traits::{DeviceTrait, HostTrait};
+
+    let host = cpal::default_host();
+    let device = if device_name.is_empty() || device_name == "System Default" {
+        host.default_input_device()
+            .ok_or_else(|| "No default input device found".to_string())?
+    } else {
+        host.input_devices()
+            .map_err(|e| e.to_string())?
+            .find(|d| {
+                d.description()
+                    .map(|desc: cpal::DeviceDescription| desc.name() == device_name.as_str())
+                    .unwrap_or(false)
+            })
+            .ok_or_else(|| format!("Input device '{}' not found", device_name))?
+    };
+
+    let new_capture = audio::start_persistent_stream_with_device(device)
+        .map_err(|e| e.to_string())?;
+
+    // Replace the inner AudioCapture — old stream drops, new one starts
+    {
+        let audio_mutex = app.state::<audio::AudioCaptureMutex>();
+        let mut guard = audio_mutex.0.lock().unwrap();
+        *guard = new_capture;
+    }
+
+    // Persist to settings.json
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let settings_path = data_dir.join("settings.json");
+    let mut json: serde_json::Value = std::fs::read_to_string(&settings_path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+    json["microphone_device"] = serde_json::Value::String(device_name.clone());
+    std::fs::write(&settings_path, serde_json::to_string_pretty(&json).unwrap())
+        .map_err(|e| e.to_string())?;
+
+    log::info!("Microphone switched to: '{}'", device_name);
+    Ok(())
+}
+
+/// Read the saved whisper model ID from settings.json.
+/// Returns None if not set (auto-detect will be used).
+#[cfg(feature = "whisper")]
+fn read_saved_model_id(app: &tauri::App) -> Option<String> {
+    let data_dir = app.path().app_data_dir().ok()?;
+    let settings_path = data_dir.join("settings.json");
+    let contents = std::fs::read_to_string(&settings_path).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&contents).ok()?;
+    json.get("whisper_model_id")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_owned())
+}
+
+/// Map a model_id string to the expected model file path.
+///
+/// Returns Err if the model_id is unknown.
+#[cfg(feature = "whisper")]
+fn model_id_to_path(model_id: &str) -> Result<std::path::PathBuf, String> {
+    use crate::transcribe::models_dir;
+    let filename = match model_id {
+        "large-v3-turbo" => "ggml-large-v3-turbo-q5_0.bin",
+        "medium" => "ggml-medium.bin",
+        "small-en" => "ggml-small.en-q5_1.bin",
+        _ => return Err(format!("Unknown model id: {}", model_id)),
+    };
+    Ok(models_dir().join(filename))
+}
+
+/// Info about a whisper model including availability and GPU recommendation.
+#[cfg(feature = "whisper")]
+#[derive(serde::Serialize)]
+struct ModelInfo {
+    id: String,
+    name: String,
+    description: String,
+    recommended: bool,
+    downloaded: bool,
+}
+
+/// List available whisper models with download status and GPU recommendation.
+#[cfg(feature = "whisper")]
+#[tauri::command]
+fn list_models() -> Result<Vec<ModelInfo>, String> {
+    use crate::transcribe::{detect_gpu, models_dir, ModelMode};
+    let gpu_mode = matches!(detect_gpu(), ModelMode::Gpu);
+    let dir = models_dir();
+
+    Ok(vec![
+        ModelInfo {
+            id: "large-v3-turbo".to_string(),
+            name: "Large v3 Turbo".to_string(),
+            description: "Best accuracy, requires NVIDIA GPU".to_string(),
+            recommended: gpu_mode,
+            downloaded: dir.join("ggml-large-v3-turbo-q5_0.bin").exists(),
+        },
+        ModelInfo {
+            id: "medium".to_string(),
+            name: "Medium".to_string(),
+            description: "Balanced speed and accuracy".to_string(),
+            recommended: false,
+            downloaded: dir.join("ggml-medium.bin").exists(),
+        },
+        ModelInfo {
+            id: "small-en".to_string(),
+            name: "Small (English)".to_string(),
+            description: "Fastest, works without GPU".to_string(),
+            recommended: !gpu_mode,
+            downloaded: dir.join("ggml-small.en-q5_1.bin").exists(),
+        },
+    ])
+}
+
+/// Switch the active whisper model. Reloads the WhisperContext without app restart.
+///
+/// Uses spawn_blocking because model loading is CPU-intensive.
+/// Persists model_id to settings.json.
+#[cfg(feature = "whisper")]
+#[tauri::command]
+async fn set_model(app: tauri::AppHandle, model_id: String) -> Result<(), String> {
+    let model_path = model_id_to_path(&model_id)?;
+    if !model_path.exists() {
+        return Err(format!("Model file not downloaded: {}", model_path.display()));
+    }
+
+    let path_str = model_path.to_string_lossy().to_string();
+    let model_id_clone = model_id.clone();
+
+    // Determine GPU mode: large-v3-turbo uses GPU, others use CPU
+    let mode = if model_id == "large-v3-turbo" {
+        crate::transcribe::ModelMode::Gpu
+    } else {
+        crate::transcribe::ModelMode::Cpu
+    };
+
+    // Load new context on a blocking thread — model loading is CPU-intensive
+    let new_ctx = tauri::async_runtime::spawn_blocking(move || {
+        crate::transcribe::load_whisper_context(&path_str, &mode)
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking panicked: {}", e))?
+    .map_err(|e| e)?;
+
+    // Replace WhisperContext in managed state
+    {
+        let whisper_mutex = app.state::<WhisperStateMutex>();
+        let mut guard = whisper_mutex.0.lock().unwrap();
+        *guard = Some(Arc::new(new_ctx));
+    }
+
+    // Persist model_id to settings.json
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let settings_path = data_dir.join("settings.json");
+    let mut json: serde_json::Value = std::fs::read_to_string(&settings_path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+    json["whisper_model_id"] = serde_json::Value::String(model_id_clone.clone());
+    std::fs::write(&settings_path, serde_json::to_string_pretty(&json).unwrap())
+        .map_err(|e| e.to_string())?;
+
+    log::info!("Whisper model switched to: '{}'", model_id_clone);
+    Ok(())
+}
+
 /// Reads a WAV file and decodes it to mono f32 samples.
 ///
 /// Supports float and integer WAV formats. Downmixes multi-channel audio to mono.
@@ -621,15 +834,18 @@ async fn transcribe_test_file(
 
     let start = Instant::now();
 
-    // Get the WhisperContext from managed state
-    let state = app.state::<WhisperState>();
-    let ctx = match &state.0 {
-        Some(ctx) => Arc::clone(ctx),
-        None => {
-            return Err(
-                "Whisper model not loaded. Check startup logs for the download instructions."
-                    .to_string(),
-            );
+    // Get the WhisperContext from managed state — lock, clone Arc, drop guard before blocking work
+    let ctx = {
+        let state = app.state::<WhisperStateMutex>();
+        let guard = state.0.lock().unwrap();
+        match guard.as_ref() {
+            Some(ctx) => Arc::clone(ctx),
+            None => {
+                return Err(
+                    "Whisper model not loaded. Check startup logs for the download instructions."
+                        .to_string(),
+                );
+            }
         }
     };
 
@@ -721,11 +937,17 @@ pub fn run() {
             start_recording,
             stop_recording,
             save_test_wav,
+            list_input_devices,
+            set_microphone,
             get_profiles,
             set_active_profile,
             get_corrections,
             save_corrections,
             set_all_caps,
+            #[cfg(feature = "whisper")]
+            list_models,
+            #[cfg(feature = "whisper")]
+            set_model,
             #[cfg(feature = "whisper")]
             transcribe_test_file,
             #[cfg(feature = "whisper")]
@@ -834,9 +1056,12 @@ pub fn run() {
                                     Mode::HoldToTalk => {
                                         // Existing behavior: start on press (release stops)
                                         if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
-                                            let audio = app.state::<audio::AudioCapture>();
+                                            let audio_mutex = app.state::<audio::AudioCaptureMutex>();
+                                            let audio = audio_mutex.0.lock().unwrap();
                                             audio.clear_buffer();
                                             audio.recording.store(true, Ordering::Relaxed);
+                                            let buffer_clone = audio.buffer.clone();
+                                            drop(audio);
                                             tray::set_tray_state(app, tray::TrayState::Recording);
 
                                             // Pill: show and set recording state
@@ -846,10 +1071,9 @@ pub fn run() {
                                             // Start RMS level stream
                                             let stream_active = app.state::<LevelStreamActive>();
                                             stream_active.0.store(true, Ordering::Relaxed);
-                                            let audio_for_pill = app.state::<audio::AudioCapture>();
                                             pill::start_level_stream(
                                                 app.clone(),
-                                                audio_for_pill.buffer.clone(),
+                                                buffer_clone,
                                                 stream_active.0.clone(),
                                             );
 
@@ -859,25 +1083,27 @@ pub fn run() {
                                     Mode::Toggle => {
                                         if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
                                             // First tap: start recording
-                                            let audio = app.state::<audio::AudioCapture>();
+                                            let audio_mutex = app.state::<audio::AudioCaptureMutex>();
+                                            let audio = audio_mutex.0.lock().unwrap();
                                             audio.clear_buffer();
                                             audio.recording.store(true, Ordering::Relaxed);
+                                            let buffer_clone = audio.buffer.clone();
+                                            drop(audio);
                                             tray::set_tray_state(app, tray::TrayState::Recording);
                                             app.emit_to("pill", "pill-show", ()).ok();
                                             app.emit_to("pill", "pill-state", "recording").ok();
                                             let stream_active = app.state::<LevelStreamActive>();
                                             stream_active.0.store(true, Ordering::Relaxed);
-                                            let audio_for_pill = app.state::<audio::AudioCapture>();
                                             pill::start_level_stream(
                                                 app.clone(),
-                                                audio_for_pill.buffer.clone(),
+                                                buffer_clone.clone(),
                                                 stream_active.0.clone(),
                                             );
 
                                             // Spawn VAD worker for auto-stop
                                             let vad_handle = vad::spawn_vad_worker(
                                                 app.clone(),
-                                                audio.buffer.clone(),
+                                                buffer_clone,
                                             );
                                             let vad_state = app.state::<VadWorkerState>();
                                             if let Ok(mut guard) = vad_state.0.lock() {
@@ -943,45 +1169,112 @@ pub fn run() {
             )?;
 
             // Start persistent audio capture stream.
+            // Prefer saved mic device if found; fall back to system default silently (RESEARCH.md Pitfall 6).
             // App continues even if microphone is unavailable.
-            match audio::start_persistent_stream() {
+            let saved_mic_name = read_saved_mic(app);
+            let capture_result = if let Some(ref name) = saved_mic_name {
+                use cpal::traits::{DeviceTrait, HostTrait};
+                let host = cpal::default_host();
+                let found = host.input_devices().ok().and_then(|mut devs| {
+                    devs.find(|d| {
+                        d.description()
+                            .map(|desc: cpal::DeviceDescription| desc.name() == name.as_str())
+                            .unwrap_or(false)
+                    })
+                });
+                if let Some(device) = found {
+                    log::info!("Restoring saved microphone: '{}'", name);
+                    audio::start_persistent_stream_with_device(device)
+                } else {
+                    log::warn!("Saved microphone '{}' not found — falling back to system default", name);
+                    audio::start_persistent_stream()
+                }
+            } else {
+                audio::start_persistent_stream()
+            };
+            match capture_result {
                 Ok(capture) => {
                     log::info!("Audio capture initialized successfully");
-                    app.manage(capture);
+                    app.manage(audio::AudioCaptureMutex(std::sync::Mutex::new(capture)));
                 }
                 Err(e) => {
                     log::error!("Audio capture failed to initialize: {} — recording commands will not function", e);
+                    // Register a dummy capture — no device, but state type is required for commands
+                    // Rather than crashing, we skip manage() and let commands fail gracefully.
+                    // AudioCaptureMutex must still be registered for Tauri state to work.
+                    // Use a dummy path: if stream fails, we cannot create AudioCapture.
+                    // Best approach: log and skip manage; commands will panic on missing state.
+                    // This matches original behavior (no AudioCapture managed = commands error).
+                    log::warn!("Audio state not registered — start_recording/stop_recording will fail");
                 }
             }
 
             // Load whisper model (only when compiled with "whisper" feature).
             #[cfg(feature = "whisper")]
             {
-                // Detect GPU presence at runtime — selects large-v3-turbo (GPU) or small.en (CPU)
-                let mode = transcribe::detect_gpu();
-                log::info!("Inference mode selected: {:?}", mode);
-
-                let whisper_ctx = match transcribe::resolve_model_path(&mode) {
-                    Ok(model_path) => {
-                        let model_str = model_path.to_string_lossy().to_string();
-                        match transcribe::load_whisper_context(&model_str, &mode) {
-                            Ok(ctx) => {
-                                log::info!("Whisper context initialized successfully ({:?} mode)", mode);
-                                Some(Arc::new(ctx))
-                            }
-                            Err(e) => {
-                                log::error!("Whisper model not loaded: {}", e);
-                                None
+                // If user has a saved model preference, try that first.
+                // Fall back to GPU-auto-detection if saved model file is missing or no preference.
+                let saved_model_id = read_saved_model_id(app);
+                let whisper_ctx = if let Some(ref model_id) = saved_model_id {
+                    // Try to load the saved model
+                    let model_path_result = model_id_to_path(model_id);
+                    match model_path_result {
+                        Ok(path) if path.exists() => {
+                            let path_str = path.to_string_lossy().to_string();
+                            // Determine GPU mode based on model selection
+                            let mode = if model_id == "large-v3-turbo" {
+                                transcribe::ModelMode::Gpu
+                            } else {
+                                transcribe::ModelMode::Cpu
+                            };
+                            match transcribe::load_whisper_context(&path_str, &mode) {
+                                Ok(ctx) => {
+                                    log::info!("Whisper context loaded from saved model '{}' ({:?} mode)", model_id, mode);
+                                    Some(Arc::new(ctx))
+                                }
+                                Err(e) => {
+                                    log::warn!("Saved model '{}' failed to load: {} — falling back to auto-detect", model_id, e);
+                                    None
+                                }
                             }
                         }
+                        _ => {
+                            log::warn!("Saved model '{}' file not found — falling back to auto-detect", model_id);
+                            None
+                        }
                     }
-                    Err(e) => {
-                        log::warn!("Whisper model not loaded: {}", e);
-                        None
-                    }
+                } else {
+                    None
                 };
 
-                app.manage(WhisperState(whisper_ctx));
+                // If saved model didn't load, fall back to GPU auto-detection
+                let whisper_ctx = if whisper_ctx.is_none() {
+                    let mode = transcribe::detect_gpu();
+                    log::info!("Inference mode selected (auto-detect): {:?}", mode);
+                    match transcribe::resolve_model_path(&mode) {
+                        Ok(model_path) => {
+                            let model_str = model_path.to_string_lossy().to_string();
+                            match transcribe::load_whisper_context(&model_str, &mode) {
+                                Ok(ctx) => {
+                                    log::info!("Whisper context initialized successfully ({:?} mode)", mode);
+                                    Some(Arc::new(ctx))
+                                }
+                                Err(e) => {
+                                    log::error!("Whisper model not loaded: {}", e);
+                                    None
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            log::warn!("Whisper model not loaded: {}", e);
+                            None
+                        }
+                    }
+                } else {
+                    whisper_ctx
+                };
+
+                app.manage(WhisperStateMutex(std::sync::Mutex::new(whisper_ctx)));
             }
 
             Ok(())

@@ -48,9 +48,14 @@ impl PipelineState {
 /// Every early-return path calls reset_to_idle() — no stuck states.
 pub async fn run_pipeline(app: tauri::AppHandle) {
     // 1. Stop recording and get audio buffer
-    let audio_state = app.state::<crate::audio::AudioCapture>();
-    let sample_count = audio_state.flush_and_stop();
-    let samples = audio_state.get_buffer();
+    // Lock AudioCaptureMutex, flush+get buffer, then drop guard before any async work.
+    let (sample_count, samples) = {
+        let audio_mutex = app.state::<crate::audio::AudioCaptureMutex>();
+        let audio = audio_mutex.0.lock().unwrap();
+        let count = audio.flush_and_stop();
+        let buf = audio.get_buffer();
+        (count, buf)
+    };
 
     // Cancel any active VAD worker (prevents double-trigger if run_pipeline
     // is called from second tap while VAD worker is still polling)
@@ -97,15 +102,19 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
     // 3. Run whisper inference (blocking — whisper-rs is sync)
     #[cfg(feature = "whisper")]
     let transcription: String = {
-        let whisper_state = app.state::<crate::WhisperState>();
-        let ctx = match &whisper_state.0 {
-            Some(ctx) => ctx.clone(),
-            None => {
-                log::error!("Pipeline: whisper model not loaded");
-                // Pill: error flash — model not available
-                app.emit_to("pill", "pill-result", "error").ok();
-                reset_to_idle(&app);
-                return;
+        // Lock WhisperStateMutex, clone Arc, drop guard before spawn_blocking
+        let ctx = {
+            let whisper_mutex = app.state::<crate::WhisperStateMutex>();
+            let guard = whisper_mutex.0.lock().unwrap();
+            match guard.as_ref() {
+                Some(ctx) => ctx.clone(),
+                None => {
+                    log::error!("Pipeline: whisper model not loaded");
+                    // Pill: error flash — model not available
+                    app.emit_to("pill", "pill-result", "error").ok();
+                    reset_to_idle(&app);
+                    return;
+                }
             }
         };
         match tauri::async_runtime::spawn_blocking(move || {
