@@ -173,7 +173,7 @@ fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<
                             tray::set_tray_state(app, tray::TrayState::Recording);
 
                             // Pill: show and set recording state
-                            app.emit_to("pill", "pill-show", ()).ok();
+                            pill::show_pill(&app);
                             app.emit_to("pill", "pill-state", "recording").ok();
 
                             // Start RMS level stream
@@ -198,7 +198,7 @@ fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<
                             let buffer_clone = audio.buffer.clone();
                             drop(audio);
                             tray::set_tray_state(app, tray::TrayState::Recording);
-                            app.emit_to("pill", "pill-show", ()).ok();
+                            pill::show_pill(&app);
                             app.emit_to("pill", "pill-state", "recording").ok();
                             let stream_active = app.state::<LevelStreamActive>();
                             stream_active.0.store(true, Ordering::Relaxed);
@@ -966,26 +966,7 @@ pub fn run() {
                 // Disable DWM shadow — rectangular shadow doesn't respect CSS border-radius (tauri#11321)
                 let _ = pill_window.set_shadow(false);
 
-                // Restore saved pill position from settings.json (sync read — same pattern as read_saved_hotkey)
-                let data_dir = app.path().app_data_dir().ok();
-                if let Some(dir) = data_dir {
-                    let settings_path = dir.join("settings.json");
-                    if let Ok(contents) = std::fs::read_to_string(&settings_path) {
-                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents) {
-                            if let Some(pos) = json.get("pill-position") {
-                                if let (Some(x), Some(y)) = (
-                                    pos.get("x").and_then(|v| v.as_f64()),
-                                    pos.get("y").and_then(|v| v.as_f64()),
-                                ) {
-                                    let _ = pill_window.set_position(tauri::PhysicalPosition::new(x as i32, y as i32));
-                                    log::info!("Pill position restored to ({}, {})", x, y);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                log::info!("Pill overlay window configured (focusable=false, position restored)");
+                log::info!("Pill overlay window configured (focusable=false, no-shadow)");
             }
 
             // Determine hotkey to register: use saved setting if present, else default
@@ -1065,7 +1046,7 @@ pub fn run() {
                                             tray::set_tray_state(app, tray::TrayState::Recording);
 
                                             // Pill: show and set recording state
-                                            app.emit_to("pill", "pill-show", ()).ok();
+                                            pill::show_pill(&app);
                                             app.emit_to("pill", "pill-state", "recording").ok();
 
                                             // Start RMS level stream
@@ -1090,7 +1071,7 @@ pub fn run() {
                                             let buffer_clone = audio.buffer.clone();
                                             drop(audio);
                                             tray::set_tray_state(app, tray::TrayState::Recording);
-                                            app.emit_to("pill", "pill-show", ()).ok();
+                                            pill::show_pill(&app);
                                             app.emit_to("pill", "pill-state", "recording").ok();
                                             let stream_active = app.state::<LevelStreamActive>();
                                             stream_active.0.store(true, Ordering::Relaxed);

@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::Emitter;
+use tauri::Manager;
 
 /// Start a ~30fps loop that reads the audio buffer, computes RMS, and emits
 /// normalized level (0.0-1.0) to the pill window.
@@ -25,6 +26,64 @@ pub fn start_level_stream(
         // Send a final zero level when stopping
         let _ = app.emit_to("pill", "pill-level", 0.0_f32);
     });
+}
+
+/// Position the pill at bottom-center of the monitor the cursor is on,
+/// then emit pill-show to make it visible.
+pub fn show_pill(app: &tauri::AppHandle) {
+    if let Some(pill_window) = app.get_webview_window("pill") {
+        // 1. Get cursor position
+        let cursor = match pill_window.cursor_position() {
+            Ok(pos) => pos,
+            Err(e) => {
+                log::warn!("Failed to get cursor position: {}, using primary monitor", e);
+                tauri::PhysicalPosition { x: 0.0, y: 0.0 }
+            }
+        };
+
+        // 2. Find which monitor the cursor is on
+        let monitors = pill_window.available_monitors().unwrap_or_default();
+        let target_monitor = monitors.iter().find(|m| {
+            let pos = m.position();
+            let size = m.size();
+            let (mx, my) = (pos.x as f64, pos.y as f64);
+            let (mw, mh) = (size.width as f64, size.height as f64);
+            cursor.x >= mx && cursor.x < mx + mw && cursor.y >= my && cursor.y < my + mh
+        });
+
+        // 3. Get the work area (excludes taskbar) of that monitor.
+        // Fall back to primary monitor if cursor isn't found on any.
+        let work_area = if let Some(mon) = target_monitor {
+            mon.work_area().clone()
+        } else if let Some(primary) = monitors.first() {
+            primary.work_area().clone()
+        } else {
+            log::warn!("No monitors detected, emitting pill-show without positioning");
+            app.emit_to("pill", "pill-show", ()).ok();
+            return;
+        };
+
+        // 4. Calculate bottom-center position within work area.
+        // Pill dimensions: 178 x 46 (from tauri.conf.json)
+        let pill_width: i32 = 178;
+        let pill_height: i32 = 46;
+        let margin_bottom: i32 = 14; // pixels above bottom of work area
+        let wa_x = work_area.position.x;
+        let wa_y = work_area.position.y;
+        let wa_w = work_area.size.width as i32;
+        let wa_h = work_area.size.height as i32;
+
+        let x = wa_x + (wa_w - pill_width) / 2;
+        let y = wa_y + wa_h - pill_height - margin_bottom;
+
+        let _ = pill_window.set_position(tauri::PhysicalPosition::new(x, y));
+        log::debug!("Pill positioned at ({}, {}) on monitor work area", x, y);
+
+        // Emit pill-show AFTER positioning
+        app.emit_to("pill", "pill-show", ()).ok();
+    } else {
+        log::warn!("Pill window not found, cannot position or show pill");
+    }
 }
 
 /// Compute normalized RMS from the last `window` samples of the buffer.
