@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 06.1-fix-duplicate-tray-icons-and-replace-default-square-icon-with-proper-app-icon
-current_plan: "06.1-01 (complete) — Phase 06.1 complete, next phase: 06.2-premium-waveform-visualization-upgrade"
+current_plan: "06.1-02 (complete) — Phase 06.1 fully verified, next phase: 06.2-premium-waveform-visualization-upgrade"
 status: planning
-last_updated: "2026-03-01T12:24:33.165Z"
+last_updated: "2026-03-01T12:40:00.000Z"
 progress:
   total_phases: 9
   completed_phases: 7
   total_plans: 20
-  completed_plans: 19
+  completed_plans: 20
 ---
 
 # Session State
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 **Milestone:** v1.0 milestone
 **Current phase:** 06.1-fix-duplicate-tray-icons-and-replace-default-square-icon-with-proper-app-icon
-**Current plan:** 06.1-01 (complete) — Phase 06.1 complete, next phase: 06.2-premium-waveform-visualization-upgrade
+**Current plan:** 06.1-02 (complete) — Phase 06.1 fully verified, next phase: 06.2-premium-waveform-visualization-upgrade
 **Status:** Ready to plan
 
-Last activity: 2026-03-01 - Completed 06.1-01: VoiceType microphone icon (SVG + bundle regeneration), fixed duplicate tray icon using Image::from_bytes(ICON_IDLE), added per-state tooltip support (commits ed7be05, 2fc9aa9)
+Last activity: 2026-03-01 - Completed 06.1-02: Human visual verification of tray icon, app icon, and tooltip — all five checks passed (single icon, VoiceType design, state color transitions, tooltip text, taskbar/title-bar icon)
 
 ## Session Log
 
@@ -39,6 +39,7 @@ Last activity: 2026-03-01 - Completed 06.1-01: VoiceType microphone icon (SVG + 
 - 2026-03-01: 06-03 (sidebar-nav settings UI, ProfileSwitcher, DictionaryEditor, ModelSelector, MicrophoneSection) — completed (commits 70ca534, 1d7b85e)
 - 2026-02-28: 06-04 (end-to-end Phase 6 verification) — all 10 scenarios pass; fixed content pane clipping and profile backend sync (commit d024c13)
 - 2026-03-01: 06.1-01 (fix duplicate tray icons + VoiceType app icon) — SVG source icon, bundle icons regenerated, tray PNGs redesigned as microphone silhouettes, tray.rs fixed to use Image::from_bytes(ICON_IDLE) in build_tray(), tooltip support added (commits ed7be05, 2fc9aa9)
+- 2026-03-01: 06.1-02 (human verification) — all five visual checks passed: single tray icon, VoiceType microphone design, state color transitions, tooltip text, taskbar/title-bar icon confirmed
 
 ## Decisions
 
