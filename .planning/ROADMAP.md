@@ -110,11 +110,11 @@ Plans:
   2. User can tap the hotkey a second time to stop recording early in toggle mode (manual override of auto-stop)
   3. If the user activates dictation and says nothing, whisper does not run and no text is injected — the silence gate discards the buffer
   4. User can switch between hold-to-talk and toggle mode in settings, and the selected mode persists across restarts
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: Silero VAD integration — integrate silero-vad-rust, process 30ms chunks from audio mpsc channel, detect speech start/end with tuned silence threshold, discard buffers with less than 300ms detected speech
-- [ ] 05-02: Toggle mode — implement tap-to-start/auto-stop state machine using VAD events, add manual stop on second tap, wire mode selection (hold-to-talk vs toggle) to settings persistence
+- [ ] 05-01-PLAN.md — Silero VAD integration via voice_activity_detector crate, vad.rs module with VadWorker and vad_gate_check, replace 1600-sample gate in pipeline.rs
+- [ ] 05-02-PLAN.md — Toggle mode state machine with mode-aware hotkey handlers, RecordingMode settings persistence, settings UI radio-card toggle
 
 ### Phase 6: Vocabulary + Settings
 **Goal**: Word correction dictionary, vocabulary profiles with engineering and general presets, and a full settings panel — the differentiating layer that makes VoiceType accurate for structural engineering work
