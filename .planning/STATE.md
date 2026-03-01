@@ -81,3 +81,5 @@ Last activity: 2026-03-01 - Completed 06.2-01: WaveformCanvas.tsx with 3 layered
 ### Pending Todos
 
 1. Investigate microphone icon persisting in system tray (area: ui)
+2. Fix pill position to bottom center above taskbar, remove dragging (area: ui)
+3. Multi-monitor support — pill follows active cursor monitor (area: ui)
