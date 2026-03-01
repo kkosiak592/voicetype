@@ -87,10 +87,14 @@ function App() {
             try {
               const store = await getStore();
               await store.set('selectedModel', downloadedModelId);
-              await invoke('set_model', { modelId: downloadedModelId });
               setSelectedModel(downloadedModelId);
             } catch (e) {
-              console.warn('Failed to auto-select downloaded model:', e);
+              console.warn('Failed to save selected model:', e);
+            }
+            try {
+              await invoke('set_model', { modelId: downloadedModelId });
+            } catch (e) {
+              console.warn('Failed to load whisper model (will load on next start):', e);
             }
             setFirstRunStatus({ ...firstRunStatus, needsSetup: false });
           }}
