@@ -29,9 +29,9 @@ pub fn start_level_stream(
 
 /// Compute normalized RMS from the last `window` samples of the buffer.
 ///
-/// Returns 0.0-1.0 where typical speech is 0.3-0.8.
-/// Uses a 10x multiplier: speech RMS is usually 0.01-0.1, so * 10 normalizes
-/// to a usable range for the visualizer.
+/// Returns 0.0-1.0 where typical speech is 0.45-1.0.
+/// Uses a 15x multiplier: speech RMS is usually 0.01-0.1, so * 15 normalizes
+/// to a higher range (0.15-1.0) for more prominent bar reactivity.
 fn compute_rms(buf: &[f32], window: usize) -> f32 {
     if buf.is_empty() {
         return 0.0;
@@ -39,5 +39,5 @@ fn compute_rms(buf: &[f32], window: usize) -> f32 {
     let n = buf.len().min(window);
     let tail = &buf[buf.len() - n..];
     let mean_sq: f32 = tail.iter().map(|&s| s * s).sum::<f32>() / n as f32;
-    (mean_sq.sqrt() * 10.0).min(1.0)
+    (mean_sq.sqrt() * 15.0).min(1.0)
 }

@@ -56,19 +56,26 @@ export function FrequencyBars({ level }: FrequencyBarsProps) {
       const t = (now - startTimeRef.current) / 1000; // seconds
       const lv = levelRef.current;
 
+      // Non-linear amplification: boosts quiet-to-mid levels, keeps loud levels near max
+      // Maps: 0.1 -> 0.28, 0.3 -> 0.51, 0.5 -> 0.68, 0.8 -> 0.88, 1.0 -> 1.0
+      const amplified = Math.pow(lv, 0.55);
+
       for (let i = 0; i < BAR_COUNT; i++) {
         // Sinusoidal wave contribution scaled by level
         const wave = Math.sin(2 * Math.PI * BAR_FREQS[i] * t + BAR_PHASES[i]);
-        // Active height: level-driven + bell envelope
-        const activeHeight = lv * BELL[i] * ((wave + 1) / 2);
-        // Idle wave: always running so bars are never fully flat
-        const idleWave = 0.15 * BELL[i] * ((Math.sin(2 * Math.PI * 1.2 * t + BAR_PHASES[i]) + 1) / 2);
+        // Active height: 0.3 floor ensures bars stay visibly tall during speech,
+        // 0.7 * wave adds bouncy sinusoidal variation on top
+        const activeHeight = amplified * BELL[i] * (0.3 + 0.7 * ((wave + 1) / 2));
+        // Idle wave: reduced amplitude increases contrast between idle and active states
+        const idleWave = 0.08 * BELL[i] * ((Math.sin(2 * Math.PI * 1.2 * t + BAR_PHASES[i]) + 1) / 2);
         // Composite height as fraction of container (0–1), then to px
-        const fraction = Math.max(0.06, activeHeight + idleWave);
-        const heightPx = Math.round(fraction * 30);
+        // Minimum lowered to 0.04 for thinner silent bars and greater dynamic range
+        const fraction = Math.max(0.04, activeHeight + idleWave);
+        // Container is 30px; use 32 multiplier so bars can slightly overflow for liveliness
+        const heightPx = Math.round(fraction * 32);
         bars[i].style.height = `${heightPx}px`;
-        // Opacity scaling: shorter bars are more transparent, taller bars are opaque
-        bars[i].style.opacity = String(0.4 + fraction * 0.6);
+        // Opacity: bars stay more visible at mid heights
+        bars[i].style.opacity = String(0.5 + fraction * 0.5);
       }
 
       rafRef.current = requestAnimationFrame(tick);
