@@ -8,23 +8,17 @@ import { ProcessingDots } from "./components/ProcessingDots";
 const appWindow = getCurrentWebviewWindow();
 
 type PillDisplayState = "hidden" | "recording" | "processing" | "error";
-type AnimState = "hidden" | "entering" | "visible" | "exiting";
+type AnimState = "hidden" | "visible" | "exiting";
 
 export function Pill() {
   const [displayState, setDisplayState] = useState<PillDisplayState>("hidden");
   const [animState, setAnimState] = useState<AnimState>("hidden");
   const [level, setLevel] = useState(0);
 
-  // Timers for animation sequencing
-  const enterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Timer for exit animation sequencing
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Clears all pending animation timers
   function clearAllTimers() {
-    if (enterTimerRef.current) {
-      clearTimeout(enterTimerRef.current);
-      enterTimerRef.current = null;
-    }
     if (exitTimerRef.current) {
       clearTimeout(exitTimerRef.current);
       exitTimerRef.current = null;
@@ -55,16 +49,11 @@ export function Pill() {
   useEffect(() => {
     const unlisteners: Array<() => void> = [];
 
-    // pill-show: make visible with entrance animation
+    // pill-show: make visible immediately (no entrance animation)
     appWindow.listen("pill-show", () => {
       clearAllTimers();
       appWindow.show();
-      setAnimState("entering");
-      // After entrance animation completes (260ms), transition to visible
-      enterTimerRef.current = setTimeout(() => {
-        setAnimState("visible");
-        enterTimerRef.current = null;
-      }, 260);
+      setAnimState("visible");
     }).then((u) => unlisteners.push(u));
 
     // pill-hide: exit animation then hide window
@@ -141,7 +130,6 @@ export function Pill() {
         flex items-center justify-center
         cursor-grab active:cursor-grabbing
         select-none
-        ${animState === "entering" ? "pill-entering" : ""}
         ${animState === "exiting" ? "pill-exiting" : ""}
         ${animState === "hidden" ? "opacity-0 pointer-events-none" : ""}
         ${displayState === "processing" ? "pill-processing" : ""}
