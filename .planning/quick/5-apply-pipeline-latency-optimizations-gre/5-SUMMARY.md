@@ -22,7 +22,7 @@ decisions:
 metrics:
   duration: ~5 minutes
   completed_date: "2026-03-01"
-  tasks_completed: 1
+  tasks_completed: 2
   tasks_total: 2
   files_modified: 2
 ---
@@ -48,14 +48,16 @@ Six parameter changes across two files:
 - Paste consumption delay: 120ms -> 50ms (revert comment: revert to 80ms if app drops pastes)
 - Total injection overhead: 195ms -> 80ms (saves ~115ms fixed per transcription)
 
-## Expected Latency Impact
+## Verified Latency Impact
+
+Human verification passed — inference improved and paste works in VS Code, Chrome, and Notepad.
 
 | Pipeline Step | Before | After |
 |---|---|---|
-| Whisper inference (large-v3-turbo) | 600-1000ms | 350-600ms |
+| Whisper inference (large-v3-turbo) | 600-1000ms | Improved (verified) |
 | inject_text delays | 195ms | 80ms |
 | Other overhead | ~10ms | ~10ms |
-| **Total** | **800-1200ms** | **440-690ms** |
+| **Total** | **800-1200ms** | **Improved (verified)** |
 
 ## Commits
 
@@ -65,10 +67,7 @@ Six parameter changes across two files:
 
 ## Status
 
-Task 1 complete. Awaiting human verification at checkpoint (Task 2):
-- Build and measure actual inference times vs 600-1000ms baseline
-- Verify paste injection works in VS Code, Chrome, Notepad
-- Confirm flash attention doesn't regress on P2000 (Pascal/compute 6.1)
+Complete. All 2 tasks done. Human verification passed — inference improved, paste works in VS Code, Chrome, and Notepad.
 
 ## Deviations from Plan
 
