@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-01T01:36:44.911Z"
+last_updated: "2026-03-01T01:47:30.455Z"
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 14
-  completed_plans: 13
+  completed_plans: 14
 ---
 
 # Project State
@@ -112,6 +112,8 @@ Recent decisions affecting current work:
 - [Phase 04.1-02]: pill window expanded 120x40 → 160x48 for FrequencyBars clearance and indigo glow room
 - [Phase 05-01]: No use crate::pipeline; import in vad.rs — pipeline referenced via inline crate::pipeline:: paths to avoid circular module coupling
 - [Phase 05-01]: VAD constants: SPEECH_PROBABILITY_THRESHOLD=0.5 (Silero default), SILENCE_FRAMES_THRESHOLD=47 (~1.5s), MIN_SPEECH_FRAMES=9 (~300ms), MAX_RECORDING_FRAMES=1875 (60s cap)
+- [Phase 05-02]: cancel_stale_vad_worker extracted as separate fn in pipeline.rs to avoid State borrow lifetime issue (E0597)
+- [Phase 05-02]: let result = ...; result pattern in MutexGuard operations forces temporary drop before State binding scope ends (compiler-suggested E0597 fix)
 
 ### Roadmap Evolution
 

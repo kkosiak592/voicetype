@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Core Pipeline** - End-to-end hold-to-talk: hotkey to audio to transcription to text injection (completed 2026-02-28)
 - [x] **Phase 4: Pill Overlay** - Floating transparent overlay with visualizer and no-focus-steal guarantee (completed 2026-02-28)
 - [ ] **Phase 4.1: Premium Pill UI** - Glassmorphism, sinusoidal bars, animated state transitions (INSERTED)
-- [ ] **Phase 5: VAD + Toggle Mode** - Silero VAD silence detection and toggle recording mode
+- [x] **Phase 5: VAD + Toggle Mode** - Silero VAD silence detection and toggle recording mode (completed 2026-03-01)
 - [ ] **Phase 6: Vocabulary + Settings** - Word corrections, vocabulary profiles, and full settings UI
 - [ ] **Phase 7: Distribution** - First-run model download, GPU auto-detection, and NSIS installer
 
@@ -160,6 +160,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 4.1 -> 5 -> 6 -> 7
 | 3. Core Pipeline | 2/2 | Complete   | 2026-02-28 |
 | 4. Pill Overlay | 2/2 | Complete   | 2026-02-28 |
 | 4.1 Premium Pill UI | 0/2 | Not started | - |
-| 5. VAD + Toggle Mode | 1/2 | In Progress|  |
+| 5. VAD + Toggle Mode | 2/2 | Complete   | 2026-03-01 |
 | 6. Vocabulary + Settings | 0/3 | Not started | - |
 | 7. Distribution | 0/3 | Not started | - |
