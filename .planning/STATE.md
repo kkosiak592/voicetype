@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 07-distribution
-current_plan: 07-02 complete
-status: planning
-last_updated: "2026-03-01T16:34:34.568Z"
+current_phase: 08-add-parakeet-tdt-model-and-optimize-transcription-latency
+current_plan: 08-01 complete
+status: executing
+last_updated: "2026-03-01T17:27:24Z"
 progress:
   total_phases: 10
   completed_phases: 9
-  total_plans: 23
-  completed_plans: 23
+  total_plans: 26
+  completed_plans: 24
 ---
 
 # Session State
@@ -22,11 +22,11 @@ See: .planning/PROJECT.md
 ## Position
 
 **Milestone:** v1.0 milestone
-**Current phase:** 07-distribution
-**Current plan:** 07-02 complete
-**Status:** Ready to plan
+**Current phase:** 08-add-parakeet-tdt-model-and-optimize-transcription-latency
+**Current plan:** 08-01 complete
+**Status:** Executing
 
-Last activity: 2026-03-01 - 07-03 (NSIS installer: tauri.conf.json NSIS config, build + Defender scan, 3 serde/UI bug fixes in human verification) — completed (commits a41d8ab, cf2c04e)
+Last activity: 2026-03-01 - 08-01 (Parakeet TDT inference wrapper + multi-file download infrastructure) — completed (commits d47e8b6, f585fa1)
 
 ## Session Log
 
@@ -45,6 +45,7 @@ Last activity: 2026-03-01 - 07-03 (NSIS installer: tauri.conf.json NSIS config, 
 - 2026-03-01: 07-01 (distribution backend) — download.rs with reqwest streaming + SHA256, check_first_run, enable_autostart, medium model removed (commits 672e0e1, ff5355f)
 - 2026-03-01: 07-02 (distribution frontend) — FirstRun.tsx with GPU badge + model cards + Channel progress + autostart; App.tsx first-run gate; ModelSelector download + progress; ModelSection refresh (commits 328e8c7, ec2f7bd)
 - 2026-03-01: 07-03 (NSIS installer) — tauri.conf.json with currentUser NSIS config, installer built (~9 MB, no models bundled), Defender scan passed; 3 serde/UI bugs fixed in verification (commits a41d8ab, cf2c04e)
+- 2026-03-01: 08-01 (Parakeet TDT inference wrapper + download infrastructure) — transcribe_parakeet.rs with load_parakeet/transcribe_with_parakeet; parakeet-rs 0.1.9 optional dep; download_parakeet_model 5-file command with cumulative progress (commits d47e8b6, f585fa1)
 
 ## Decisions
 
@@ -74,6 +75,11 @@ Last activity: 2026-03-01 - 07-03 (NSIS installer: tauri.conf.json NSIS config, 
 - 07-distribution-installer: installMode=currentUser — installs to AppData, no UAC prompt; appropriate for per-user hotkey tool
 - 07-distribution-installer: installer size ~9 MB exceeds 5 MB target due to CUDA static linkage; models are NOT bundled; 5 MB constraint accepted as aspirational for model-exclusion verification only
 - 07-distribution-installer: enum-level #[serde(rename_all)] on DownloadEvent does not propagate into struct variant fields — per-field #[serde(rename)] required on Progress variant fields
+- 08-parakeet: parakeet-rs 0.1.9 used (not 0.3.x) — 0.3.x requires ort ^2.0.0-rc.11, conflicts with voice_activity_detector ort =2.0.0-rc.10 exact pin
+- 08-parakeet: transcribe_with_parakeet takes &mut ParakeetTDT — parakeet-rs 0.1.x transcribe_samples requires &mut self; Plan 02 uses Mutex<ParakeetTDT>
+- 08-parakeet: no cuda feature on parakeet-rs dep — CPU EP compiles without CUDA; cuda feature deferred until deployment environment confirmed
+- 08-parakeet: cumulative progress across all 5 Parakeet files — single total_bytes for simpler frontend progress bar UX
+- 08-parakeet: no SHA256 for Parakeet files — HuggingFace LFS doesn't expose checksums; size-based validation only, TODO for post-download checksums
 
 ### Roadmap Evolution
 

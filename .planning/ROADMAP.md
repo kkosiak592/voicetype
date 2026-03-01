@@ -182,7 +182,7 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — Parakeet backend: transcribe_parakeet.rs inference wrapper + parakeet-rs dependency + multi-file ONNX download
+- [x] 08-01-PLAN.md — Parakeet backend: transcribe_parakeet.rs inference wrapper + parakeet-rs dependency + multi-file ONNX download
 - [ ] 08-02-PLAN.md — Pipeline integration: engine dispatch, ActiveEngine state, get/set engine commands, VAD gate bypass for hold-to-talk
 - [ ] 08-03-PLAN.md — Frontend: Parakeet card in FirstRun, engine selector in settings, download support, human verification
 
@@ -201,4 +201,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 4.1 -> 5 -> 6 -> 7 -> 8
 | 5. VAD + Toggle Mode | 2/2 | Complete   | 2026-03-01 |
 | 6. Vocabulary + Settings | 4/4 | Complete   | 2026-03-01 |
 | 7. Distribution | 3/3 | Complete   | 2026-03-01 |
-| 8. Parakeet TDT + Latency | 0/3 | Not started | - |
+| 8. Parakeet TDT + Latency | 1/3 | In progress | - |
