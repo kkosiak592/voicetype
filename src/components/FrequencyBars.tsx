@@ -20,6 +20,9 @@ function bellCurve(i: number, count: number): number {
 
 const BELL = Array.from({ length: BAR_COUNT }, (_, i) => bellCurve(i, BAR_COUNT));
 
+// Evenly-spaced phase offset per bar so the idle wave travels at a constant speed left-to-right
+const IDLE_PHASE_STEP = (Math.PI * 2) / BAR_COUNT;
+
 export function FrequencyBars({ level }: FrequencyBarsProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
@@ -66,8 +69,9 @@ export function FrequencyBars({ level }: FrequencyBarsProps) {
         // Active height: 0.3 floor ensures bars stay visibly tall during speech,
         // 0.7 * wave adds bouncy sinusoidal variation on top
         const activeHeight = amplified * BELL[i] * (0.3 + 0.7 * ((wave + 1) / 2));
-        // Idle wave: reduced amplitude increases contrast between idle and active states
-        const idleWave = 0.08 * BELL[i] * ((Math.sin(2 * Math.PI * 1.2 * t + BAR_PHASES[i]) + 1) / 2);
+        // Idle traveling wave: uniform amplitude, linear phase sweep left-to-right
+        // No BELL[i] factor — all bars participate equally; wave front moves rightward
+        const idleWave = 0.12 * ((Math.sin(2 * Math.PI * 0.8 * t - i * IDLE_PHASE_STEP) + 1) / 2);
         // Composite height as fraction of container (0–1), then to px
         // Minimum lowered to 0.04 for thinner silent bars and greater dynamic range
         const fraction = Math.max(0.04, activeHeight + idleWave);
