@@ -20,6 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: VAD + Toggle Mode** - Silero VAD silence detection and toggle recording mode (completed 2026-03-01)
 - [x] **Phase 6: Vocabulary + Settings** - Word corrections, vocabulary profiles, and full settings UI (completed 2026-02-28)
 - [x] **Phase 7: Distribution** - First-run model download, GPU auto-detection, and NSIS installer (completed 2026-03-01)
+- [ ] **Phase 8: Parakeet TDT + Latency** - Parakeet TDT as second GPU engine, multi-file ONNX download, engine selector, VAD gate bypass
 
 ## Phase Details
 
@@ -166,10 +167,29 @@ Plans:
 - [ ] 07-02-PLAN.md — Frontend: FirstRun.tsx setup flow (GPU detection + model cards + download progress), App.tsx first-run gate, ModelSelector download buttons
 - [ ] 07-03-PLAN.md — NSIS packaging: tauri.conf.json bundle config, installer build, Defender scan, human verification of full flow
 
+### Phase 8: Add Parakeet TDT model and optimize transcription latency
+
+**Goal:** Add NVIDIA Parakeet TDT as a selectable transcription engine alongside Whisper for GPU users, targeting sub-500ms post-release latency. Apply pipeline micro-optimizations to reduce non-inference overhead. CPU users remain on Whisper only.
+**Requirements**: PKT-01, PKT-02, PKT-03, PKT-04, PKT-05, PKT-06
+**Depends on:** Phase 7
+**Success Criteria** (what must be TRUE):
+  1. GPU users can select Parakeet TDT as their transcription engine in the settings panel and switch between Whisper and Parakeet without restarting the app
+  2. Parakeet TDT int8 ONNX model files can be downloaded from HuggingFace with a progress indicator showing cumulative progress across all files
+  3. Parakeet appears as a third model card in the first-run setup flow for GPU users, with a "Fastest" badge (Whisper Large stays "Recommended")
+  4. Corrections dictionary and ALL CAPS mode apply to Parakeet output identically to Whisper output
+  5. Hold-to-talk mode completes transcription noticeably faster due to VAD gate bypass (sample-count check instead of Silero scan)
+  6. Engine selection persists across app restarts
+**Plans:** 3 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — Parakeet backend: transcribe_parakeet.rs inference wrapper + parakeet-rs dependency + multi-file ONNX download
+- [ ] 08-02-PLAN.md — Pipeline integration: engine dispatch, ActiveEngine state, get/set engine commands, VAD gate bypass for hold-to-talk
+- [ ] 08-03-PLAN.md — Frontend: Parakeet card in FirstRun, engine selector in settings, download support, human verification
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 4.1 -> 5 -> 6 -> 7
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 4.1 -> 5 -> 6 -> 7 -> 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -181,13 +201,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 4.1 -> 5 -> 6 -> 7
 | 5. VAD + Toggle Mode | 2/2 | Complete   | 2026-03-01 |
 | 6. Vocabulary + Settings | 4/4 | Complete   | 2026-03-01 |
 | 7. Distribution | 3/3 | Complete   | 2026-03-01 |
-
-### Phase 8: Add Parakeet TDT model and optimize transcription latency
-
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 7
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd:plan-phase 8 to break down)
+| 8. Parakeet TDT + Latency | 0/3 | Not started | - |

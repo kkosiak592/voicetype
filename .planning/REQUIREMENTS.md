@@ -54,13 +54,22 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **DIST-02**: App auto-detects GPU capability and recommends appropriate model size
 - [x] **DIST-03**: App is packaged as a single Windows NSIS installer (models downloaded separately, not bundled)
 
+### Parakeet TDT Engine + Latency Optimization
+
+- [ ] **PKT-01**: GPU users can select Parakeet TDT as a transcription engine alongside Whisper
+- [ ] **PKT-02**: Parakeet TDT int8 ONNX model can be downloaded from HuggingFace with progress indicator
+- [ ] **PKT-03**: User can switch between Whisper and Parakeet engines without app restart (hot-swap)
+- [ ] **PKT-04**: Parakeet appears as a selectable model in the first-run setup flow (GPU users only)
+- [ ] **PKT-05**: Corrections engine and ALL CAPS mode apply to Parakeet output (engine-independent post-processing)
+- [ ] **PKT-06**: Hold-to-talk mode bypasses Silero VAD post-hoc gate with sample-count check for reduced latency
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
 
 ### Enhanced Corrections
 
-- **ECOR-01**: Regex-based post-processing corrections for phonetic mishearings ("why section" → "W-section")
+- **ECOR-01**: Regex-based post-processing corrections for phonetic mishearings ("why section" -> "W-section")
 - **ECOR-02**: Hotword support via whisper.cpp --hotwords parameter (experimental)
 - **ECOR-03**: Quick-add to dictionary from system tray context menu
 
@@ -128,12 +137,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DIST-01 | Phase 7 | Complete |
 | DIST-02 | Phase 7 | Complete |
 | DIST-03 | Phase 7 | Complete |
+| PKT-01 | Phase 8 | Pending |
+| PKT-02 | Phase 8 | Pending |
+| PKT-03 | Phase 8 | Pending |
+| PKT-04 | Phase 8 | Pending |
+| PKT-05 | Phase 8 | Pending |
+| PKT-06 | Phase 8 | Pending |
 
 **Coverage:**
-- v1 requirements: 29 total
-- Mapped to phases: 29
+- v1 requirements: 35 total
+- Mapped to phases: 35
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-27*
-*Last updated: 2026-02-27 after roadmap creation*
+*Last updated: 2026-03-01 after Phase 8 planning*
