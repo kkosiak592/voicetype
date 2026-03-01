@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-02-27)
 Phase: 4.1 of 7 (Premium Pill Overlay UI Polish) — COMPLETE
 Plan: 2 of 2 in phase 04.1 complete — premium pill overlay visually verified and approved
 Status: Plan 04.1-02 complete — Pill.tsx rewritten with dual-state animation orchestrator (animState + displayState), FrequencyBars/ProcessingDots/CheckmarkIcon wired, 160x48 window, all transitions user-approved. Phase 04.1 done. Phase 05 (VAD) next.
-Last activity: 2026-02-28 - Completed quick task 1: Premium pill UI rework — monochrome luxury redesign
+Last activity: 2026-03-01 - Completed quick task 3: Pill UI overhaul: smaller size, vibrant waveform, animated thinking dots, rainbow border
 
 Progress: [██████████] 100%
 
@@ -124,6 +124,7 @@ None yet.
 |---|-------------|------|--------|--------|-----------|
 | 1 | Premium pill UI rework — monochrome luxury redesign | 2026-02-28 | 52d726c | Verified | [1-premium-pill-ui-rework-monochrome-luxury](./quick/1-premium-pill-ui-rework-monochrome-luxury/) |
 | 2 | Fix pill rounded corner haziness via set_shadow | 2026-02-28 | 527b0f9 | Awaiting verification | [2-fix-pill-rounded-corner-haziness-via-set](./quick/2-fix-pill-rounded-corner-haziness-via-set/) |
+| 3 | Pill UI overhaul: smaller size, vibrant waveform, animated thinking dots, rainbow border | 2026-03-01 | 099f5c2 | Needs Review | [3-pill-ui-overhaul-smaller-size-vibrant-wa](./quick/3-pill-ui-overhaul-smaller-size-vibrant-wa/) |
 
 ### Blockers/Concerns
 
