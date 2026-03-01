@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T23:16:19.792Z"
+last_updated: "2026-03-01T01:36:44.911Z"
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 5
-  total_plans: 12
-  completed_plans: 12
+  total_plans: 14
+  completed_plans: 13
 ---
 
 # Project State
@@ -22,10 +22,10 @@ See: .planning/PROJECT.md (updated 2026-02-27)
 
 ## Current Position
 
-Phase: 4.1 of 7 (Premium Pill Overlay UI Polish) — COMPLETE
-Plan: 2 of 2 in phase 04.1 complete — premium pill overlay visually verified and approved
-Status: Plan 04.1-02 complete — Pill.tsx rewritten with dual-state animation orchestrator (animState + displayState), FrequencyBars/ProcessingDots/CheckmarkIcon wired, 160x48 window, all transitions user-approved. Phase 04.1 done. Phase 05 (VAD) next.
-Last activity: 2026-03-01 - Completed quick task 3: Pill UI overhaul: smaller size, vibrant waveform, animated thinking dots, rainbow border
+Phase: 5 of 7 (VAD + Toggle Mode) — IN PROGRESS
+Plan: 1 of 2 in phase 05 complete — Silero VAD dependency added, vad.rs created, pipeline VAD gate wired
+Status: Plan 05-01 complete — voice_activity_detector@0.2.1 added, vad.rs with VadWorker/VadWorkerHandle/vad_gate_check created, run_pipeline() VAD gate replaces 1600-sample check. Plan 05-02 (toggle mode hotkey handler) next.
+Last activity: 2026-03-01 - Completed plan 05-01: Silero VAD integration (vad.rs + pipeline gate)
 
 Progress: [██████████] 100%
 
@@ -57,6 +57,7 @@ Progress: [██████████] 100%
 | Phase 04-pill-overlay P02 | 60 | 3 tasks | 8 files |
 | Phase 04.1 P01 | 3 | 2 tasks | 4 files |
 | Phase 04.1 P02 | 25 | 2 tasks | 2 files |
+| Phase 05-vad-toggle-mode P01 | 884 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,8 @@ Recent decisions affecting current work:
 - [Phase 04.1-02]: Error dismiss is silent — no displayState change, previous content scales away with pill per "no visual punishment" design principle
 - [Phase 04.1-02]: Success auto-dismiss: 600ms hold (280ms draw + 320ms hold), then exit animation, then window hide
 - [Phase 04.1-02]: pill window expanded 120x40 → 160x48 for FrequencyBars clearance and indigo glow room
+- [Phase 05-01]: No use crate::pipeline; import in vad.rs — pipeline referenced via inline crate::pipeline:: paths to avoid circular module coupling
+- [Phase 05-01]: VAD constants: SPEECH_PROBABILITY_THRESHOLD=0.5 (Silero default), SILENCE_FRAMES_THRESHOLD=47 (~1.5s), MIN_SPEECH_FRAMES=9 (~300ms), MAX_RECORDING_FRAMES=1875 (60s cap)
 
 ### Roadmap Evolution
 
@@ -129,14 +132,14 @@ None yet.
 ### Blockers/Concerns
 
 - [Pre-Phase 6]: Win32 WS_EX_NOACTIVATE exact Rust API call needs to be identified from Tauri source or reference projects (Keyless, Voquill) — config alone confirmed broken
-- [Pre-Phase 6]: silero-vad-rust crate version unverified — confirm on crates.io before writing Cargo.toml for Phase 5
+- [Pre-Phase 6 RESOLVED]: voice_activity_detector@0.2.1 chosen (not silero-vad-rust) — Silero V5, ort 2.0.0-rc.10, Windows verified, added to Cargo.toml in Plan 05-01
 - [Pre-Phase 7]: Code signing certificate (OV vs EV) decision and cost unresolved — budget needed before Phase 7 planning
 - [Phase 02-02 RESOLVED]: CUDA 12.9 installed (not 11.7 — MSVC incompatibility; not 13.x — dropped Pascal support)
 - [Phase 02-02 RESOLVED]: LIBCLANG_PATH and BINDGEN_EXTRA_CLANG_ARGS set permanently as user env vars
 
 ## Session Continuity
 
-Last session: 2026-02-28
-Stopped at: Quick task 2 — fix pill corner haziness — task 1 committed (527b0f9), awaiting human verification of visual result.
-Resume signal: Phase 04.1 fully complete. Execute Phase 05 (VAD — Voice Activity Detection).
-Resume file: .planning/phases/05-vad/ (plan TBD)
+Last session: 2026-03-01
+Stopped at: Plan 05-01 complete — vad.rs created (VadWorker, VadWorkerHandle, vad_gate_check), pipeline VAD gate wired. Commits: 720b0f0, f59658a.
+Resume signal: Phase 05 plan 01 complete. Execute Phase 05 Plan 02 (toggle mode — hotkey handler, RecordingMode state, VadWorker managed state).
+Resume file: .planning/phases/05-vad-toggle-mode/05-02-PLAN.md
