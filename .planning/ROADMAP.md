@@ -181,3 +181,13 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 4.1 -> 5 -> 6 -> 7
 | 5. VAD + Toggle Mode | 2/2 | Complete   | 2026-03-01 |
 | 6. Vocabulary + Settings | 4/4 | Complete   | 2026-03-01 |
 | 7. Distribution | 3/3 | Complete   | 2026-03-01 |
+
+### Phase 8: Add Parakeet TDT model and optimize transcription latency
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 7
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 8 to break down)
