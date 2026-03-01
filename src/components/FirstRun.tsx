@@ -22,13 +22,23 @@ const MODELS = [
     size: '574 MB',
     quality: 'Best accuracy',
     requirement: 'Requires NVIDIA GPU',
+    gpuOnly: true,
+  },
+  {
+    id: 'parakeet-tdt-v2',
+    name: 'Parakeet TDT',
+    size: '661 MB',
+    quality: 'Fastest (GPU)',
+    requirement: 'Requires NVIDIA GPU',
+    gpuOnly: true,
   },
   {
     id: 'small-en',
     name: 'Small (English)',
     size: '190 MB',
-    quality: 'Fastest',
+    quality: 'Works on CPU',
     requirement: 'Works on any CPU',
+    gpuOnly: false,
   },
 ];
 
@@ -44,6 +54,8 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
   const [errorMsg, setErrorMsg] = useState('');
   const cancelledRef = useRef(false);
 
+  const visibleModels = gpuDetected ? MODELS : MODELS.filter((m) => !m.gpuOnly);
+
   useEffect(() => {
     if (downloadState !== 'complete') return;
 
@@ -55,6 +67,15 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
       } catch (e) {
         console.warn('Failed to enable autostart:', e);
         // Non-blocking — user can toggle autostart later in settings
+      }
+
+      // If the user chose Parakeet, activate that engine immediately
+      if (downloadingId === 'parakeet-tdt-v2') {
+        try {
+          await invoke('set_engine', { engine: 'parakeet' });
+        } catch (e) {
+          console.warn('Failed to set Parakeet engine:', e);
+        }
       }
 
       if (active && downloadingId) {
@@ -104,7 +125,11 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
     };
 
     try {
-      await invoke('download_model', { modelId, onEvent });
+      if (modelId === 'parakeet-tdt-v2') {
+        await invoke('download_parakeet_model', { onEvent });
+      } else {
+        await invoke('download_model', { modelId, onEvent });
+      }
     } catch (e) {
       if (!cancelledRef.current) {
         setErrorMsg(String(e));
@@ -134,9 +159,14 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
   const percent =
     totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : null;
 
+  const gridClass =
+    gpuDetected
+      ? 'grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6'
+      : 'grid grid-cols-1 gap-4 mb-6';
+
   return (
     <div className="flex h-full w-full flex-col items-center justify-center px-8 py-10 bg-white dark:bg-gray-900">
-      <div className="w-full max-w-xl">
+      <div className="w-full max-w-3xl">
         {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
@@ -163,9 +193,10 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
         </div>
 
         {/* Model cards */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-6">
-          {MODELS.map((model) => {
+        <div className={gridClass}>
+          {visibleModels.map((model) => {
             const isRecommended = model.id === recommendedModel;
+            const isFastest = model.id === 'parakeet-tdt-v2' && gpuDetected;
             const isDownloading = downloadingId === model.id && downloadState === 'downloading';
             const isValidating = downloadingId === model.id && downloadState === 'validating';
             const isComplete = downloadingId === model.id && downloadState === 'complete';
@@ -188,6 +219,11 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
                 {isRecommended && (
                   <span className="absolute -top-2.5 left-3 rounded-full bg-indigo-500 px-2 py-0.5 text-xs font-semibold text-white">
                     Recommended
+                  </span>
+                )}
+                {isFastest && (
+                  <span className="absolute -top-2.5 right-3 rounded-full bg-green-500 px-2 py-0.5 text-xs font-semibold text-white">
+                    Fastest
                   </span>
                 )}
 
