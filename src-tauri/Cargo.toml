@@ -13,6 +13,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [features]
+default = ["whisper"]
 # Enable whisper-rs CUDA transcription. Requires:
 #   - LIBCLANG_PATH (LLVM clang for bindgen)
 #   - CUDA Toolkit 11.7 (CUDA_PATH)

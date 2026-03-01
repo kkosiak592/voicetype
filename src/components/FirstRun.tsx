@@ -12,7 +12,7 @@ type DownloadState = 'idle' | 'downloading' | 'validating' | 'complete' | 'error
 interface FirstRunProps {
   gpuDetected: boolean;
   recommendedModel: string;
-  onComplete: () => void;
+  onComplete: (downloadedModelId: string) => void;
 }
 
 const MODELS = [
@@ -57,9 +57,9 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
         // Non-blocking — user can toggle autostart later in settings
       }
 
-      if (active) {
+      if (active && downloadingId) {
         setTimeout(() => {
-          if (active) onComplete();
+          if (active) onComplete(downloadingId);
         }, 1000);
       }
     }

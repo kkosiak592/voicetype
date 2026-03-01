@@ -28,8 +28,13 @@ function App() {
 
   useEffect(() => {
     async function loadSettings() {
-      const status = await invoke<FirstRunStatus>('check_first_run');
-      setFirstRunStatus(status);
+      try {
+        const status = await invoke<FirstRunStatus>('check_first_run');
+        setFirstRunStatus(status);
+      } catch {
+        // check_first_run unavailable (whisper feature not compiled) — skip first-run gate
+        setFirstRunStatus({ needsSetup: false, gpuDetected: false, recommendedModel: '' });
+      }
 
       const store = await getStore();
       const savedHotkey = await store.get<string>('hotkey');
@@ -78,7 +83,17 @@ function App() {
         <FirstRun
           gpuDetected={firstRunStatus.gpuDetected}
           recommendedModel={firstRunStatus.recommendedModel}
-          onComplete={() => setFirstRunStatus({ ...firstRunStatus, needsSetup: false })}
+          onComplete={async (downloadedModelId) => {
+            try {
+              const store = await getStore();
+              await store.set('selectedModel', downloadedModelId);
+              await invoke('set_model', { modelId: downloadedModelId });
+              setSelectedModel(downloadedModelId);
+            } catch (e) {
+              console.warn('Failed to auto-select downloaded model:', e);
+            }
+            setFirstRunStatus({ ...firstRunStatus, needsSetup: false });
+          }}
         />
       </div>
     );
