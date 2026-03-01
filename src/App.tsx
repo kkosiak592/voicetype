@@ -63,7 +63,7 @@ function App() {
   return (
     <div className="flex h-screen bg-white dark:bg-gray-900">
       <Sidebar activeSection={activeSection} onSelect={setActiveSection} />
-      <main className="flex-1 overflow-hidden px-6 py-5 text-gray-900 dark:text-gray-100">
+      <main className="flex-1 overflow-y-auto px-6 py-5 text-gray-900 dark:text-gray-100">
         {activeSection === 'general' && (
           <GeneralSection
             hotkey={hotkey}

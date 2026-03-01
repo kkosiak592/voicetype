@@ -17,6 +17,8 @@ export function ProfilesSection({ activeProfileId, onActiveProfileChange }: Prof
 
   useEffect(() => {
     async function loadInitial() {
+      // Sync backend with frontend's active profile before reading corrections
+      await invoke('set_active_profile', { profileId: activeProfileId });
       const [profileList, correctionMap] = await Promise.all([
         invoke<ProfileInfo[]>('get_profiles'),
         invoke<Record<string, string>>('get_corrections'),
@@ -26,13 +28,14 @@ export function ProfilesSection({ activeProfileId, onActiveProfileChange }: Prof
       setLoading(false);
     }
     loadInitial();
-  }, []);
+  }, [activeProfileId]);
 
   async function handleProfileSelect(id: string) {
     onActiveProfileChange(id);
     const store = await getStore();
     await store.set('activeProfile', id);
-    // Reload corrections for the new profile
+    // Switch backend profile and reload corrections
+    await invoke('set_active_profile', { profileId: id });
     const correctionMap = await invoke<Record<string, string>>('get_corrections');
     setCorrections(correctionMap);
   }
