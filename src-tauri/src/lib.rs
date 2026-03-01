@@ -705,6 +705,7 @@ fn list_models() -> Result<Vec<ModelInfo>, String> {
 /// and which model to recommend based on GPU detection.
 #[cfg(feature = "whisper")]
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct FirstRunStatus {
     needs_setup: bool,
     gpu_detected: bool,

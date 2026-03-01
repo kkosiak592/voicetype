@@ -8,13 +8,33 @@ use tokio::io::AsyncWriteExt;
 /// Events streamed to the frontend during a model download.
 ///
 /// Tagged with `event` field and `data` content for easy frontend discrimination.
+///
+/// NOTE: `rename_all = "camelCase"` on the enum container renames variant discriminants
+/// (Started->"started", Progress->"progress") but NOT the field names inside struct variants.
+/// Field names require explicit per-field `#[serde(rename)]` to match the camelCase keys
+/// the frontend reads from `msg.data`.
 #[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase", tag = "event", content = "data")]
+#[serde(tag = "event", content = "data")]
 pub enum DownloadEvent {
-    Started { url: String, total_bytes: u64 },
-    Progress { downloaded_bytes: u64, total_bytes: u64 },
+    #[serde(rename = "started")]
+    Started {
+        url: String,
+        #[serde(rename = "totalBytes")]
+        total_bytes: u64,
+    },
+    #[serde(rename = "progress")]
+    Progress {
+        #[serde(rename = "downloadedBytes")]
+        downloaded_bytes: u64,
+        #[serde(rename = "totalBytes")]
+        total_bytes: u64,
+    },
+    #[serde(rename = "finished")]
     Finished,
-    Error { message: String },
+    #[serde(rename = "error")]
+    Error {
+        message: String,
+    },
 }
 
 /// Returns the VoiceType models directory in APPDATA.

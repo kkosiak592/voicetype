@@ -106,16 +106,20 @@ export function ModelSelector({
 
         return (
           <div key={model.id}>
-            <button
-              onClick={() => handleSelect(model)}
-              disabled={disabled}
+            <div
+              onClick={() => model.downloaded && !disabled ? handleSelect(model) : undefined}
+              role={model.downloaded ? 'button' : undefined}
+              tabIndex={model.downloaded && !disabled ? 0 : undefined}
+              onKeyDown={model.downloaded && !disabled ? (e) => { if (e.key === 'Enter' || e.key === ' ') handleSelect(model); } : undefined}
               className={[
-                'w-full rounded-lg border-2 px-4 py-3 text-left transition-colors duration-150 focus:outline-none',
+                'w-full rounded-lg border-2 px-4 py-3 text-left transition-colors duration-150',
                 !model.downloaded
                   ? 'cursor-default border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
                   : isSelected
-                    ? 'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-950'
-                    : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600',
+                    ? 'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-950 cursor-pointer focus:outline-none'
+                    : disabled
+                      ? 'border-gray-200 bg-white opacity-50 dark:border-gray-700 dark:bg-gray-800'
+                      : 'border-gray-200 bg-white hover:border-gray-300 cursor-pointer dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600 focus:outline-none',
               ].join(' ')}
             >
               <div className="flex items-center justify-between">
@@ -139,10 +143,7 @@ export function ModelSelector({
                 <div className="flex items-center gap-2">
                   {!model.downloaded && !isDownloading && (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDownload(model.id);
-                      }}
+                      onClick={() => handleDownload(model.id)}
                       disabled={downloadingId !== null}
                       className="rounded-md bg-indigo-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
@@ -155,7 +156,7 @@ export function ModelSelector({
                 </div>
               </div>
               <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{model.description}</p>
-            </button>
+            </div>
 
             {/* Progress bar for active download */}
             {isDownloading && (
