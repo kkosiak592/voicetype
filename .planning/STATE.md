@@ -71,3 +71,9 @@ Last activity: 2026-03-01 - Completed 06.1-02: Human visual verification of tray
 | 4 | Make waveform bars in pill bounce more prominently | 2026-03-01 | 78d2835 | [4-make-waveform-bars-in-pill-bounce-more-p](./quick/4-make-waveform-bars-in-pill-bounce-more-p/) |
 | 5 | Apply pipeline latency optimizations: greedy decoding, flash attention, whisper parameter tuning, and injection delay reduction | 2026-03-01 | 72ea1fd | [5-apply-pipeline-latency-optimizations-gre](./quick/5-apply-pipeline-latency-optimizations-gre/) |
 | 6 | Remove checkmark from pill after successful processing — immediate exit identical to error path | 2026-03-01 | 8bb5ed5 | [6-remove-checkmark-from-pill-after-process](./quick/6-remove-checkmark-from-pill-after-process/) |
+
+## Accumulated Context
+
+### Pending Todos
+
+1. Investigate microphone icon persisting in system tray (area: ui)
