@@ -136,13 +136,20 @@ Plans:
 
 ### Phase 06.1: Fix duplicate tray icons and replace default square icon with proper app icon (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
+**Goal:** Eliminate duplicate tray icons, replace all Tauri default icons with a custom VoiceType microphone icon, redesign tray state icons, and add tooltip showing app name + current state
+**Requirements**: None (inserted phase, no formal requirement IDs)
 **Depends on:** Phase 6
-**Plans:** 0 plans
+**Success Criteria** (what must be TRUE):
+  1. Only one tray icon appears in the Windows notification area at app startup (not two)
+  2. Tray icon is the new VoiceType microphone design, not the Tauri grey square
+  3. Tray icon changes color for recording (red) and processing (orange) states
+  4. Hovering over the tray icon shows tooltip "VoiceType - Idle" / "Recording" / "Processing"
+  5. Bundle icons (taskbar, title bar, installer) all show the new VoiceType icon
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 06.1 to break down)
+- [ ] 06.1-01-PLAN.md — Create VoiceType SVG icon, generate bundle icons, redesign tray state icons, fix duplicate tray icon bug, add tooltip support
+- [ ] 06.1-02-PLAN.md — Human verification: confirm single tray icon, correct branding, tooltip behavior
 
 ### Phase 7: Distribution
 **Goal**: First-run model download with progress UI, GPU auto-detection with model recommendation, and a single NSIS installer — making the app installable on any Windows machine regardless of hardware
