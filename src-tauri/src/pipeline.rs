@@ -52,6 +52,10 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
     let sample_count = audio_state.flush_and_stop();
     let samples = audio_state.get_buffer();
 
+    // Cancel any active VAD worker (prevents double-trigger if run_pipeline
+    // is called from second tap while VAD worker is still polling)
+    cancel_stale_vad_worker(&app);
+
     // 2. VAD speech gate: run Silero VAD post-hoc on completed buffer.
     //    Fast-path: buffer too small for even one VAD chunk (512 samples = 32ms).
     if samples.len() < 512 {
@@ -178,6 +182,29 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
 
         // 6. Reset to idle
         reset_to_idle(&app);
+    }
+}
+
+/// Cancel any active VAD worker in managed state.
+///
+/// Called at the top of run_pipeline() to ensure no stale VAD worker fires
+/// a second pipeline trigger after the pipeline has already been entered
+/// (e.g., second tap in toggle mode races with a silence-timeout).
+fn cancel_stale_vad_worker(app: &tauri::AppHandle) {
+    // Take the handle out under lock, then cancel it after releasing the guard.
+    // The `let result = ...; result` pattern forces the MutexGuard temporary to
+    // drop before `vad_state` goes out of scope (compiler E0597 fix).
+    let maybe_handle: Option<crate::vad::VadWorkerHandle> = {
+        let vad_state = app.state::<crate::VadWorkerState>();
+        let result = match vad_state.0.lock() {
+            Ok(mut guard) => guard.take(),
+            Err(_) => None,
+        };
+        result
+    };
+    if let Some(mut handle) = maybe_handle {
+        handle.cancel();
+        log::info!("Pipeline: cancelled stale VAD worker");
     }
 }
 

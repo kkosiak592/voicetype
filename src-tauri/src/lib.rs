@@ -20,6 +20,40 @@ use tray::build_tray;
 /// so both the setup() and rebind_hotkey() hotkey handlers can access it.
 pub struct LevelStreamActive(pub Arc<AtomicBool>);
 
+/// Recording mode selector: hold-to-talk (default) or toggle mode.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Mode {
+    HoldToTalk = 0,
+    Toggle = 1,
+}
+
+/// AtomicU8-backed managed state for the current recording mode.
+///
+/// Loaded from settings.json at startup via `read_saved_mode()`.
+/// Updated immediately when the user changes mode in settings UI.
+pub struct RecordingMode(pub std::sync::atomic::AtomicU8);
+
+impl RecordingMode {
+    pub fn new(mode: Mode) -> Self {
+        RecordingMode(std::sync::atomic::AtomicU8::new(mode as u8))
+    }
+    pub fn get(&self) -> Mode {
+        match self.0.load(std::sync::atomic::Ordering::Relaxed) {
+            1 => Mode::Toggle,
+            _ => Mode::HoldToTalk,
+        }
+    }
+    pub fn set(&self, mode: Mode) {
+        self.0.store(mode as u8, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// Managed state holding the cancel handle for the active VAD worker (toggle mode).
+///
+/// Stored as `Mutex<Option<VadWorkerHandle>>` so the handle can be taken (replaced
+/// with None) on second tap, pipeline entry, or any early-stop path.
+pub struct VadWorkerState(pub std::sync::Mutex<Option<vad::VadWorkerHandle>>);
+
 // WhisperState and related types are only available with the whisper feature.
 #[cfg(feature = "whisper")]
 use whisper_rs::WhisperContext;
@@ -42,6 +76,61 @@ fn read_saved_hotkey(app: &tauri::App) -> Option<String> {
         .map(|s| s.to_owned())
 }
 
+/// Read the saved recording mode from settings.json.
+/// Returns Mode::HoldToTalk on first launch, file missing, or parse error (hold-to-talk is default).
+fn read_saved_mode(app: &tauri::App) -> Mode {
+    let data_dir = match app.path().app_data_dir() {
+        Ok(d) => d,
+        Err(_) => return Mode::HoldToTalk,
+    };
+    let settings_path = data_dir.join("settings.json");
+
+    let contents = match std::fs::read_to_string(&settings_path) {
+        Ok(c) => c,
+        Err(_) => return Mode::HoldToTalk,
+    };
+    let json: serde_json::Value = match serde_json::from_str(&contents) {
+        Ok(j) => j,
+        Err(_) => return Mode::HoldToTalk,
+    };
+
+    match json.get("recording_mode").and_then(|v| v.as_str()) {
+        Some("toggle") => Mode::Toggle,
+        _ => Mode::HoldToTalk,
+    }
+}
+
+#[tauri::command]
+fn set_recording_mode(app: tauri::AppHandle, mode: String) -> Result<(), String> {
+    // Update managed state immediately
+    let recording_mode = app.state::<RecordingMode>();
+    match mode.as_str() {
+        "toggle" => recording_mode.set(Mode::Toggle),
+        _ => recording_mode.set(Mode::HoldToTalk),
+    }
+    // Persist to settings.json (merge into existing JSON — same pattern as hotkey)
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let settings_path = data_dir.join("settings.json");
+    let mut json: serde_json::Value = std::fs::read_to_string(&settings_path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+    json["recording_mode"] = serde_json::Value::String(mode);
+    std::fs::write(&settings_path, serde_json::to_string_pretty(&json).unwrap())
+        .map_err(|e| e.to_string())?;
+    log::info!("Recording mode set to: {}", json["recording_mode"]);
+    Ok(())
+}
+
+#[tauri::command]
+fn get_recording_mode(app: tauri::AppHandle) -> String {
+    let mode = app.state::<RecordingMode>();
+    match mode.get() {
+        Mode::Toggle => "toggle".to_string(),
+        Mode::HoldToTalk => "hold".to_string(),
+    }
+}
+
 #[tauri::command]
 fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<(), String> {
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -61,44 +150,113 @@ fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<
 
         match event.state {
             ShortcutState::Pressed => {
-                if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
-                    let audio = app.state::<audio::AudioCapture>();
-                    audio.clear_buffer();
-                    audio.recording.store(true, Ordering::Relaxed);
-                    tray::set_tray_state(app, tray::TrayState::Recording);
+                let mode = app.state::<RecordingMode>().get();
 
-                    // Pill: show and set recording state
-                    app.emit_to("pill", "pill-show", ()).ok();
-                    app.emit_to("pill", "pill-state", "recording").ok();
+                match mode {
+                    Mode::HoldToTalk => {
+                        // Existing behavior: start on press (release stops)
+                        if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
+                            let audio = app.state::<audio::AudioCapture>();
+                            audio.clear_buffer();
+                            audio.recording.store(true, Ordering::Relaxed);
+                            tray::set_tray_state(app, tray::TrayState::Recording);
 
-                    // Start RMS level stream
-                    let stream_active = app.state::<LevelStreamActive>();
-                    stream_active.0.store(true, Ordering::Relaxed);
-                    let audio_for_pill = app.state::<audio::AudioCapture>();
-                    pill::start_level_stream(
-                        app.clone(),
-                        audio_for_pill.buffer.clone(),
-                        stream_active.0.clone(),
-                    );
+                            // Pill: show and set recording state
+                            app.emit_to("pill", "pill-show", ()).ok();
+                            app.emit_to("pill", "pill-state", "recording").ok();
 
-                    log::info!("Pipeline: IDLE -> RECORDING (rebound hotkey)");
+                            // Start RMS level stream
+                            let stream_active = app.state::<LevelStreamActive>();
+                            stream_active.0.store(true, Ordering::Relaxed);
+                            let audio_for_pill = app.state::<audio::AudioCapture>();
+                            pill::start_level_stream(
+                                app.clone(),
+                                audio_for_pill.buffer.clone(),
+                                stream_active.0.clone(),
+                            );
+
+                            log::info!("Pipeline: IDLE -> RECORDING (hold-to-talk, rebound hotkey)");
+                        }
+                    }
+                    Mode::Toggle => {
+                        if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
+                            // First tap: start recording
+                            let audio = app.state::<audio::AudioCapture>();
+                            audio.clear_buffer();
+                            audio.recording.store(true, Ordering::Relaxed);
+                            tray::set_tray_state(app, tray::TrayState::Recording);
+                            app.emit_to("pill", "pill-show", ()).ok();
+                            app.emit_to("pill", "pill-state", "recording").ok();
+                            let stream_active = app.state::<LevelStreamActive>();
+                            stream_active.0.store(true, Ordering::Relaxed);
+                            let audio_for_pill = app.state::<audio::AudioCapture>();
+                            pill::start_level_stream(
+                                app.clone(),
+                                audio_for_pill.buffer.clone(),
+                                stream_active.0.clone(),
+                            );
+
+                            // Spawn VAD worker for auto-stop
+                            let vad_handle = vad::spawn_vad_worker(
+                                app.clone(),
+                                audio.buffer.clone(),
+                            );
+                            let vad_state = app.state::<VadWorkerState>();
+                            if let Ok(mut guard) = vad_state.0.lock() {
+                                *guard = Some(vad_handle);
+                            }
+
+                            log::info!("Pipeline: IDLE -> RECORDING (toggle mode, VAD worker started, rebound hotkey)");
+                        } else if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
+                            // Second tap: instant hard stop — go straight to transcription
+                            // Cancel VAD worker first
+                            let vad_state = app.state::<VadWorkerState>();
+                            if let Ok(mut guard) = vad_state.0.lock() {
+                                if let Some(mut handle) = guard.take() {
+                                    handle.cancel();
+                                }
+                            }
+
+                            // Stop recording and level stream
+                            let stream_active = app.state::<LevelStreamActive>();
+                            stream_active.0.store(false, Ordering::Relaxed);
+                            app.emit_to("pill", "pill-state", "processing").ok();
+                            tray::set_tray_state(app, tray::TrayState::Processing);
+                            log::info!("Pipeline: RECORDING -> PROCESSING (toggle mode, second tap, rebound hotkey)");
+
+                            let app_handle = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                pipeline::run_pipeline(app_handle).await;
+                            });
+                        }
+                        // If PROCESSING, ignore tap (CAS prevents double-execution)
+                    }
                 }
             }
             ShortcutState::Released => {
-                if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
-                    // Stop RMS level stream BEFORE transitioning to processing
-                    let stream_active = app.state::<LevelStreamActive>();
-                    stream_active.0.store(false, Ordering::Relaxed);
+                let mode = app.state::<RecordingMode>().get();
+                match mode {
+                    Mode::HoldToTalk => {
+                        // Existing behavior: release stops recording
+                        if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
+                            // Stop RMS level stream BEFORE transitioning to processing
+                            let stream_active = app.state::<LevelStreamActive>();
+                            stream_active.0.store(false, Ordering::Relaxed);
 
-                    // Pill: switch to processing state (bars stop, animated border starts)
-                    app.emit_to("pill", "pill-state", "processing").ok();
+                            // Pill: switch to processing state (bars stop, animated border starts)
+                            app.emit_to("pill", "pill-state", "processing").ok();
 
-                    tray::set_tray_state(app, tray::TrayState::Processing);
-                    log::info!("Pipeline: RECORDING -> PROCESSING (rebound hotkey)");
-                    let app_handle = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        pipeline::run_pipeline(app_handle).await;
-                    });
+                            tray::set_tray_state(app, tray::TrayState::Processing);
+                            log::info!("Pipeline: RECORDING -> PROCESSING (hold-to-talk release, rebound hotkey)");
+                            let app_handle = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                pipeline::run_pipeline(app_handle).await;
+                            });
+                        }
+                    }
+                    Mode::Toggle => {
+                        // Toggle mode: release is ignored — VAD or second tap stops
+                    }
                 }
             }
         }
@@ -322,6 +480,8 @@ pub fn run() {
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             rebind_hotkey,
+            set_recording_mode,
+            get_recording_mode,
             start_recording,
             stop_recording,
             save_test_wav,
@@ -378,6 +538,12 @@ pub fn run() {
             let level_stream_active = Arc::new(AtomicBool::new(false));
             app.manage(LevelStreamActive(level_stream_active));
 
+            // Load and register recording mode from saved settings
+            let saved_mode = read_saved_mode(app);
+            log::info!("Recording mode: {:?}", saved_mode);
+            app.manage(RecordingMode::new(saved_mode));
+            app.manage(VadWorkerState(std::sync::Mutex::new(None)));
+
             // Register global hotkey plugin (desktop only — no Android/iOS support)
             #[cfg(desktop)]
             app.handle().plugin(
@@ -392,46 +558,113 @@ pub fn run() {
 
                         match event.state {
                             ShortcutState::Pressed => {
-                                // Only start if idle — blocked if recording or processing
-                                if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
-                                    let audio = app.state::<audio::AudioCapture>();
-                                    audio.clear_buffer();
-                                    audio.recording.store(true, Ordering::Relaxed);
-                                    tray::set_tray_state(app, tray::TrayState::Recording);
+                                let mode = app.state::<RecordingMode>().get();
 
-                                    // Pill: show and set recording state
-                                    app.emit_to("pill", "pill-show", ()).ok();
-                                    app.emit_to("pill", "pill-state", "recording").ok();
+                                match mode {
+                                    Mode::HoldToTalk => {
+                                        // Existing behavior: start on press (release stops)
+                                        if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
+                                            let audio = app.state::<audio::AudioCapture>();
+                                            audio.clear_buffer();
+                                            audio.recording.store(true, Ordering::Relaxed);
+                                            tray::set_tray_state(app, tray::TrayState::Recording);
 
-                                    // Start RMS level stream
-                                    let stream_active = app.state::<LevelStreamActive>();
-                                    stream_active.0.store(true, Ordering::Relaxed);
-                                    let audio_for_pill = app.state::<audio::AudioCapture>();
-                                    pill::start_level_stream(
-                                        app.clone(),
-                                        audio_for_pill.buffer.clone(),
-                                        stream_active.0.clone(),
-                                    );
+                                            // Pill: show and set recording state
+                                            app.emit_to("pill", "pill-show", ()).ok();
+                                            app.emit_to("pill", "pill-state", "recording").ok();
 
-                                    log::info!("Pipeline: IDLE -> RECORDING");
+                                            // Start RMS level stream
+                                            let stream_active = app.state::<LevelStreamActive>();
+                                            stream_active.0.store(true, Ordering::Relaxed);
+                                            let audio_for_pill = app.state::<audio::AudioCapture>();
+                                            pill::start_level_stream(
+                                                app.clone(),
+                                                audio_for_pill.buffer.clone(),
+                                                stream_active.0.clone(),
+                                            );
+
+                                            log::info!("Pipeline: IDLE -> RECORDING (hold-to-talk)");
+                                        }
+                                    }
+                                    Mode::Toggle => {
+                                        if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
+                                            // First tap: start recording
+                                            let audio = app.state::<audio::AudioCapture>();
+                                            audio.clear_buffer();
+                                            audio.recording.store(true, Ordering::Relaxed);
+                                            tray::set_tray_state(app, tray::TrayState::Recording);
+                                            app.emit_to("pill", "pill-show", ()).ok();
+                                            app.emit_to("pill", "pill-state", "recording").ok();
+                                            let stream_active = app.state::<LevelStreamActive>();
+                                            stream_active.0.store(true, Ordering::Relaxed);
+                                            let audio_for_pill = app.state::<audio::AudioCapture>();
+                                            pill::start_level_stream(
+                                                app.clone(),
+                                                audio_for_pill.buffer.clone(),
+                                                stream_active.0.clone(),
+                                            );
+
+                                            // Spawn VAD worker for auto-stop
+                                            let vad_handle = vad::spawn_vad_worker(
+                                                app.clone(),
+                                                audio.buffer.clone(),
+                                            );
+                                            let vad_state = app.state::<VadWorkerState>();
+                                            if let Ok(mut guard) = vad_state.0.lock() {
+                                                *guard = Some(vad_handle);
+                                            }
+
+                                            log::info!("Pipeline: IDLE -> RECORDING (toggle mode, VAD worker started)");
+                                        } else if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
+                                            // Second tap: instant hard stop — go straight to transcription
+                                            // Cancel VAD worker first (prevents double-trigger)
+                                            let vad_state = app.state::<VadWorkerState>();
+                                            if let Ok(mut guard) = vad_state.0.lock() {
+                                                if let Some(mut handle) = guard.take() {
+                                                    handle.cancel();
+                                                }
+                                            }
+
+                                            // Stop recording and level stream
+                                            let stream_active = app.state::<LevelStreamActive>();
+                                            stream_active.0.store(false, Ordering::Relaxed);
+                                            app.emit_to("pill", "pill-state", "processing").ok();
+                                            tray::set_tray_state(app, tray::TrayState::Processing);
+                                            log::info!("Pipeline: RECORDING -> PROCESSING (toggle mode, second tap)");
+
+                                            let app_handle = app.clone();
+                                            tauri::async_runtime::spawn(async move {
+                                                pipeline::run_pipeline(app_handle).await;
+                                            });
+                                        }
+                                        // If PROCESSING, ignore tap (CAS prevents double-execution)
+                                    }
                                 }
                             }
                             ShortcutState::Released => {
-                                // Only fire pipeline if we were actually recording
-                                if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
-                                    // Stop RMS level stream BEFORE transitioning to processing
-                                    let stream_active = app.state::<LevelStreamActive>();
-                                    stream_active.0.store(false, Ordering::Relaxed);
+                                let mode = app.state::<RecordingMode>().get();
+                                match mode {
+                                    Mode::HoldToTalk => {
+                                        // Only fire pipeline if we were actually recording
+                                        if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
+                                            // Stop RMS level stream BEFORE transitioning to processing
+                                            let stream_active = app.state::<LevelStreamActive>();
+                                            stream_active.0.store(false, Ordering::Relaxed);
 
-                                    // Pill: switch to processing state (bars stop, animated border starts)
-                                    app.emit_to("pill", "pill-state", "processing").ok();
+                                            // Pill: switch to processing state (bars stop, animated border starts)
+                                            app.emit_to("pill", "pill-state", "processing").ok();
 
-                                    tray::set_tray_state(app, tray::TrayState::Processing);
-                                    log::info!("Pipeline: RECORDING -> PROCESSING");
-                                    let app_handle = app.clone();
-                                    tauri::async_runtime::spawn(async move {
-                                        pipeline::run_pipeline(app_handle).await;
-                                    });
+                                            tray::set_tray_state(app, tray::TrayState::Processing);
+                                            log::info!("Pipeline: RECORDING -> PROCESSING");
+                                            let app_handle = app.clone();
+                                            tauri::async_runtime::spawn(async move {
+                                                pipeline::run_pipeline(app_handle).await;
+                                            });
+                                        }
+                                    }
+                                    Mode::Toggle => {
+                                        // Toggle mode: release is ignored — VAD or second tap stops
+                                    }
                                 }
                             }
                         }
