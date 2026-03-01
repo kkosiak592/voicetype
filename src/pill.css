@@ -20,9 +20,7 @@ html, body, #pill-root {
   background: rgba(10, 10, 10, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 9999px;
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: none;
 }
 
 /* ==========================================================================
@@ -83,6 +81,40 @@ html, body, #pill-root {
   background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.06) 50%, transparent 100%);
   background-size: 200% 100%;
   animation: shimmer-sweep 2s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   Rainbow border — animated conic-gradient ring, active during recording
+   Requires CSS @property for animatable custom property (WebView2 supports it)
+   ========================================================================== */
+
+@property --border-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes rainbow-rotate {
+  from { --border-angle: 0deg; }
+  to   { --border-angle: 360deg; }
+}
+
+.pill-rainbow-border {
+  position: relative;
+  border: none !important;
+}
+
+.pill-rainbow-border::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--border-angle),
+    #ff0000, #ff8800, #ffff00, #00ff00, #0088ff, #8800ff, #ff0000
+  );
+  z-index: -1;
+  animation: rainbow-rotate 3s linear infinite;
 }
 
 /* ==========================================================================
