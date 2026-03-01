@@ -3,6 +3,7 @@ mod inject;
 mod pill;
 mod pipeline;
 mod tray;
+mod vad;
 
 // transcribe.rs requires whisper-rs which needs LIBCLANG_PATH + optional CUDA.
 // Gate it behind the "whisper" Cargo feature so the project builds without
