@@ -126,12 +126,23 @@ Plans:
   3. With ALL CAPS mode enabled on a profile, all injected text is uppercased — enabling engineering drawing annotation and PDF markup workflows
   4. User can select which microphone and which whisper model to use from the settings panel; selections persist across restarts
   5. Settings panel opens from the system tray context menu and provides access to all configurable options: hotkey, profile, model, microphone, and correction dictionary editor
-**Plans**: TBD
+**Plans:** 4 plans
 
 Plans:
-- [ ] 06-01: Corrections engine — implement HashMap-based post-processing dictionary in corrections.rs, load from JSON, apply after each transcription
-- [ ] 06-02: Vocabulary profiles — implement profiles.rs with initial_prompt selection, corrections dictionary per profile, ALL CAPS normalization flag; ship Structural Engineering and General profiles
-- [ ] 06-03: Settings panel UI — build Settings.tsx Tauri window with hotkey rebind, model selector, microphone selector, profile switcher, and inline corrections dictionary editor
+- [ ] 06-01-PLAN.md — Corrections engine + profile system backend (corrections.rs, profiles.rs, pipeline integration, initial_prompt)
+- [ ] 06-02-PLAN.md — Microphone + model selection backend (AudioCaptureMutex refactor, WhisperStateMutex, device enumeration, model reload)
+- [ ] 06-03-PLAN.md — Settings panel UI rebuild (sidebar-nav layout, ProfileSwitcher, DictionaryEditor, ModelSelector, MicrophoneSection)
+- [ ] 06-04-PLAN.md — End-to-end verification checkpoint (human-verify all Phase 6 features)
+
+### Phase 06.1: Fix duplicate tray icons and replace default square icon with proper app icon (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 6
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 06.1 to break down)
 
 ### Phase 7: Distribution
 **Goal**: First-run model download with progress UI, GPU auto-detection with model recommendation, and a single NSIS installer — making the app installable on any Windows machine regardless of hardware
@@ -161,5 +172,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 4.1 -> 5 -> 6 -> 7
 | 4. Pill Overlay | 2/2 | Complete   | 2026-02-28 |
 | 4.1 Premium Pill UI | 0/2 | Not started | - |
 | 5. VAD + Toggle Mode | 2/2 | Complete   | 2026-03-01 |
-| 6. Vocabulary + Settings | 0/3 | Not started | - |
+| 6. Vocabulary + Settings | 0/4 | Not started | - |
 | 7. Distribution | 0/3 | Not started | - |
