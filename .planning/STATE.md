@@ -26,7 +26,7 @@ See: .planning/PROJECT.md
 **Current plan:** pending
 **Status:** In progress
 
-Last activity: 2026-03-01 - Quick task 7 (remove rainbow border from pill recording state) — completed (commit 8d36805)
+Last activity: 2026-03-01 - Quick task 8 (fix pill position to bottom-center above taskbar + multi-monitor) — tasks 1-2 complete (commits 69f28ea, 000463d), awaiting human visual verification (task 3)
 
 ## Session Log
 
@@ -41,6 +41,7 @@ Last activity: 2026-03-01 - Quick task 7 (remove rainbow border from pill record
 - 2026-03-01: 06.1-01 (fix duplicate tray icons + VoiceType app icon) — SVG source icon, bundle icons regenerated, tray PNGs redesigned as microphone silhouettes, tray.rs fixed to use Image::from_bytes(ICON_IDLE) in build_tray(), tooltip support added (commits ed7be05, 2fc9aa9)
 - 2026-03-01: 06.1-02 (human verification) — all five visual checks passed: single tray icon, VoiceType microphone design, state color transitions, tooltip text, taskbar/title-bar icon confirmed
 - 2026-03-01: 06.2-01 (neon waveform visualization) — REVERTED: code didn't meet quality bar, restored FrequencyBars.tsx (reverts 5343619, a605af6)
+- 2026-03-01: Quick task 8 (fix pill position bottom-center + multi-monitor) — tasks 1-2 done (commits 69f28ea, 000463d), awaiting visual verify
 
 ## Decisions
 
@@ -73,11 +74,10 @@ Last activity: 2026-03-01 - Quick task 7 (remove rainbow border from pill record
 | 5 | Apply pipeline latency optimizations: greedy decoding, flash attention, whisper parameter tuning, and injection delay reduction | 2026-03-01 | 72ea1fd | [5-apply-pipeline-latency-optimizations-gre](./quick/5-apply-pipeline-latency-optimizations-gre/) |
 | 6 | Remove checkmark from pill after successful processing — immediate exit identical to error path | 2026-03-01 | 8bb5ed5 | [6-remove-checkmark-from-pill-after-process](./quick/6-remove-checkmark-from-pill-after-process/) |
 | 7 | Remove rainbow rotating border from pill recording state — dark glass + waveform bars only | 2026-03-01 | 8d36805 | [7-remove-rainbow-startup-animation-from-pi](./quick/7-remove-rainbow-startup-animation-from-pi/) |
+| 8 | Fix pill position to bottom-center above taskbar, remove dragging, add multi-monitor support | 2026-03-01 | 000463d | [8-fix-pill-position-to-bottom-center-above](./quick/8-fix-pill-position-to-bottom-center-above/) |
 
 ## Accumulated Context
 
 ### Pending Todos
 
 1. Investigate microphone icon persisting in system tray (area: ui)
-2. Fix pill position to bottom center above taskbar, remove dragging (area: ui)
-3. Multi-monitor support — pill follows active cursor monitor (area: ui)
