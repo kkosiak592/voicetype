@@ -155,7 +155,7 @@ Plans:
   3. Tray icon changes color for recording (red) and processing (orange) states
   4. Hovering over the tray icon shows tooltip "VoiceType - Idle" / "Recording" / "Processing"
   5. Bundle icons (taskbar, title bar, installer) all show the new VoiceType icon
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 06.1-01-PLAN.md — Create VoiceType SVG icon, generate bundle icons, redesign tray state icons, fix duplicate tray icon bug, add tooltip support

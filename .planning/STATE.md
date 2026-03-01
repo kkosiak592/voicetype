@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 06-vocabulary-settings
-current_plan: "06-04 (complete) — Phase 06 complete, next phase: 06.1-fix-duplicate-tray-icons"
+current_phase: 06.1-fix-duplicate-tray-icons-and-replace-default-square-icon-with-proper-app-icon
+current_plan: "06.1-01 (complete) — Phase 06.1 complete, next phase: 06.2-premium-waveform-visualization-upgrade"
 status: planning
-last_updated: "2026-03-01T03:38:27.178Z"
+last_updated: "2026-03-01T12:24:33.165Z"
 progress:
   total_phases: 9
   completed_phases: 7
   total_plans: 20
-  completed_plans: 18
+  completed_plans: 19
 ---
 
 # Session State
@@ -22,11 +22,11 @@ See: .planning/PROJECT.md
 ## Position
 
 **Milestone:** v1.0 milestone
-**Current phase:** 06-vocabulary-settings
-**Current plan:** 06-04 (complete) — Phase 06 complete, next phase: 06.1-fix-duplicate-tray-icons
+**Current phase:** 06.1-fix-duplicate-tray-icons-and-replace-default-square-icon-with-proper-app-icon
+**Current plan:** 06.1-01 (complete) — Phase 06.1 complete, next phase: 06.2-premium-waveform-visualization-upgrade
 **Status:** Ready to plan
 
-Last activity: 2026-02-28 - Completed 06-04: End-to-end verification of Phase 6; two bugs fixed — content pane overflow-hidden clipping and ProfilesSection not calling set_active_profile on backend (commit d024c13)
+Last activity: 2026-03-01 - Completed 06.1-01: VoiceType microphone icon (SVG + bundle regeneration), fixed duplicate tray icon using Image::from_bytes(ICON_IDLE), added per-state tooltip support (commits ed7be05, 2fc9aa9)
 
 ## Session Log
 
@@ -38,6 +38,7 @@ Last activity: 2026-02-28 - Completed 06-04: End-to-end verification of Phase 6;
 - 2026-03-01: 06-02 (AudioCaptureMutex + WhisperStateMutex + 4 Tauri commands) — completed (commit 8031dee)
 - 2026-03-01: 06-03 (sidebar-nav settings UI, ProfileSwitcher, DictionaryEditor, ModelSelector, MicrophoneSection) — completed (commits 70ca534, 1d7b85e)
 - 2026-02-28: 06-04 (end-to-end Phase 6 verification) — all 10 scenarios pass; fixed content pane clipping and profile backend sync (commit d024c13)
+- 2026-03-01: 06.1-01 (fix duplicate tray icons + VoiceType app icon) — SVG source icon, bundle icons regenerated, tray PNGs redesigned as microphone silhouettes, tray.rs fixed to use Image::from_bytes(ICON_IDLE) in build_tray(), tooltip support added (commits ed7be05, 2fc9aa9)
 
 ## Decisions
 
@@ -54,6 +55,8 @@ Last activity: 2026-02-28 - Completed 06-04: End-to-end verification of Phase 6;
 - 06-vocabulary-settings: each section component owns its own useEffect + invoke data fetching, not App.tsx coordination
 - 06-vocabulary-settings: overflow-y-auto on settings content pane — overflow-hidden clips long sections like the corrections dictionary
 - 06-vocabulary-settings: ProfilesSection must call set_active_profile on initial load — backend corrections engine has no implicit knowledge of which profile is active on restart
+- 06.1-fix-duplicate-tray: Image::from_bytes(ICON_IDLE) in build_tray() instead of default_window_icon() — aligns icon source with set_tray_state() so Windows registers one HICON entry not two
+- 06.1-fix-duplicate-tray: tray-icon.png deleted — was unused (not referenced in any include_bytes! or tauri.conf.json config)
 
 ### Roadmap Evolution
 
