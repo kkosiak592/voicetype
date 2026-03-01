@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 07-distribution
-current_plan: 02-complete
+current_plan: 03-complete
 status: in_progress
-last_updated: "2026-03-01T14:46:11Z"
+last_updated: "2026-03-01T15:30:00Z"
 progress:
   total_phases: 8
   completed_phases: 7
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md
 **Current plan:** 07-02 complete
 **Status:** In progress
 
-Last activity: 2026-03-01 - 07-02 (distribution frontend: FirstRun.tsx, App.tsx first-run gate, ModelSelector download, ModelSection refresh) — completed (commits 328e8c7, ec2f7bd)
+Last activity: 2026-03-01 - 07-03 (NSIS installer: tauri.conf.json NSIS config, build + Defender scan, 3 serde/UI bug fixes in human verification) — completed (commits a41d8ab, cf2c04e)
 
 ## Session Log
 
@@ -44,6 +44,7 @@ Last activity: 2026-03-01 - 07-02 (distribution frontend: FirstRun.tsx, App.tsx 
 - 2026-03-01: Quick task 8 (fix pill position bottom-center + multi-monitor) — completed (commits 69f28ea, 000463d, human verified)
 - 2026-03-01: 07-01 (distribution backend) — download.rs with reqwest streaming + SHA256, check_first_run, enable_autostart, medium model removed (commits 672e0e1, ff5355f)
 - 2026-03-01: 07-02 (distribution frontend) — FirstRun.tsx with GPU badge + model cards + Channel progress + autostart; App.tsx first-run gate; ModelSelector download + progress; ModelSection refresh (commits 328e8c7, ec2f7bd)
+- 2026-03-01: 07-03 (NSIS installer) — tauri.conf.json with currentUser NSIS config, installer built (~9 MB, no models bundled), Defender scan passed; 3 serde/UI bugs fixed in verification (commits a41d8ab, cf2c04e)
 
 ## Decisions
 
@@ -69,6 +70,10 @@ Last activity: 2026-03-01 - 07-02 (distribution frontend: FirstRun.tsx, App.tsx 
 - 07-distribution-frontend: ModelSection auto-selects freshly downloaded model after list_models refresh — eliminates extra user click
 - 07-distribution-frontend: FirstRun uses hardcoded MODELS array (not list_models) — needs size/quality/hardware labels absent from ModelInfo
 - 07-distribution-frontend: cancelledRef pattern for cancel button — Rust download continues to overwrite .tmp, frontend ignores subsequent Channel events
+- 07-distribution-installer: targets=["nsis"] not "all" — WiX toolset unavailable; NSIS single-exe is the distribution target
+- 07-distribution-installer: installMode=currentUser — installs to AppData, no UAC prompt; appropriate for per-user hotkey tool
+- 07-distribution-installer: installer size ~9 MB exceeds 5 MB target due to CUDA static linkage; models are NOT bundled; 5 MB constraint accepted as aspirational for model-exclusion verification only
+- 07-distribution-installer: enum-level #[serde(rename_all)] on DownloadEvent does not propagate into struct variant fields — per-field #[serde(rename)] required on Progress variant fields
 
 ### Roadmap Evolution
 

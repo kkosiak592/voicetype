@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 4.1: Premium Pill UI** - Glassmorphism, sinusoidal bars, animated state transitions (INSERTED)
 - [x] **Phase 5: VAD + Toggle Mode** - Silero VAD silence detection and toggle recording mode (completed 2026-03-01)
 - [x] **Phase 6: Vocabulary + Settings** - Word corrections, vocabulary profiles, and full settings UI (completed 2026-02-28)
-- [ ] **Phase 7: Distribution** - First-run model download, GPU auto-detection, and NSIS installer
+- [x] **Phase 7: Distribution** - First-run model download, GPU auto-detection, and NSIS installer (completed 2026-03-01)
 
 ## Phase Details
 
@@ -180,4 +180,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 4.1 -> 5 -> 6 -> 7
 | 4.1 Premium Pill UI | 0/2 | Not started | - |
 | 5. VAD + Toggle Mode | 2/2 | Complete   | 2026-03-01 |
 | 6. Vocabulary + Settings | 4/4 | Complete   | 2026-03-01 |
-| 7. Distribution | 1/3 | In Progress|  |
+| 7. Distribution | 3/3 | Complete   | 2026-03-01 |
