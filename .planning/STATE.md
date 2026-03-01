@@ -112,3 +112,4 @@ Last activity: 2026-03-01 - 08-03 (Parakeet frontend: 3-card FirstRun, engine se
 
 1. Investigate microphone icon persisting in system tray (area: ui)
 2. Implement sub-500ms transcription latency improvements (area: backend)
+3. Simplify profiles to shared dictionary and editable prompts (area: ui)
