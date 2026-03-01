@@ -11,8 +11,8 @@ use voice_activity_detector::VoiceActivityDetector;
 const SPEECH_PROBABILITY_THRESHOLD: f32 = 0.5;
 
 /// Number of consecutive below-threshold (silence) chunks before auto-stop in toggle mode.
-/// At 32ms per chunk: 47 chunks * 32ms = 1504ms ≈ 1.5 seconds.
-const SILENCE_FRAMES_THRESHOLD: u32 = 47;
+/// At 32ms per chunk: 94 chunks * 32ms = 3008ms ≈ 3.0 seconds.
+const SILENCE_FRAMES_THRESHOLD: u32 = 94;
 
 /// Minimum number of chunks classified as speech before the buffer is eligible
 /// for whisper inference. Below this, the buffer is discarded as noise.
@@ -174,7 +174,7 @@ pub fn spawn_vad_worker(
                 } else if ever_spoke {
                     silence_frames += 1;
                     if silence_frames >= SILENCE_FRAMES_THRESHOLD {
-                        // 1.5s of silence after speech — auto-stop
+                        // 3.0s of silence after speech — auto-stop
                         log::info!(
                             "VAD worker: silence threshold reached after {} speech frames \
                              (total: {} frames, cursor: {} samples)",
