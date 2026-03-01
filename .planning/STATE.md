@@ -24,7 +24,7 @@ See: .planning/PROJECT.md
 **Current phase:** (determining...)
 **Status:** Resuming
 
-Last activity: 2026-03-01 - Completed quick task 4: Make waveform bars in pill bounce more prominently
+Last activity: 2026-03-01 - Completed quick task 5: Apply pipeline latency optimizations: greedy decoding, flash attention, whisper parameter tuning, and injection delay reduction
 
 ## Session Log
 
@@ -37,3 +37,4 @@ Last activity: 2026-03-01 - Completed quick task 4: Make waveform bars in pill b
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 4 | Make waveform bars in pill bounce more prominently | 2026-03-01 | 78d2835 | [4-make-waveform-bars-in-pill-bounce-more-p](./quick/4-make-waveform-bars-in-pill-bounce-more-p/) |
+| 5 | Apply pipeline latency optimizations: greedy decoding, flash attention, whisper parameter tuning, and injection delay reduction | 2026-03-01 | 72ea1fd | [5-apply-pipeline-latency-optimizations-gre](./quick/5-apply-pipeline-latency-optimizations-gre/) |
