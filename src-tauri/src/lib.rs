@@ -16,10 +16,46 @@ mod corrections_tests;
 #[cfg(feature = "whisper")]
 mod transcribe;
 
+// transcribe_parakeet.rs uses parakeet-rs and ONNX runtime.
+// Gated so the project builds without the parakeet feature.
+#[cfg(feature = "parakeet")]
+mod transcribe_parakeet;
+
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use tauri::Manager;
 use tray::build_tray;
+
+/// Transcription engine selector: Whisper (default) or Parakeet.
+///
+/// Not feature-gated so settings persistence works regardless of compiled features.
+/// Loaded from settings.json at startup via `read_saved_engine()`.
+#[derive(Clone, Copy, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TranscriptionEngine {
+    Whisper,
+    Parakeet,
+}
+
+/// Mutex-backed managed state for the active transcription engine.
+///
+/// CRITICAL: Registered on the Builder (not just in setup) so frontend IPC can
+/// read the engine before setup() fires (same issue as CachedGpuMode).
+pub struct ActiveEngine(pub std::sync::Mutex<TranscriptionEngine>);
+
+/// Mutex-wrapped ParakeetTDT for runtime access.
+///
+/// Outer Mutex<Option<...>> mirrors WhisperStateMutex — allows replacing the model
+/// at runtime (load-on-demand or engine switch).
+///
+/// Inner Arc<Mutex<ParakeetTDT>>: Arc makes it clonable for spawn_blocking;
+/// inner Mutex provides the `&mut self` access that parakeet-rs 0.1.x requires.
+/// ParakeetTDT is not Sync (transcribe_samples takes &mut self), so it cannot be
+/// wrapped in Arc alone — the inner Mutex serialises &mut access.
+#[cfg(feature = "parakeet")]
+pub struct ParakeetStateMutex(
+    pub std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<parakeet_rs::ParakeetTDT>>>>,
+);
 
 /// Control flag for the RMS level streaming loop. Stored as managed state
 /// so both the setup() and rebind_hotkey() hotkey handlers can access it.
@@ -132,6 +168,28 @@ fn read_saved_mode(app: &tauri::App) -> Mode {
     }
 }
 
+/// Read the saved transcription engine from settings.json.
+/// Returns TranscriptionEngine::Whisper on first launch, file missing, or parse error.
+fn read_saved_engine(app: &tauri::App) -> TranscriptionEngine {
+    let data_dir = match app.path().app_data_dir() {
+        Ok(d) => d,
+        Err(_) => return TranscriptionEngine::Whisper,
+    };
+    let settings_path = data_dir.join("settings.json");
+    let contents = match std::fs::read_to_string(&settings_path) {
+        Ok(c) => c,
+        Err(_) => return TranscriptionEngine::Whisper,
+    };
+    let json: serde_json::Value = match serde_json::from_str(&contents) {
+        Ok(j) => j,
+        Err(_) => return TranscriptionEngine::Whisper,
+    };
+    match json.get("active_engine").and_then(|v| v.as_str()) {
+        Some("parakeet") => TranscriptionEngine::Parakeet,
+        _ => TranscriptionEngine::Whisper,
+    }
+}
+
 #[tauri::command]
 fn set_recording_mode(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     // Update managed state immediately
@@ -155,6 +213,83 @@ fn get_recording_mode(app: tauri::AppHandle) -> String {
         Mode::Toggle => "toggle".to_string(),
         Mode::HoldToTalk => "hold".to_string(),
     }
+}
+
+/// Returns the current active transcription engine as a string ("whisper" or "parakeet").
+#[tauri::command]
+fn get_engine(app: tauri::AppHandle) -> String {
+    let state = app.state::<ActiveEngine>();
+    let guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    match *guard {
+        TranscriptionEngine::Whisper => "whisper".to_string(),
+        TranscriptionEngine::Parakeet => "parakeet".to_string(),
+    }
+}
+
+/// Switch the active transcription engine.
+///
+/// If switching to Parakeet and the model is not already loaded, attempts to load it.
+/// Reverts to Whisper and returns Err if loading fails or model is not downloaded.
+/// Persists the selection to settings.json.
+#[tauri::command]
+fn set_engine(app: tauri::AppHandle, engine: String) -> Result<(), String> {
+    let new_engine = match engine.as_str() {
+        "parakeet" => TranscriptionEngine::Parakeet,
+        _ => TranscriptionEngine::Whisper,
+    };
+    // Update ActiveEngine managed state
+    {
+        let state = app.state::<ActiveEngine>();
+        let mut guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+        *guard = new_engine;
+    }
+    // If switching to Parakeet and ParakeetStateMutex is None, try to load model
+    #[cfg(feature = "parakeet")]
+    if new_engine == TranscriptionEngine::Parakeet {
+        let parakeet_state = app.state::<ParakeetStateMutex>();
+        let is_none = {
+            let guard = parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
+            guard.is_none()
+        };
+        if is_none {
+            let model_dir = download::parakeet_model_dir();
+            if model_dir.exists() {
+                let dir_str = model_dir.to_string_lossy().to_string();
+                match transcribe_parakeet::load_parakeet(&dir_str, false) {
+                    Ok(p) => {
+                        let mut guard = parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                        *guard = Some(std::sync::Arc::new(std::sync::Mutex::new(p)));
+                        log::info!("Parakeet model loaded on engine switch");
+                    }
+                    Err(e) => {
+                        log::error!("Failed to load Parakeet on engine switch: {}", e);
+                        // Revert to Whisper since Parakeet failed
+                        let state = app.state::<ActiveEngine>();
+                        let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+                        *guard = TranscriptionEngine::Whisper;
+                        return Err(format!(
+                            "Parakeet model failed to load: {}. Reverting to Whisper.",
+                            e
+                        ));
+                    }
+                }
+            } else {
+                // Revert — model not downloaded
+                let state = app.state::<ActiveEngine>();
+                let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+                *guard = TranscriptionEngine::Whisper;
+                return Err(
+                    "Parakeet model not downloaded. Download it first from Settings.".to_string(),
+                );
+            }
+        }
+    }
+    // Persist to settings.json
+    let mut json = read_settings(&app)?;
+    json["active_engine"] = serde_json::Value::String(engine);
+    write_settings(&app, &json)?;
+    log::info!("Transcription engine set to: {:?}", new_engine);
+    Ok(())
 }
 
 /// Shared hotkey handler body — called from both setup() and rebind_hotkey() handlers.
@@ -672,8 +807,10 @@ fn model_id_to_path(model_id: &str) -> Result<std::path::PathBuf, String> {
     Ok(models_dir().join(filename))
 }
 
-/// Info about a whisper model including availability and GPU recommendation.
-#[cfg(feature = "whisper")]
+/// Info about a transcription model including availability and GPU recommendation.
+///
+/// Used by both Whisper models (feature-gated) and Parakeet (always visible so
+/// the UI can show download status regardless of compiled features).
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ModelInfo {
@@ -684,7 +821,7 @@ struct ModelInfo {
     downloaded: bool,
 }
 
-/// List available whisper models with download status and GPU recommendation.
+/// List available transcription models (Whisper + Parakeet) with download status.
 #[cfg(feature = "whisper")]
 #[tauri::command]
 fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
@@ -693,7 +830,7 @@ fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
     let gpu_mode = matches!(cached.0, ModelMode::Gpu);
     let dir = models_dir();
 
-    Ok(vec![
+    let mut models = vec![
         ModelInfo {
             id: "large-v3-turbo".to_string(),
             name: "Large v3 Turbo".to_string(),
@@ -708,7 +845,19 @@ fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
             recommended: !gpu_mode,
             downloaded: dir.join("ggml-small.en-q5_1.bin").exists(),
         },
-    ])
+    ];
+
+    // Parakeet TDT is always listed regardless of the parakeet feature flag
+    // (download.rs is not feature-gated, so parakeet_model_exists() is always available).
+    models.push(ModelInfo {
+        id: "parakeet-tdt-v2".to_string(),
+        name: "Parakeet TDT".to_string(),
+        description: "Fastest — 661 MB — requires NVIDIA GPU (ONNX)".to_string(),
+        recommended: false, // Whisper is recommended per locked decision
+        downloaded: crate::download::parakeet_model_exists(),
+    });
+
+    Ok(models)
 }
 
 /// Response type for check_first_run — tells the frontend whether setup is needed
@@ -724,7 +873,7 @@ struct FirstRunStatus {
 
 /// Check whether the app needs first-run model setup.
 ///
-/// Returns needs_setup=true when no model file exists in the models directory.
+/// Returns needs_setup=true when no model file exists (neither Whisper nor Parakeet).
 /// Also surfaces GPU detection so the frontend can pre-select the appropriate model.
 #[cfg(feature = "whisper")]
 #[tauri::command]
@@ -735,8 +884,10 @@ fn check_first_run(app: tauri::AppHandle) -> FirstRunStatus {
     let dir = models_dir();
     let large_exists = dir.join("ggml-large-v3-turbo-q5_0.bin").exists();
     let small_exists = dir.join("ggml-small.en-q5_1.bin").exists();
+    // Parakeet is also a valid installed model — skip first-run if it's present
+    let parakeet_exists = crate::download::parakeet_model_exists();
     FirstRunStatus {
-        needs_setup: !large_exists && !small_exists,
+        needs_setup: !large_exists && !small_exists && !parakeet_exists,
         gpu_detected: gpu_mode,
         recommended_model: if gpu_mode {
             "large-v3-turbo".to_string()
@@ -995,10 +1146,23 @@ pub fn run() {
         builder = builder.manage(CachedGpuMode(cached_gpu));
     }
 
+    // ActiveEngine MUST be registered on Builder (same reason as CachedGpuMode).
+    // setup() will overwrite with the saved value from settings.json.
+    builder = builder.manage(ActiveEngine(std::sync::Mutex::new(TranscriptionEngine::Whisper)));
+
+    // ParakeetStateMutex starts as None — model is loaded on demand (engine switch)
+    // or at startup if saved engine is Parakeet.
+    #[cfg(feature = "parakeet")]
+    {
+        builder = builder.manage(ParakeetStateMutex(std::sync::Mutex::new(None)));
+    }
+
     builder.invoke_handler(tauri::generate_handler![
             rebind_hotkey,
             set_recording_mode,
             get_recording_mode,
+            get_engine,
+            set_engine,
             start_recording,
             stop_recording,
             save_test_wav,
@@ -1010,6 +1174,7 @@ pub fn run() {
             save_corrections,
             set_all_caps,
             download::download_model,
+            download::download_parakeet_model,
             enable_autostart,
             #[cfg(feature = "whisper")]
             check_first_run,
@@ -1056,6 +1221,59 @@ pub fn run() {
             log::info!("Recording mode: {:?}", saved_mode);
             app.manage(RecordingMode::new(saved_mode));
             app.manage(VadWorkerState(std::sync::Mutex::new(None)));
+
+            // Update ActiveEngine from saved settings (Builder registered it as Whisper default).
+            {
+                let saved_engine = read_saved_engine(app);
+                log::info!("Transcription engine (saved): {:?}", saved_engine);
+                let engine_state = app.state::<ActiveEngine>();
+                let mut guard = engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                *guard = saved_engine;
+            }
+
+            // If saved engine is Parakeet and parakeet feature is enabled, load model at startup.
+            #[cfg(feature = "parakeet")]
+            {
+                let saved_engine = {
+                    let engine_state = app.state::<ActiveEngine>();
+                    let guard = engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                    *guard
+                };
+                if saved_engine == TranscriptionEngine::Parakeet {
+                    let model_dir = download::parakeet_model_dir();
+                    if model_dir.exists() {
+                        let dir_str = model_dir.to_string_lossy().to_string();
+                        match transcribe_parakeet::load_parakeet(&dir_str, false) {
+                            Ok(p) => {
+                                let parakeet_state = app.state::<ParakeetStateMutex>();
+                                let mut guard =
+                                    parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                                *guard = Some(std::sync::Arc::new(std::sync::Mutex::new(p)));
+                                log::info!(
+                                    "Parakeet model loaded at startup (saved engine=parakeet)"
+                                );
+                            }
+                            Err(e) => {
+                                log::warn!(
+                                    "Parakeet startup load failed: {} — falling back to Whisper",
+                                    e
+                                );
+                                let engine_state = app.state::<ActiveEngine>();
+                                let mut guard =
+                                    engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                                *guard = TranscriptionEngine::Whisper;
+                            }
+                        }
+                    } else {
+                        log::warn!(
+                            "Parakeet set as engine but model files not found — falling back to Whisper"
+                        );
+                        let engine_state = app.state::<ActiveEngine>();
+                        let mut guard = engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                        *guard = TranscriptionEngine::Whisper;
+                    }
+                }
+            }
 
             // Load and register vocabulary profile + corrections engine
             {
