@@ -179,7 +179,7 @@ Plans:
   4. Corrections dictionary and ALL CAPS mode apply to Parakeet output identically to Whisper output
   5. Hold-to-talk mode completes transcription noticeably faster due to VAD gate bypass (sample-count check instead of Silero scan)
   6. Engine selection persists across app restarts
-**Plans:** 3 plans
+**Plans:** 2/3 plans executed
 
 Plans:
 - [x] 08-01-PLAN.md — Parakeet backend: transcribe_parakeet.rs inference wrapper + parakeet-rs dependency + multi-file ONNX download
@@ -201,4 +201,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 4.1 -> 5 -> 6 -> 7 -> 8
 | 5. VAD + Toggle Mode | 2/2 | Complete   | 2026-03-01 |
 | 6. Vocabulary + Settings | 4/4 | Complete   | 2026-03-01 |
 | 7. Distribution | 3/3 | Complete   | 2026-03-01 |
-| 8. Parakeet TDT + Latency | 1/3 | In progress | - |
+| 8. Parakeet TDT + Latency | 2/3 | In Progress|  |
