@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 06.1-fix-duplicate-tray-icons-and-replace-default-square-icon-with-proper-app-icon
-current_plan: "06.1-02 (complete) — Phase 06.1 fully verified, next phase: 06.2-premium-waveform-visualization-upgrade"
-status: planning
-last_updated: "2026-03-01T12:40:00.000Z"
+current_phase: 06.2-premium-waveform-visualization-upgrade
+current_plan: "06.2-01 (complete) — Canvas2D neon waveform with 16-bin FFT shipped"
+status: in_progress
+last_updated: "2026-03-01T13:08:57Z"
 progress:
   total_phases: 9
-  completed_phases: 7
-  total_plans: 20
-  completed_plans: 20
+  completed_phases: 8
+  total_plans: 22
+  completed_plans: 22
 ---
 
 # Session State
@@ -22,11 +22,11 @@ See: .planning/PROJECT.md
 ## Position
 
 **Milestone:** v1.0 milestone
-**Current phase:** 06.1-fix-duplicate-tray-icons-and-replace-default-square-icon-with-proper-app-icon
-**Current plan:** 06.1-02 (complete) — Phase 06.1 fully verified, next phase: 06.2-premium-waveform-visualization-upgrade
-**Status:** Ready to plan
+**Current phase:** 06.2-premium-waveform-visualization-upgrade
+**Current plan:** 06.2-01 (complete) — Canvas2D neon waveform with 16-bin FFT shipped
+**Status:** In progress
 
-Last activity: 2026-03-01 - Completed 06.1-02: Human visual verification of tray icon, app icon, and tooltip — all five checks passed (single icon, VoiceType design, state color transitions, tooltip text, taskbar/title-bar icon)
+Last activity: 2026-03-01 - Completed 06.2-01: WaveformCanvas.tsx with 3 layered bezier curves + bloom, FFT in pill.rs, cyan-purple border. FrequencyBars.tsx deleted (commits bb14eef, 896cd3d)
 
 ## Session Log
 
