@@ -1,7 +1,5 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { PhysicalPosition } from "@tauri-apps/api/dpi";
-import { load } from "@tauri-apps/plugin-store";
 import { FrequencyBars } from "./components/FrequencyBars";
 import { ProcessingDots } from "./components/ProcessingDots";
 
@@ -24,26 +22,6 @@ export function Pill() {
       exitTimerRef.current = null;
     }
   }
-
-  // Position to bottom center on first load if no saved position
-  useEffect(() => {
-    async function initPosition() {
-      try {
-        const store = await load("settings.json");
-        const saved = await store.get<{ x: number; y: number }>("pill-position");
-        if (!saved) {
-          const screenW = window.screen.width;
-          const screenH = window.screen.height;
-          const x = Math.round((screenW - 178) / 2);
-          const y = screenH - 46 - 60;
-          await appWindow.setPosition(new PhysicalPosition(x, y));
-        }
-      } catch (e) {
-        console.warn("Failed to init pill position:", e);
-      }
-    }
-    initPosition();
-  }, []);
 
   // Event listeners for all pill events from backend
   useEffect(() => {
@@ -101,34 +79,12 @@ export function Pill() {
     };
   }, []);
 
-  // Drag handling: temporarily enable focusable for drag, restore after
-  const handleMouseDown = useCallback(async (e: React.MouseEvent) => {
-    e.preventDefault();
-    await appWindow.setFocusable(true);
-    await appWindow.startDragging();
-  }, []);
-
-  const handleMouseUp = useCallback(async () => {
-    try {
-      const pos = await appWindow.outerPosition();
-      const store = await load("settings.json");
-      await store.set("pill-position", { x: pos.x, y: pos.y });
-      await store.save();
-    } catch (e) {
-      console.warn("Failed to save pill position:", e);
-    }
-    await appWindow.setFocusable(false);
-  }, []);
-
   return (
     <div
-      onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
       className={`
         pill-glass
         w-[170px] h-[38px] rounded-full
         flex items-center justify-center
-        cursor-grab active:cursor-grabbing
         select-none
         ${animState === "exiting" ? "pill-exiting" : ""}
         ${animState === "hidden" ? "opacity-0 pointer-events-none" : ""}
