@@ -5373,7 +5373,6 @@ dependencies = [
  "nvml-wrapper",
  "regex",
  "rubato",
- "rustfft",
  "serde",
  "serde_json",
  "tauri",
