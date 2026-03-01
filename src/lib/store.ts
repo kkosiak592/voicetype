@@ -4,12 +4,14 @@ export interface AppSettings {
   hotkey: string;
   theme: 'light' | 'dark';
   autostart: boolean;
+  recordingMode: 'hold' | 'toggle';
 }
 
 export const DEFAULTS: AppSettings = {
   hotkey: 'ctrl+shift+space',
   theme: 'light',
   autostart: false,
+  recordingMode: 'hold',
 };
 
 let _store: Store | null = null;

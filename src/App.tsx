@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { HotkeyCapture } from './components/HotkeyCapture';
 import { ThemeToggle } from './components/ThemeToggle';
 import { AutostartToggle } from './components/AutostartToggle';
+import { RecordingModeToggle } from './components/RecordingModeToggle';
 import { getStore, DEFAULTS } from './lib/store';
 
 function App() {
   const [hotkey, setHotkey] = useState(DEFAULTS.hotkey);
   const [theme, setTheme] = useState<'light' | 'dark'>(DEFAULTS.theme);
+  const [recordingMode, setRecordingMode] = useState<'hold' | 'toggle'>(DEFAULTS.recordingMode);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -14,6 +16,7 @@ function App() {
       const store = await getStore();
       const savedHotkey = await store.get<string>('hotkey');
       const savedTheme = await store.get<'light' | 'dark'>('theme');
+      const savedRecordingMode = await store.get<'hold' | 'toggle'>('recordingMode');
 
       if (savedHotkey) setHotkey(savedHotkey);
 
@@ -26,6 +29,8 @@ function App() {
       } else {
         document.documentElement.classList.remove('dark');
       }
+
+      if (savedRecordingMode) setRecordingMode(savedRecordingMode);
 
       setLoaded(true);
     }
@@ -58,6 +63,19 @@ function App() {
             Click the box below then press your desired key combination.
           </p>
           <HotkeyCapture value={hotkey} onChange={setHotkey} />
+        </section>
+
+        <hr className="border-gray-200 dark:border-gray-700" />
+
+        {/* Recording Mode section */}
+        <section>
+          <h2 className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+            Recording Mode
+          </h2>
+          <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
+            Choose how the hotkey controls recording.
+          </p>
+          <RecordingModeToggle value={recordingMode} onChange={setRecordingMode} />
         </section>
 
         <hr className="border-gray-200 dark:border-gray-700" />
