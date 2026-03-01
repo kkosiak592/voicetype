@@ -132,7 +132,7 @@ Plans:
 - [ ] 06-01-PLAN.md — Corrections engine + profile system backend (corrections.rs, profiles.rs, pipeline integration, initial_prompt)
 - [ ] 06-02-PLAN.md — Microphone + model selection backend (AudioCaptureMutex refactor, WhisperStateMutex, device enumeration, model reload)
 - [ ] 06-03-PLAN.md — Settings panel UI rebuild (sidebar-nav layout, ProfileSwitcher, DictionaryEditor, ModelSelector, MicrophoneSection)
-- [ ] 06-04-PLAN.md — End-to-end verification checkpoint (human-verify all Phase 6 features)
+- [x] 06-04-PLAN.md — End-to-end verification checkpoint (human-verify all Phase 6 features) (completed 2026-03-01)
 
 ### Phase 06.2: Premium waveform visualization upgrade (INSERTED)
 
@@ -196,5 +196,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 4.1 -> 5 -> 6 -> 7
 | 4. Pill Overlay | 2/2 | Complete   | 2026-02-28 |
 | 4.1 Premium Pill UI | 0/2 | Not started | - |
 | 5. VAD + Toggle Mode | 2/2 | Complete   | 2026-03-01 |
-| 6. Vocabulary + Settings | 4/4 | Complete   | 2026-02-28 |
+| 6. Vocabulary + Settings | 4/4 | Complete   | 2026-03-01 |
 | 7. Distribution | 0/3 | Not started | - |

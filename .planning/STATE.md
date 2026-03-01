@@ -40,6 +40,7 @@ Last activity: 2026-03-01 - Completed 06.2-01: WaveformCanvas.tsx with 3 layered
 - 2026-02-28: 06-04 (end-to-end Phase 6 verification) — all 10 scenarios pass; fixed content pane clipping and profile backend sync (commit d024c13)
 - 2026-03-01: 06.1-01 (fix duplicate tray icons + VoiceType app icon) — SVG source icon, bundle icons regenerated, tray PNGs redesigned as microphone silhouettes, tray.rs fixed to use Image::from_bytes(ICON_IDLE) in build_tray(), tooltip support added (commits ed7be05, 2fc9aa9)
 - 2026-03-01: 06.1-02 (human verification) — all five visual checks passed: single tray icon, VoiceType microphone design, state color transitions, tooltip text, taskbar/title-bar icon confirmed
+- 2026-03-01: 06.2-01 (neon waveform visualization) — WaveformCanvas.tsx with 3 bezier curves + 3 bloom passes, 16-bin FFT in pill.rs, cyan-purple border, FrequencyBars.tsx deleted (commits bb14eef, 896cd3d)
 
 ## Decisions
 
@@ -58,6 +59,9 @@ Last activity: 2026-03-01 - Completed 06.2-01: WaveformCanvas.tsx with 3 layered
 - 06-vocabulary-settings: ProfilesSection must call set_active_profile on initial load — backend corrections engine has no implicit knowledge of which profile is active on restart
 - 06.1-fix-duplicate-tray: Image::from_bytes(ICON_IDLE) in build_tray() instead of default_window_icon() — aligns icon source with set_tray_state() so Windows registers one HICON entry not two
 - 06.1-fix-duplicate-tray: tray-icon.png deleted — was unused (not referenced in any include_bytes! or tauri.conf.json config)
+- 06.2-neon-waveform: FftPlanner cached outside async loop, Arc<dyn Fft<f32>> moved into spawn closure — avoids per-tick re-planning (critical perf decision)
+- 06.2-neon-waveform: RMS gate at 0.02 zeroes all FFT bins below threshold — prevents ambient mic noise from triggering waveform visual activity
+- 06.2-neon-waveform: 3 bloom passes with globalCompositeOperation: lighter for additive blending — JARVIS neon halo effect on waveform curves
 
 ### Roadmap Evolution
 
