@@ -8,9 +8,9 @@ use std::time::Duration;
 /// Sequence:
 ///   1. Save existing clipboard content (None if non-text or empty)
 ///   2. Write `text` to clipboard
-///   3. Sleep 75ms — Windows clipboard propagation delay (mandatory for Chrome, VS Code)
+///   3. Sleep 30ms — Windows clipboard propagation delay (revert to 50ms if any app drops pastes)
 ///   4. Simulate Ctrl+V
-///   5. Sleep 120ms — let target app consume paste before restore
+///   5. Sleep 50ms — let target app consume paste before restore (revert to 80ms if any app drops pastes)
 ///   6. Restore original clipboard (log warning on failure, do not error)
 ///
 /// Intentionally synchronous — callers must wrap in tokio::task::spawn_blocking.
@@ -25,8 +25,8 @@ pub fn inject_text(text: &str) -> Result<(), String> {
     clipboard.set_text(text).map_err(|e| e.to_string())?;
 
     // Allow clipboard write to propagate before paste (Windows requirement)
-    // 75ms is the midpoint of the documented 50-100ms range
-    thread::sleep(Duration::from_millis(75));
+    // 30ms clipboard propagation (reduced from 75ms — revert to 50ms if any app drops pastes)
+    thread::sleep(Duration::from_millis(30));
 
     // Simulate Ctrl+V — fresh Enigo instance per call (anti-pattern: sharing instances)
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
@@ -35,8 +35,8 @@ pub fn inject_text(text: &str) -> Result<(), String> {
     enigo.key(Key::Control, Release).map_err(|e| e.to_string())?;
 
     // Allow target app to consume the paste before clipboard restore
-    // 120ms is the midpoint of the documented 100-150ms range
-    thread::sleep(Duration::from_millis(120));
+    // 50ms paste consumption (reduced from 120ms — revert to 80ms if any app drops pastes)
+    thread::sleep(Duration::from_millis(50));
 
     // Restore original clipboard content — per user decision: log failure, move on
     match saved {

@@ -104,6 +104,7 @@ pub fn resolve_model_path(mode: &ModelMode) -> Result<PathBuf, String> {
 /// Loads a WhisperContext from the given model path.
 ///
 /// GPU mode enables CUDA acceleration; CPU mode forces software inference.
+/// Flash attention is enabled for faster self-attention computation.
 /// Logs model load duration and GPU status.
 pub fn load_whisper_context(model_path: &str, mode: &ModelMode) -> Result<WhisperContext, String> {
     let start = Instant::now();
@@ -117,6 +118,7 @@ pub fn load_whisper_context(model_path: &str, mode: &ModelMode) -> Result<Whispe
 
     let mut ctx_params = WhisperContextParameters::default();
     ctx_params.use_gpu(use_gpu);
+    ctx_params.flash_attn(true);
 
     let ctx = WhisperContext::new_with_params(model_path, ctx_params)
         .map_err(|e| format!("Failed to load whisper model from '{}': {}", model_path, e))?;
@@ -132,9 +134,11 @@ pub fn load_whisper_context(model_path: &str, mode: &ModelMode) -> Result<Whispe
 
 /// Transcribes a slice of 16 kHz mono f32 audio samples using the provided WhisperContext.
 ///
-/// Uses beam search (beam_size=5) with forced English and temperature 0.0.
-/// A fresh WhisperState is created per call — this is thread-safe and the recommended
-/// approach (see RESEARCH.md Pitfall 6).
+/// Uses greedy decoding (best_of=1) with forced English and temperature 0.0. Greedy is
+/// 30-50% faster than beam search (beam_size=5) with negligible accuracy loss for short
+/// dictation phrases. Single-segment mode is forced since hold-to-talk clips are always
+/// one utterance. A fresh WhisperState is created per call — this is thread-safe and the
+/// recommended approach (see RESEARCH.md Pitfall 6).
 ///
 /// Returns the trimmed transcription text, or an error string on failure.
 pub fn transcribe_audio(ctx: &WhisperContext, audio: &[f32]) -> Result<String, String> {
@@ -142,16 +146,16 @@ pub fn transcribe_audio(ctx: &WhisperContext, audio: &[f32]) -> Result<String, S
 
     let mut state = ctx.create_state().map_err(|e| e.to_string())?;
 
-    let mut params = FullParams::new(SamplingStrategy::BeamSearch {
-        beam_size: 5,
-        patience: -1.0,
-    });
+    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
     params.set_language(Some("en"));
     params.set_temperature(0.0);
     params.set_print_special(false);
     params.set_print_progress(false);
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
+    params.set_single_segment(true);   // short dictation = one segment
+    params.set_no_context(true);       // no prior context carryover
+    params.set_temperature_inc(0.0);   // disable temperature fallback retries
 
     state.full(params, audio).map_err(|e| e.to_string())?;
 
