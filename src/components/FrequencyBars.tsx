@@ -36,13 +36,14 @@ export function FrequencyBars({ level }: FrequencyBarsProps) {
     const container = containerRef.current;
     if (!container) return;
 
-    // Build bar elements once
+    // Build bar elements once — each bar gets a rainbow hue based on position
     const bars: HTMLDivElement[] = [];
     for (let i = 0; i < BAR_COUNT; i++) {
+      const hue = Math.round((i / BAR_COUNT) * 300); // 0 (red) → 300 (magenta)
       const bar = document.createElement("div");
-      bar.style.width = "4px";
+      bar.style.width = "3px";
       bar.style.borderRadius = "9999px";
-      bar.style.background = "white";
+      bar.style.background = `hsl(${hue}, 90%, 65%)`;
       bar.style.flexShrink = "0";
       container.appendChild(bar);
       bars.push(bar);
@@ -64,7 +65,7 @@ export function FrequencyBars({ level }: FrequencyBarsProps) {
         const idleWave = 0.08 * BELL[i] * ((Math.sin(2 * Math.PI * 1.2 * t + BAR_PHASES[i]) + 1) / 2);
         // Composite height as fraction of container (0–1), then to px (container is 36px)
         const fraction = Math.max(0.05, activeHeight + idleWave);
-        const heightPx = Math.round(fraction * 36);
+        const heightPx = Math.round(fraction * 28);
         bars[i].style.height = `${heightPx}px`;
         // Opacity scaling: shorter bars are more transparent, taller bars are opaque
         bars[i].style.opacity = String(0.4 + fraction * 0.6);
@@ -86,8 +87,8 @@ export function FrequencyBars({ level }: FrequencyBarsProps) {
   return (
     <div
       ref={containerRef}
-      className="flex items-center gap-[2px]"
-      style={{ height: "36px" }}
+      className="flex items-center gap-[1.5px]"
+      style={{ height: "28px" }}
     />
   );
 }
