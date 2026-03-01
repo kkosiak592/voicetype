@@ -50,8 +50,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Distribution
 
-- [ ] **DIST-01**: On first run, app downloads the selected whisper model with a progress indicator
-- [ ] **DIST-02**: App auto-detects GPU capability and recommends appropriate model size
+- [x] **DIST-01**: On first run, app downloads the selected whisper model with a progress indicator
+- [x] **DIST-02**: App auto-detects GPU capability and recommends appropriate model size
 - [ ] **DIST-03**: App is packaged as a single Windows NSIS installer (models downloaded separately, not bundled)
 
 ## v2 Requirements
@@ -125,8 +125,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SET-03 | Phase 6 | Complete |
 | SET-04 | Phase 6 | Complete |
 | SET-05 | Phase 1 | Complete |
-| DIST-01 | Phase 7 | Pending |
-| DIST-02 | Phase 7 | Pending |
+| DIST-01 | Phase 7 | Complete |
+| DIST-02 | Phase 7 | Complete |
 | DIST-03 | Phase 7 | Pending |
 
 **Coverage:**

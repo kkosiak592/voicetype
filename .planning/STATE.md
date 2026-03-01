@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 07-distribution
-current_plan: pending
+current_plan: 01-complete
 status: in_progress
-last_updated: "2026-03-01T13:40:00Z"
+last_updated: "2026-03-01T14:40:04Z"
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 20
-  completed_plans: 20
+  completed_plans: 21
 ---
 
 # Session State
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md
 
 **Milestone:** v1.0 milestone
 **Current phase:** 07-distribution
-**Current plan:** pending
+**Current plan:** 07-01 complete
 **Status:** In progress
 
-Last activity: 2026-03-01 - Quick task 8 (fix pill position to bottom-center above taskbar + multi-monitor) — completed (commits 69f28ea, 000463d, human verified)
+Last activity: 2026-03-01 - 07-01 (distribution backend: download.rs, check_first_run, enable_autostart, medium model removed) — completed (commits 672e0e1, ff5355f)
 
 ## Session Log
 
@@ -42,6 +42,7 @@ Last activity: 2026-03-01 - Quick task 8 (fix pill position to bottom-center abo
 - 2026-03-01: 06.1-02 (human verification) — all five visual checks passed: single tray icon, VoiceType microphone design, state color transitions, tooltip text, taskbar/title-bar icon confirmed
 - 2026-03-01: 06.2-01 (neon waveform visualization) — REVERTED: code didn't meet quality bar, restored FrequencyBars.tsx (reverts 5343619, a605af6)
 - 2026-03-01: Quick task 8 (fix pill position bottom-center + multi-monitor) — completed (commits 69f28ea, 000463d, human verified)
+- 2026-03-01: 07-01 (distribution backend) — download.rs with reqwest streaming + SHA256, check_first_run, enable_autostart, medium model removed (commits 672e0e1, ff5355f)
 
 ## Decisions
 
@@ -60,6 +61,10 @@ Last activity: 2026-03-01 - Quick task 8 (fix pill position to bottom-center abo
 - 06-vocabulary-settings: ProfilesSection must call set_active_profile on initial load — backend corrections engine has no implicit knowledge of which profile is active on restart
 - 06.1-fix-duplicate-tray: Image::from_bytes(ICON_IDLE) in build_tray() instead of default_window_icon() — aligns icon source with set_tray_state() so Windows registers one HICON entry not two
 - 06.1-fix-duplicate-tray: tray-icon.png deleted — was unused (not referenced in any include_bytes! or tauri.conf.json config)
+- 07-distribution: download.rs duplicates models_dir() (3 lines) to avoid whisper feature-gate coupling on pure HTTP/IO module
+- 07-distribution: download_model and enable_autostart not whisper-gated; check_first_run is whisper-gated (calls detect_gpu/models_dir from transcribe)
+- 07-distribution: SHA256 checksums + expected sizes hardcoded in model_info(); content_length() fallback for progress denominator
+- 07-distribution: .tmp-then-rename atomic write; .tmp deleted on mismatch/error so next launch re-shows first-run flow
 
 ### Roadmap Evolution
 
