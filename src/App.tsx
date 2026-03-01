@@ -66,7 +66,7 @@ function App() {
       setLoaded(true);
     }
 
-    loadSettings();
+    loadSettings().catch((err) => console.error('Failed to load settings:', err));
   }, []);
 
   if (!loaded) {

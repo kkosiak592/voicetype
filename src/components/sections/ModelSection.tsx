@@ -13,7 +13,10 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadModels();
+    loadModels().catch(err => {
+      console.error('Failed to load models:', err);
+      setLoading(false);
+    });
   }, []);
 
   async function loadModels() {
@@ -23,10 +26,14 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
   }
 
   async function handleModelSelect(modelId: string) {
-    onSelectedModelChange(modelId);
-    const store = await getStore();
-    await store.set('selectedModel', modelId);
-    await invoke('set_model', { modelId });
+    try {
+      await invoke('set_model', { modelId });
+      const store = await getStore();
+      await store.set('selectedModel', modelId);
+      onSelectedModelChange(modelId);
+    } catch (err) {
+      console.error('Failed to set model:', err);
+    }
   }
 
   async function handleDownloadComplete(modelId: string) {

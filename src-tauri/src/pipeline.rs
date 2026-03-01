@@ -3,33 +3,44 @@ use tauri::Emitter;
 use tauri::Manager;
 use crate::vad;
 
-pub const IDLE: u8 = 0;
-pub const RECORDING: u8 = 1;
-pub const PROCESSING: u8 = 2;
+/// Type-safe pipeline phase. Stored as a `#[repr(u8)]` enum so it maps cleanly
+/// to the underlying AtomicU8.
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[repr(u8)]
+pub enum Phase {
+    Idle = 0,
+    Recording = 1,
+    Processing = 2,
+}
+
+// Keep public constants for callers that use pipeline::IDLE etc.
+pub const IDLE: Phase = Phase::Idle;
+pub const RECORDING: Phase = Phase::Recording;
+pub const PROCESSING: Phase = Phase::Processing;
 
 /// AtomicU8-backed state machine for the hold-to-talk pipeline.
 ///
 /// Transitions are guarded by compare_exchange to prevent concurrent recordings
 /// or double-starts. Every exit path in run_pipeline must call reset_to_idle().
-pub struct PipelineState(pub AtomicU8);
+pub struct PipelineState(AtomicU8);
 
 impl PipelineState {
     pub fn new() -> Self {
-        PipelineState(AtomicU8::new(IDLE))
+        PipelineState(AtomicU8::new(Phase::Idle as u8))
     }
 
     /// Attempt a CAS transition from `from` -> `to`. Returns true if successful.
     /// Returns false if the current state is not `from` (pipeline is busy).
-    pub fn transition(&self, from: u8, to: u8) -> bool {
+    pub fn transition(&self, from: Phase, to: Phase) -> bool {
         self.0
-            .compare_exchange(from, to, Ordering::SeqCst, Ordering::Relaxed)
+            .compare_exchange(from as u8, to as u8, Ordering::SeqCst, Ordering::Relaxed)
             .is_ok()
     }
 
-    pub fn set(&self, val: u8) {
-        self.0.store(val, Ordering::SeqCst);
+    /// Reset to Idle unconditionally. Used by every exit path in run_pipeline.
+    pub fn reset_to_idle(&self) {
+        self.0.store(Phase::Idle as u8, Ordering::SeqCst);
     }
-
 }
 
 /// Core pipeline orchestration — called from the Released hotkey handler.
@@ -48,10 +59,20 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
     // Lock AudioCaptureMutex, flush+get buffer, then drop guard before any async work.
     let (sample_count, samples) = {
         let audio_mutex = app.state::<crate::audio::AudioCaptureMutex>();
-        let audio = audio_mutex.0.lock().unwrap();
-        let count = audio.flush_and_stop();
-        let buf = audio.get_buffer();
-        (count, buf)
+        let guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
+        match guard.as_ref() {
+            Some(audio) => {
+                let count = audio.flush_and_stop();
+                let buf = audio.get_buffer();
+                (count, buf)
+            }
+            None => {
+                log::error!("Pipeline: no microphone available — cannot process");
+                app.emit_to("pill", "pill-result", "error").ok();
+                reset_to_idle(&app);
+                return;
+            }
+        }
     };
 
     // Cancel any active VAD worker (prevents double-trigger if run_pipeline
@@ -92,7 +113,7 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
     #[cfg(feature = "whisper")]
     let initial_prompt: String = {
         let profile = app.state::<crate::profiles::ActiveProfile>();
-        let guard = profile.0.lock().unwrap();
+        let guard = profile.0.lock().unwrap_or_else(|e| e.into_inner());
         guard.initial_prompt.clone()
     };
 
@@ -102,7 +123,7 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
         // Lock WhisperStateMutex, clone Arc, drop guard before spawn_blocking
         let ctx = {
             let whisper_mutex = app.state::<crate::WhisperStateMutex>();
-            let guard = whisper_mutex.0.lock().unwrap();
+            let guard = whisper_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
             match guard.as_ref() {
                 Some(ctx) => ctx.clone(),
                 None => {
@@ -165,14 +186,14 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
         // Apply corrections (word-level find-and-replace per active profile dictionary)
         let corrected = {
             let engine = app.state::<crate::corrections::CorrectionsState>();
-            let guard = engine.0.lock().unwrap();
+            let guard = engine.0.lock().unwrap_or_else(|e| e.into_inner());
             guard.apply(trimmed)
         };
 
         // Apply ALL CAPS if active profile flag is set
         let formatted = {
             let profile = app.state::<crate::profiles::ActiveProfile>();
-            let guard = profile.0.lock().unwrap();
+            let guard = profile.0.lock().unwrap_or_else(|e| e.into_inner());
             if guard.all_caps { corrected.to_uppercase() } else { corrected }
         };
 
@@ -242,7 +263,7 @@ fn cancel_stale_vad_worker(app: &tauri::AppHandle) {
 /// Called from every exit path in run_pipeline — ensures no stuck states
 /// regardless of error type (Pitfall 3 from RESEARCH.md).
 fn reset_to_idle(app: &tauri::AppHandle) {
-    app.state::<PipelineState>().set(IDLE);
+    app.state::<PipelineState>().reset_to_idle();
     crate::tray::set_tray_state(app, crate::tray::TrayState::Idle);
     if let Some(tray) = app.tray_by_id("tray") {
         let _ = tray.set_tooltip(Some("VoiceType — idle"));

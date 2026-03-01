@@ -17,14 +17,21 @@ export function MicrophoneSection({ selectedMic, onSelectedMicChange }: Micropho
       setDevices(deviceList);
       setLoading(false);
     }
-    loadDevices();
+    loadDevices().catch(err => {
+      console.error('Failed to load devices:', err);
+      setLoading(false);
+    });
   }, []);
 
   async function handleDeviceChange(deviceName: string) {
-    onSelectedMicChange(deviceName);
-    const store = await getStore();
-    await store.set('selectedMic', deviceName);
-    await invoke('set_microphone', { deviceName });
+    try {
+      await invoke('set_microphone', { deviceName });
+      const store = await getStore();
+      await store.set('selectedMic', deviceName);
+      onSelectedMicChange(deviceName);
+    } catch (err) {
+      console.error('Failed to set microphone:', err);
+    }
   }
 
   return (

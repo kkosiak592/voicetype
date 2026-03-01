@@ -99,7 +99,11 @@ unsafe impl Sync for AudioCapture {}
 /// The outer Mutex guards the entire AudioCapture for replacement (mic switch).
 /// The inner Mutex inside AudioCapture guards the audio buffer for the callback.
 /// These two locks serve different purposes and do not nest.
-pub struct AudioCaptureMutex(pub std::sync::Mutex<AudioCapture>);
+///
+/// Wrapped in `Option` so the app can start even when no microphone is available.
+/// Commands that need audio must check for `Some` and return a user-friendly error
+/// if the capture is `None`.
+pub struct AudioCaptureMutex(pub std::sync::Mutex<Option<AudioCapture>>);
 
 // SAFETY: AudioCaptureMutex wraps AudioCapture (which is already Sync via unsafe impl).
 // The Mutex ensures exclusive access for replacement operations.
@@ -258,11 +262,11 @@ impl AudioCapture {
             .unwrap_or(0)
     }
 
-    /// Get a copy of all buffered 16kHz mono samples.
+    /// Take all buffered 16kHz mono samples, leaving the buffer empty.
     pub fn get_buffer(&self) -> Vec<f32> {
         self.buffer
             .lock()
-            .map(|b| b.clone())
+            .map(|mut b| std::mem::take(&mut *b))
             .unwrap_or_default()
     }
 }

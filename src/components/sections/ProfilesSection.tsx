@@ -27,28 +27,42 @@ export function ProfilesSection({ activeProfileId, onActiveProfileChange }: Prof
       setCorrections(correctionMap);
       setLoading(false);
     }
-    loadInitial();
+    loadInitial().catch(err => {
+      console.error('Failed to load profiles:', err);
+      setLoading(false);
+    });
   }, [activeProfileId]);
 
   async function handleProfileSelect(id: string) {
-    onActiveProfileChange(id);
-    const store = await getStore();
-    await store.set('activeProfile', id);
-    // Switch backend profile and reload corrections
-    await invoke('set_active_profile', { profileId: id });
-    const correctionMap = await invoke<Record<string, string>>('get_corrections');
-    setCorrections(correctionMap);
+    try {
+      await invoke('set_active_profile', { profileId: id });
+      const store = await getStore();
+      await store.set('activeProfile', id);
+      const correctionMap = await invoke<Record<string, string>>('get_corrections');
+      setCorrections(correctionMap);
+      onActiveProfileChange(id);
+    } catch (err) {
+      console.error('Failed to switch profile:', err);
+    }
   }
 
   async function handleAllCapsToggle() {
     const next = !allCaps;
-    setAllCaps(next);
-    await invoke('set_all_caps', { enabled: next });
+    try {
+      await invoke('set_all_caps', { enabled: next });
+      setAllCaps(next);
+    } catch (err) {
+      console.error('Failed to toggle ALL CAPS:', err);
+    }
   }
 
   async function handleCorrectionsChange(updated: Record<string, string>) {
-    setCorrections(updated);
-    await invoke('save_corrections', { corrections: updated });
+    try {
+      await invoke('save_corrections', { corrections: updated });
+      setCorrections(updated);
+    } catch (err) {
+      console.error('Failed to save corrections:', err);
+    }
   }
 
   if (loading) {

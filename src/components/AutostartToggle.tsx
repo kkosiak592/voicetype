@@ -10,6 +10,9 @@ export function AutostartToggle() {
     isEnabled().then((val) => {
       setEnabled(val);
       setLoading(false);
+    }).catch(err => {
+      console.error('Failed to check autostart:', err);
+      setLoading(false);
     });
   }, []);
 

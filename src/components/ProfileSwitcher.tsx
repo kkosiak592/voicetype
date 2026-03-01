@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 export interface ProfileInfo {
   id: string;
   name: string;
-  active: boolean;
+  isActive: boolean;
 }
 
 const PROFILE_DESCRIPTIONS: Record<string, string> = {

@@ -70,6 +70,29 @@ use whisper_rs::WhisperContext;
 #[cfg(feature = "whisper")]
 pub struct WhisperStateMutex(pub std::sync::Mutex<Option<Arc<WhisperContext>>>);
 
+/// Cached GPU detection result. Populated once at startup so that
+/// `list_models()` and `check_first_run()` don't re-probe NVML on every call.
+#[cfg(feature = "whisper")]
+pub struct CachedGpuMode(pub transcribe::ModelMode);
+
+/// Read settings.json from the app data directory. Returns empty object on missing/corrupt file.
+fn read_settings(app_handle: &tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let data_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let settings_path = data_dir.join("settings.json");
+    Ok(std::fs::read_to_string(&settings_path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| serde_json::json!({})))
+}
+
+/// Write settings.json to the app data directory (pretty-printed).
+fn write_settings(app_handle: &tauri::AppHandle, json: &serde_json::Value) -> Result<(), String> {
+    let data_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let settings_path = data_dir.join("settings.json");
+    std::fs::write(&settings_path, serde_json::to_string_pretty(json).unwrap())
+        .map_err(|e| e.to_string())
+}
+
 /// Read the saved hotkey from settings.json in the app data directory.
 /// Returns None on first launch, file missing, or parse error — callers fall back to default.
 fn read_saved_hotkey(app: &tauri::App) -> Option<String> {
@@ -117,16 +140,10 @@ fn set_recording_mode(app: tauri::AppHandle, mode: String) -> Result<(), String>
         "toggle" => recording_mode.set(Mode::Toggle),
         _ => recording_mode.set(Mode::HoldToTalk),
     }
-    // Persist to settings.json (merge into existing JSON — same pattern as hotkey)
-    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let settings_path = data_dir.join("settings.json");
-    let mut json: serde_json::Value = std::fs::read_to_string(&settings_path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| serde_json::json!({}));
+    // Persist to settings.json
+    let mut json = read_settings(&app)?;
     json["recording_mode"] = serde_json::Value::String(mode);
-    std::fs::write(&settings_path, serde_json::to_string_pretty(&json).unwrap())
-        .map_err(|e| e.to_string())?;
+    write_settings(&app, &json)?;
     log::info!("Recording mode set to: {}", json["recording_mode"]);
     Ok(())
 }
@@ -137,6 +154,133 @@ fn get_recording_mode(app: tauri::AppHandle) -> String {
     match mode.get() {
         Mode::Toggle => "toggle".to_string(),
         Mode::HoldToTalk => "hold".to_string(),
+    }
+}
+
+/// Shared hotkey handler body — called from both setup() and rebind_hotkey() handlers.
+fn handle_shortcut(app: &tauri::AppHandle, event: &tauri_plugin_global_shortcut::ShortcutEvent) {
+    use tauri_plugin_global_shortcut::ShortcutState;
+    use std::sync::atomic::Ordering;
+    use tauri::Emitter;
+
+    let pipeline = app.state::<pipeline::PipelineState>();
+
+    match event.state {
+        ShortcutState::Pressed => {
+            let mode = app.state::<RecordingMode>().get();
+
+            match mode {
+                Mode::HoldToTalk => {
+                    if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
+                        let audio_mutex = app.state::<audio::AudioCaptureMutex>();
+                        let guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
+                        let audio = match guard.as_ref() {
+                            Some(a) => a,
+                            None => {
+                                log::error!("No microphone — cannot record");
+                                pipeline.reset_to_idle();
+                                return;
+                            }
+                        };
+                        audio.clear_buffer();
+                        audio.recording.store(true, Ordering::Relaxed);
+                        let buffer_clone = audio.buffer.clone();
+                        drop(guard);
+                        tray::set_tray_state(app, tray::TrayState::Recording);
+                        pill::show_pill(app);
+                        app.emit_to("pill", "pill-state", "recording").ok();
+
+                        let stream_active = app.state::<LevelStreamActive>();
+                        stream_active.0.store(true, Ordering::Relaxed);
+                        pill::start_level_stream(
+                            app.clone(),
+                            buffer_clone,
+                            stream_active.0.clone(),
+                        );
+
+                        log::info!("Pipeline: IDLE -> RECORDING (hold-to-talk)");
+                    }
+                }
+                Mode::Toggle => {
+                    if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
+                        let audio_mutex = app.state::<audio::AudioCaptureMutex>();
+                        let guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
+                        let audio = match guard.as_ref() {
+                            Some(a) => a,
+                            None => {
+                                log::error!("No microphone — cannot record (toggle)");
+                                pipeline.reset_to_idle();
+                                return;
+                            }
+                        };
+                        audio.clear_buffer();
+                        audio.recording.store(true, Ordering::Relaxed);
+                        let buffer_clone = audio.buffer.clone();
+                        drop(guard);
+                        tray::set_tray_state(app, tray::TrayState::Recording);
+                        pill::show_pill(app);
+                        app.emit_to("pill", "pill-state", "recording").ok();
+                        let stream_active = app.state::<LevelStreamActive>();
+                        stream_active.0.store(true, Ordering::Relaxed);
+                        pill::start_level_stream(
+                            app.clone(),
+                            buffer_clone.clone(),
+                            stream_active.0.clone(),
+                        );
+
+                        let vad_handle = vad::spawn_vad_worker(
+                            app.clone(),
+                            buffer_clone,
+                        );
+                        let vad_state = app.state::<VadWorkerState>();
+                        if let Ok(mut guard) = vad_state.0.lock() {
+                            *guard = Some(vad_handle);
+                        }
+
+                        log::info!("Pipeline: IDLE -> RECORDING (toggle mode, VAD worker started)");
+                    } else if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
+                        let vad_state = app.state::<VadWorkerState>();
+                        if let Ok(mut guard) = vad_state.0.lock() {
+                            if let Some(mut handle) = guard.take() {
+                                handle.cancel();
+                            }
+                        }
+
+                        let stream_active = app.state::<LevelStreamActive>();
+                        stream_active.0.store(false, Ordering::Relaxed);
+                        app.emit_to("pill", "pill-state", "processing").ok();
+                        tray::set_tray_state(app, tray::TrayState::Processing);
+                        log::info!("Pipeline: RECORDING -> PROCESSING (toggle mode, second tap)");
+
+                        let app_handle = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            pipeline::run_pipeline(app_handle).await;
+                        });
+                    }
+                }
+            }
+        }
+        ShortcutState::Released => {
+            let mode = app.state::<RecordingMode>().get();
+            match mode {
+                Mode::HoldToTalk => {
+                    if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
+                        let stream_active = app.state::<LevelStreamActive>();
+                        stream_active.0.store(false, Ordering::Relaxed);
+                        app.emit_to("pill", "pill-state", "processing").ok();
+                        tray::set_tray_state(app, tray::TrayState::Processing);
+                        log::info!("Pipeline: RECORDING -> PROCESSING");
+                        let app_handle = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            pipeline::run_pipeline(app_handle).await;
+                        });
+                    }
+                }
+                Mode::Toggle => {
+                    // Toggle mode: release is ignored — VAD or second tap stops
+                }
+            }
+        }
     }
 }
 
@@ -151,128 +295,7 @@ fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<
     }
 
     gs.on_shortcut(new_key.as_str(), |app, _shortcut, event| {
-        use tauri_plugin_global_shortcut::ShortcutState;
-        use std::sync::atomic::Ordering;
-        use tauri::Emitter;
-
-        let pipeline = app.state::<pipeline::PipelineState>();
-
-        match event.state {
-            ShortcutState::Pressed => {
-                let mode = app.state::<RecordingMode>().get();
-
-                match mode {
-                    Mode::HoldToTalk => {
-                        // Existing behavior: start on press (release stops)
-                        if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
-                            let audio_mutex = app.state::<audio::AudioCaptureMutex>();
-                            let audio = audio_mutex.0.lock().unwrap();
-                            audio.clear_buffer();
-                            audio.recording.store(true, Ordering::Relaxed);
-                            let buffer_clone = audio.buffer.clone();
-                            drop(audio);
-                            tray::set_tray_state(app, tray::TrayState::Recording);
-
-                            // Pill: show and set recording state
-                            pill::show_pill(&app);
-                            app.emit_to("pill", "pill-state", "recording").ok();
-
-                            // Start RMS level stream
-                            let stream_active = app.state::<LevelStreamActive>();
-                            stream_active.0.store(true, Ordering::Relaxed);
-                            pill::start_level_stream(
-                                app.clone(),
-                                buffer_clone,
-                                stream_active.0.clone(),
-                            );
-
-                            log::info!("Pipeline: IDLE -> RECORDING (hold-to-talk, rebound hotkey)");
-                        }
-                    }
-                    Mode::Toggle => {
-                        if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
-                            // First tap: start recording
-                            let audio_mutex = app.state::<audio::AudioCaptureMutex>();
-                            let audio = audio_mutex.0.lock().unwrap();
-                            audio.clear_buffer();
-                            audio.recording.store(true, Ordering::Relaxed);
-                            let buffer_clone = audio.buffer.clone();
-                            drop(audio);
-                            tray::set_tray_state(app, tray::TrayState::Recording);
-                            pill::show_pill(&app);
-                            app.emit_to("pill", "pill-state", "recording").ok();
-                            let stream_active = app.state::<LevelStreamActive>();
-                            stream_active.0.store(true, Ordering::Relaxed);
-                            pill::start_level_stream(
-                                app.clone(),
-                                buffer_clone.clone(),
-                                stream_active.0.clone(),
-                            );
-
-                            // Spawn VAD worker for auto-stop
-                            let vad_handle = vad::spawn_vad_worker(
-                                app.clone(),
-                                buffer_clone,
-                            );
-                            let vad_state = app.state::<VadWorkerState>();
-                            if let Ok(mut guard) = vad_state.0.lock() {
-                                *guard = Some(vad_handle);
-                            }
-
-                            log::info!("Pipeline: IDLE -> RECORDING (toggle mode, VAD worker started, rebound hotkey)");
-                        } else if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
-                            // Second tap: instant hard stop — go straight to transcription
-                            // Cancel VAD worker first
-                            let vad_state = app.state::<VadWorkerState>();
-                            if let Ok(mut guard) = vad_state.0.lock() {
-                                if let Some(mut handle) = guard.take() {
-                                    handle.cancel();
-                                }
-                            }
-
-                            // Stop recording and level stream
-                            let stream_active = app.state::<LevelStreamActive>();
-                            stream_active.0.store(false, Ordering::Relaxed);
-                            app.emit_to("pill", "pill-state", "processing").ok();
-                            tray::set_tray_state(app, tray::TrayState::Processing);
-                            log::info!("Pipeline: RECORDING -> PROCESSING (toggle mode, second tap, rebound hotkey)");
-
-                            let app_handle = app.clone();
-                            tauri::async_runtime::spawn(async move {
-                                pipeline::run_pipeline(app_handle).await;
-                            });
-                        }
-                        // If PROCESSING, ignore tap (CAS prevents double-execution)
-                    }
-                }
-            }
-            ShortcutState::Released => {
-                let mode = app.state::<RecordingMode>().get();
-                match mode {
-                    Mode::HoldToTalk => {
-                        // Existing behavior: release stops recording
-                        if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
-                            // Stop RMS level stream BEFORE transitioning to processing
-                            let stream_active = app.state::<LevelStreamActive>();
-                            stream_active.0.store(false, Ordering::Relaxed);
-
-                            // Pill: switch to processing state (bars stop, animated border starts)
-                            app.emit_to("pill", "pill-state", "processing").ok();
-
-                            tray::set_tray_state(app, tray::TrayState::Processing);
-                            log::info!("Pipeline: RECORDING -> PROCESSING (hold-to-talk release, rebound hotkey)");
-                            let app_handle = app.clone();
-                            tauri::async_runtime::spawn(async move {
-                                pipeline::run_pipeline(app_handle).await;
-                            });
-                        }
-                    }
-                    Mode::Toggle => {
-                        // Toggle mode: release is ignored — VAD or second tap stops
-                    }
-                }
-            }
-        }
+        handle_shortcut(app, &event);
     })
     .map_err(|e| e.to_string())?;
 
@@ -284,9 +307,10 @@ fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<
 /// Audio captured after this call is accumulated in memory at 16kHz mono.
 #[tauri::command]
 fn start_recording(state: tauri::State<'_, audio::AudioCaptureMutex>) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
-    guard.clear_buffer();
-    guard.recording.store(true, std::sync::atomic::Ordering::Relaxed);
+    let guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+    let audio = guard.as_ref().ok_or("No microphone available")?;
+    audio.clear_buffer();
+    audio.recording.store(true, std::sync::atomic::Ordering::Relaxed);
     log::info!("Recording started");
     Ok(())
 }
@@ -295,8 +319,9 @@ fn start_recording(state: tauri::State<'_, audio::AudioCaptureMutex>) -> Result<
 /// and returns the number of 16kHz samples captured.
 #[tauri::command]
 fn stop_recording(state: tauri::State<'_, audio::AudioCaptureMutex>) -> Result<usize, String> {
-    let guard = state.0.lock().unwrap();
-    let n = guard.flush_and_stop();
+    let guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+    let audio = guard.as_ref().ok_or("No microphone available")?;
+    let n = audio.flush_and_stop();
     let seconds = n as f32 / 16000.0;
     log::info!("Recording stopped: {} samples ({:.1}s)", n, seconds);
     Ok(n)
@@ -307,7 +332,9 @@ fn stop_recording(state: tauri::State<'_, audio::AudioCaptureMutex>) -> Result<u
 /// Returns the file path on success.
 #[tauri::command]
 fn save_test_wav(app: tauri::AppHandle, state: tauri::State<'_, audio::AudioCaptureMutex>) -> Result<String, String> {
-    let samples = state.0.lock().unwrap().get_buffer();
+    let guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+    let audio = guard.as_ref().ok_or("No microphone available")?;
+    let samples = audio.get_buffer();
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let wav_dir = data_dir.join("test-fixtures");
     std::fs::create_dir_all(&wav_dir).map_err(|e| e.to_string())?;
@@ -400,6 +427,7 @@ fn read_saved_all_caps(app: &tauri::App, profile_id: &str) -> bool {
 
 /// Profile info returned by get_profiles command — lightweight, no corrections dictionary.
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ProfileInfo {
     id: String,
     name: String,
@@ -408,20 +436,20 @@ struct ProfileInfo {
 
 /// Returns the list of available profiles with their IDs, names, and active flag.
 #[tauri::command]
-fn get_profiles(app: tauri::AppHandle) -> Vec<ProfileInfo> {
+fn get_profiles(app: tauri::AppHandle) -> Result<Vec<ProfileInfo>, String> {
     let active_id = {
         let state = app.state::<profiles::ActiveProfile>();
-        let guard = state.0.lock().unwrap();
+        let guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
         guard.id.clone()
     };
-    profiles::get_all_profiles()
+    Ok(profiles::get_all_profiles()
         .into_iter()
         .map(|p| ProfileInfo {
             is_active: p.id == active_id,
             id: p.id,
             name: p.name,
         })
-        .collect()
+        .collect())
 }
 
 /// Switch the active profile by ID. Rebuilds the CorrectionsEngine from the new profile's
@@ -437,12 +465,7 @@ fn set_active_profile(app: tauri::AppHandle, profile_id: String) -> Result<(), S
     };
 
     // Merge saved user corrections (user overrides defaults)
-    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let settings_path = data_dir.join("settings.json");
-    let mut json: serde_json::Value = std::fs::read_to_string(&settings_path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| serde_json::json!({}));
+    let mut json = read_settings(&app)?;
 
     let user_corrections_key = format!("corrections.{}", profile_id);
     if let Some(user_map) = json.get(&user_corrections_key).and_then(|v| v.as_object()) {
@@ -465,19 +488,18 @@ fn set_active_profile(app: tauri::AppHandle, profile_id: String) -> Result<(), S
     // Update managed states
     {
         let profile_state = app.state::<profiles::ActiveProfile>();
-        let mut guard = profile_state.0.lock().unwrap();
+        let mut guard = profile_state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
         *guard = new_profile;
     }
     {
         let corrections_state = app.state::<corrections::CorrectionsState>();
-        let mut guard = corrections_state.0.lock().unwrap();
+        let mut guard = corrections_state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
         *guard = engine;
     }
 
     // Persist active profile ID
     json["active_profile_id"] = serde_json::Value::String(profile_id.clone());
-    std::fs::write(&settings_path, serde_json::to_string_pretty(&json).unwrap())
-        .map_err(|e| e.to_string())?;
+    write_settings(&app, &json)?;
 
     log::info!("Active profile set to: {}", profile_id);
     Ok(())
@@ -485,10 +507,10 @@ fn set_active_profile(app: tauri::AppHandle, profile_id: String) -> Result<(), S
 
 /// Returns the current active profile's corrections dictionary (for the UI editor).
 #[tauri::command]
-fn get_corrections(app: tauri::AppHandle) -> std::collections::HashMap<String, String> {
+fn get_corrections(app: tauri::AppHandle) -> Result<std::collections::HashMap<String, String>, String> {
     let state = app.state::<profiles::ActiveProfile>();
-    let guard = state.0.lock().unwrap();
-    guard.corrections.clone()
+    let guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+    Ok(guard.corrections.clone())
 }
 
 /// Save user corrections for the active profile. Merges with defaults and rebuilds engine.
@@ -497,8 +519,14 @@ fn get_corrections(app: tauri::AppHandle) -> std::collections::HashMap<String, S
 fn save_corrections(app: tauri::AppHandle, corrections: std::collections::HashMap<String, String>) -> Result<(), String> {
     let profile_id = {
         let state = app.state::<profiles::ActiveProfile>();
-        let mut guard = state.0.lock().unwrap();
-        // Merge user corrections into profile
+        let mut guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+        // Rebuild corrections from defaults + user map so deleted keys are removed.
+        let defaults = match guard.id.as_str() {
+            "structural-engineering" => profiles::structural_engineering_profile().corrections,
+            _ => profiles::general_profile().corrections,
+        };
+        guard.corrections.clear();
+        guard.corrections.extend(defaults);
         guard.corrections.extend(corrections.clone());
         guard.id.clone()
     };
@@ -506,27 +534,20 @@ fn save_corrections(app: tauri::AppHandle, corrections: std::collections::HashMa
     // Rebuild engine from updated corrections
     let engine = {
         let state = app.state::<profiles::ActiveProfile>();
-        let guard = state.0.lock().unwrap();
+        let guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
         corrections::CorrectionsEngine::from_map(&guard.corrections)?
     };
     {
         let corrections_state = app.state::<corrections::CorrectionsState>();
-        let mut guard = corrections_state.0.lock().unwrap();
+        let mut guard = corrections_state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
         *guard = engine;
     }
 
     // Persist user corrections to settings.json
-    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let settings_path = data_dir.join("settings.json");
-    let mut json: serde_json::Value = std::fs::read_to_string(&settings_path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| serde_json::json!({}));
-
+    let mut json = read_settings(&app)?;
     let key = format!("corrections.{}", profile_id);
     json[&key] = serde_json::to_value(&corrections).unwrap();
-    std::fs::write(&settings_path, serde_json::to_string_pretty(&json).unwrap())
-        .map_err(|e| e.to_string())?;
+    write_settings(&app, &json)?;
 
     log::info!("Corrections saved for profile '{}'", profile_id);
     Ok(())
@@ -537,22 +558,15 @@ fn save_corrections(app: tauri::AppHandle, corrections: std::collections::HashMa
 fn set_all_caps(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     let profile_id = {
         let state = app.state::<profiles::ActiveProfile>();
-        let mut guard = state.0.lock().unwrap();
+        let mut guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
         guard.all_caps = enabled;
         guard.id.clone()
     };
 
-    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let settings_path = data_dir.join("settings.json");
-    let mut json: serde_json::Value = std::fs::read_to_string(&settings_path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| serde_json::json!({}));
-
+    let mut json = read_settings(&app)?;
     let key = format!("profiles.{}.all_caps", profile_id);
     json[&key] = serde_json::Value::Bool(enabled);
-    std::fs::write(&settings_path, serde_json::to_string_pretty(&json).unwrap())
-        .map_err(|e| e.to_string())?;
+    write_settings(&app, &json)?;
 
     log::info!("ALL CAPS set to {} for profile '{}'", enabled, profile_id);
     Ok(())
@@ -617,20 +631,14 @@ fn set_microphone(app: tauri::AppHandle, device_name: String) -> Result<(), Stri
     // Replace the inner AudioCapture — old stream drops, new one starts
     {
         let audio_mutex = app.state::<audio::AudioCaptureMutex>();
-        let mut guard = audio_mutex.0.lock().unwrap();
-        *guard = new_capture;
+        let mut guard = audio_mutex.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+        *guard = Some(new_capture);
     }
 
     // Persist to settings.json
-    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let settings_path = data_dir.join("settings.json");
-    let mut json: serde_json::Value = std::fs::read_to_string(&settings_path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| serde_json::json!({}));
+    let mut json = read_settings(&app)?;
     json["microphone_device"] = serde_json::Value::String(device_name.clone());
-    std::fs::write(&settings_path, serde_json::to_string_pretty(&json).unwrap())
-        .map_err(|e| e.to_string())?;
+    write_settings(&app, &json)?;
 
     log::info!("Microphone switched to: '{}'", device_name);
     Ok(())
@@ -667,6 +675,7 @@ fn model_id_to_path(model_id: &str) -> Result<std::path::PathBuf, String> {
 /// Info about a whisper model including availability and GPU recommendation.
 #[cfg(feature = "whisper")]
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ModelInfo {
     id: String,
     name: String,
@@ -678,9 +687,10 @@ struct ModelInfo {
 /// List available whisper models with download status and GPU recommendation.
 #[cfg(feature = "whisper")]
 #[tauri::command]
-fn list_models() -> Result<Vec<ModelInfo>, String> {
-    use crate::transcribe::{detect_gpu, models_dir, ModelMode};
-    let gpu_mode = matches!(detect_gpu(), ModelMode::Gpu);
+fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
+    use crate::transcribe::{models_dir, ModelMode};
+    let cached = app.state::<CachedGpuMode>();
+    let gpu_mode = matches!(cached.0, ModelMode::Gpu);
     let dir = models_dir();
 
     Ok(vec![
@@ -718,9 +728,10 @@ struct FirstRunStatus {
 /// Also surfaces GPU detection so the frontend can pre-select the appropriate model.
 #[cfg(feature = "whisper")]
 #[tauri::command]
-fn check_first_run() -> FirstRunStatus {
-    use crate::transcribe::{detect_gpu, models_dir, ModelMode};
-    let gpu_mode = matches!(detect_gpu(), ModelMode::Gpu);
+fn check_first_run(app: tauri::AppHandle) -> FirstRunStatus {
+    use crate::transcribe::{models_dir, ModelMode};
+    let cached = app.state::<CachedGpuMode>();
+    let gpu_mode = matches!(cached.0, ModelMode::Gpu);
     let dir = models_dir();
     let large_exists = dir.join("ggml-large-v3-turbo-q5_0.bin").exists();
     let small_exists = dir.join("ggml-small.en-q5_1.bin").exists();
@@ -780,20 +791,14 @@ async fn set_model(app: tauri::AppHandle, model_id: String) -> Result<(), String
     // Replace WhisperContext in managed state
     {
         let whisper_mutex = app.state::<WhisperStateMutex>();
-        let mut guard = whisper_mutex.0.lock().unwrap();
+        let mut guard = whisper_mutex.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
         *guard = Some(Arc::new(new_ctx));
     }
 
     // Persist model_id to settings.json
-    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let settings_path = data_dir.join("settings.json");
-    let mut json: serde_json::Value = std::fs::read_to_string(&settings_path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| serde_json::json!({}));
+    let mut json = read_settings(&app)?;
     json["whisper_model_id"] = serde_json::Value::String(model_id_clone.clone());
-    std::fs::write(&settings_path, serde_json::to_string_pretty(&json).unwrap())
-        .map_err(|e| e.to_string())?;
+    write_settings(&app, &json)?;
 
     log::info!("Whisper model switched to: '{}'", model_id_clone);
     Ok(())
@@ -804,6 +809,7 @@ async fn set_model(app: tauri::AppHandle, model_id: String) -> Result<(), String
 /// Supports float and integer WAV formats. Downmixes multi-channel audio to mono.
 /// Shared by transcribe_test_file and force_cpu_transcribe.
 #[cfg(feature = "whisper")]
+#[cfg(debug_assertions)]
 fn read_wav_to_f32(path: &str) -> Result<(Vec<f32>, u32), String> {
     let mut reader = hound::WavReader::open(path)
         .map_err(|e| format!("Failed to open WAV file '{}': {}", path, e))?;
@@ -864,6 +870,7 @@ fn read_wav_to_f32(path: &str) -> Result<(Vec<f32>, u32), String> {
 ///
 /// Only available when compiled with the "whisper" feature flag.
 #[cfg(feature = "whisper")]
+#[cfg(debug_assertions)]
 #[tauri::command]
 async fn transcribe_test_file(
     app: tauri::AppHandle,
@@ -876,7 +883,7 @@ async fn transcribe_test_file(
     // Get the WhisperContext from managed state — lock, clone Arc, drop guard before blocking work
     let ctx = {
         let state = app.state::<WhisperStateMutex>();
-        let guard = state.0.lock().unwrap();
+        let guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
         match guard.as_ref() {
             Some(ctx) => Arc::clone(ctx),
             None => {
@@ -915,6 +922,7 @@ async fn transcribe_test_file(
 /// Only available when compiled with the "whisper" feature flag.
 /// Phase 2 verification command — will be removed or hidden in later phases.
 #[cfg(feature = "whisper")]
+#[cfg(debug_assertions)]
 #[tauri::command]
 async fn force_cpu_transcribe(path: String) -> Result<String, String> {
     use std::time::Instant;
@@ -958,18 +966,36 @@ pub fn run() {
     )
     .init();
 
-    tauri::Builder::default()
+    // Cache GPU detection BEFORE Builder::run() — Tauri creates webviews during
+    // run() and the webview2 COM init pumps the Win32 message loop, which lets
+    // the frontend call check_first_run/list_models before setup() even fires.
+    #[cfg(feature = "whisper")]
+    let cached_gpu = {
+        let mode = transcribe::detect_gpu();
+        log::info!("GPU detection cached: {:?}", mode);
+        mode
+    };
+
+    let mut builder = tauri::Builder::default()
         // single-instance MUST be registered first (before setup)
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // Second instance launched — show and focus existing settings window
             if let Some(w) = app.get_webview_window("settings") {
-                w.show().unwrap();
-                w.set_focus().unwrap();
+                let _ = w.show();
+                let _ = w.set_focus();
             }
         }))
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_autostart::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![
+        .plugin(tauri_plugin_autostart::Builder::new().build());
+
+    // GPU cache MUST be registered on Builder (before .run()) because webview2
+    // COM init pumps Win32 messages, allowing frontend IPC before setup() runs.
+    #[cfg(feature = "whisper")]
+    {
+        builder = builder.manage(CachedGpuMode(cached_gpu));
+    }
+
+    builder.invoke_handler(tauri::generate_handler![
             rebind_hotkey,
             set_recording_mode,
             get_recording_mode,
@@ -991,9 +1017,9 @@ pub fn run() {
             list_models,
             #[cfg(feature = "whisper")]
             set_model,
-            #[cfg(feature = "whisper")]
+            #[cfg(all(feature = "whisper", debug_assertions))]
             transcribe_test_file,
-            #[cfg(feature = "whisper")]
+            #[cfg(all(feature = "whisper", debug_assertions))]
             force_cpu_transcribe,
         ])
         .setup(|app| {
@@ -1066,128 +1092,7 @@ pub fn run() {
                 tauri_plugin_global_shortcut::Builder::new()
                     .with_shortcuts([hotkey.as_str()])?
                     .with_handler(|app, _shortcut, event| {
-                        use tauri_plugin_global_shortcut::ShortcutState;
-                        use std::sync::atomic::Ordering;
-                        use tauri::Emitter;
-
-                        let pipeline = app.state::<pipeline::PipelineState>();
-
-                        match event.state {
-                            ShortcutState::Pressed => {
-                                let mode = app.state::<RecordingMode>().get();
-
-                                match mode {
-                                    Mode::HoldToTalk => {
-                                        // Existing behavior: start on press (release stops)
-                                        if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
-                                            let audio_mutex = app.state::<audio::AudioCaptureMutex>();
-                                            let audio = audio_mutex.0.lock().unwrap();
-                                            audio.clear_buffer();
-                                            audio.recording.store(true, Ordering::Relaxed);
-                                            let buffer_clone = audio.buffer.clone();
-                                            drop(audio);
-                                            tray::set_tray_state(app, tray::TrayState::Recording);
-
-                                            // Pill: show and set recording state
-                                            pill::show_pill(&app);
-                                            app.emit_to("pill", "pill-state", "recording").ok();
-
-                                            // Start RMS level stream
-                                            let stream_active = app.state::<LevelStreamActive>();
-                                            stream_active.0.store(true, Ordering::Relaxed);
-                                            pill::start_level_stream(
-                                                app.clone(),
-                                                buffer_clone,
-                                                stream_active.0.clone(),
-                                            );
-
-                                            log::info!("Pipeline: IDLE -> RECORDING (hold-to-talk)");
-                                        }
-                                    }
-                                    Mode::Toggle => {
-                                        if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
-                                            // First tap: start recording
-                                            let audio_mutex = app.state::<audio::AudioCaptureMutex>();
-                                            let audio = audio_mutex.0.lock().unwrap();
-                                            audio.clear_buffer();
-                                            audio.recording.store(true, Ordering::Relaxed);
-                                            let buffer_clone = audio.buffer.clone();
-                                            drop(audio);
-                                            tray::set_tray_state(app, tray::TrayState::Recording);
-                                            pill::show_pill(&app);
-                                            app.emit_to("pill", "pill-state", "recording").ok();
-                                            let stream_active = app.state::<LevelStreamActive>();
-                                            stream_active.0.store(true, Ordering::Relaxed);
-                                            pill::start_level_stream(
-                                                app.clone(),
-                                                buffer_clone.clone(),
-                                                stream_active.0.clone(),
-                                            );
-
-                                            // Spawn VAD worker for auto-stop
-                                            let vad_handle = vad::spawn_vad_worker(
-                                                app.clone(),
-                                                buffer_clone,
-                                            );
-                                            let vad_state = app.state::<VadWorkerState>();
-                                            if let Ok(mut guard) = vad_state.0.lock() {
-                                                *guard = Some(vad_handle);
-                                            }
-
-                                            log::info!("Pipeline: IDLE -> RECORDING (toggle mode, VAD worker started)");
-                                        } else if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
-                                            // Second tap: instant hard stop — go straight to transcription
-                                            // Cancel VAD worker first (prevents double-trigger)
-                                            let vad_state = app.state::<VadWorkerState>();
-                                            if let Ok(mut guard) = vad_state.0.lock() {
-                                                if let Some(mut handle) = guard.take() {
-                                                    handle.cancel();
-                                                }
-                                            }
-
-                                            // Stop recording and level stream
-                                            let stream_active = app.state::<LevelStreamActive>();
-                                            stream_active.0.store(false, Ordering::Relaxed);
-                                            app.emit_to("pill", "pill-state", "processing").ok();
-                                            tray::set_tray_state(app, tray::TrayState::Processing);
-                                            log::info!("Pipeline: RECORDING -> PROCESSING (toggle mode, second tap)");
-
-                                            let app_handle = app.clone();
-                                            tauri::async_runtime::spawn(async move {
-                                                pipeline::run_pipeline(app_handle).await;
-                                            });
-                                        }
-                                        // If PROCESSING, ignore tap (CAS prevents double-execution)
-                                    }
-                                }
-                            }
-                            ShortcutState::Released => {
-                                let mode = app.state::<RecordingMode>().get();
-                                match mode {
-                                    Mode::HoldToTalk => {
-                                        // Only fire pipeline if we were actually recording
-                                        if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
-                                            // Stop RMS level stream BEFORE transitioning to processing
-                                            let stream_active = app.state::<LevelStreamActive>();
-                                            stream_active.0.store(false, Ordering::Relaxed);
-
-                                            // Pill: switch to processing state (bars stop, animated border starts)
-                                            app.emit_to("pill", "pill-state", "processing").ok();
-
-                                            tray::set_tray_state(app, tray::TrayState::Processing);
-                                            log::info!("Pipeline: RECORDING -> PROCESSING");
-                                            let app_handle = app.clone();
-                                            tauri::async_runtime::spawn(async move {
-                                                pipeline::run_pipeline(app_handle).await;
-                                            });
-                                        }
-                                    }
-                                    Mode::Toggle => {
-                                        // Toggle mode: release is ignored — VAD or second tap stops
-                                    }
-                                }
-                            }
-                        }
+                        handle_shortcut(app, &event);
                     })
                     .build(),
             )?;
@@ -1219,17 +1124,12 @@ pub fn run() {
             match capture_result {
                 Ok(capture) => {
                     log::info!("Audio capture initialized successfully");
-                    app.manage(audio::AudioCaptureMutex(std::sync::Mutex::new(capture)));
+                    app.manage(audio::AudioCaptureMutex(std::sync::Mutex::new(Some(capture))));
                 }
                 Err(e) => {
                     log::error!("Audio capture failed to initialize: {} — recording commands will not function", e);
-                    // Register a dummy capture — no device, but state type is required for commands
-                    // Rather than crashing, we skip manage() and let commands fail gracefully.
-                    // AudioCaptureMutex must still be registered for Tauri state to work.
-                    // Use a dummy path: if stream fails, we cannot create AudioCapture.
-                    // Best approach: log and skip manage; commands will panic on missing state.
-                    // This matches original behavior (no AudioCapture managed = commands error).
-                    log::warn!("Audio state not registered — start_recording/stop_recording will fail");
+                    app.manage(audio::AudioCaptureMutex(std::sync::Mutex::new(None)));
+                    log::warn!("Audio state registered as None — start_recording/stop_recording will return errors");
                 }
             }
 
@@ -1273,8 +1173,8 @@ pub fn run() {
 
                 // If saved model didn't load, fall back to GPU auto-detection
                 let whisper_ctx = if whisper_ctx.is_none() {
-                    let mode = transcribe::detect_gpu();
-                    log::info!("Inference mode selected (auto-detect): {:?}", mode);
+                    let mode = app.state::<CachedGpuMode>().0.clone();
+                    log::info!("Inference mode selected (cached): {:?}", mode);
                     match transcribe::resolve_model_path(&mode) {
                         Ok(model_path) => {
                             let model_str = model_path.to_string_lossy().to_string();
