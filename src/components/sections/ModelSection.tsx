@@ -49,7 +49,20 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
 
   async function handleModelSelect(modelId: string) {
     try {
-      await invoke('set_model', { modelId });
+      // Determine the correct engine based on the selected model
+      const engine = modelId === 'parakeet-tdt-v2' ? 'parakeet' : 'whisper';
+
+      // Switch engine if needed
+      if (engine !== currentEngine) {
+        await invoke('set_engine', { engine });
+        setCurrentEngine(engine);
+      }
+
+      // For Whisper models, also call set_model
+      if (engine === 'whisper') {
+        await invoke('set_model', { modelId });
+      }
+
       const store = await getStore();
       await store.set('selectedModel', modelId);
       onSelectedModelChange(modelId);
@@ -61,17 +74,8 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
   async function handleDownloadComplete(modelId: string) {
     const modelList = await invoke<ModelInfo[]>('list_models');
     setModels(modelList);
-    // Auto-select the freshly downloaded model
+    // Auto-select the freshly downloaded model with engine-aware logic
     await handleModelSelect(modelId);
-  }
-
-  async function handleEngineChange(engine: string) {
-    try {
-      await invoke('set_engine', { engine });
-      setCurrentEngine(engine);
-    } catch (err) {
-      console.error('Failed to set engine:', err);
-    }
   }
 
   async function handleParakeetDownload() {
@@ -80,7 +84,7 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
     setParakeetError(null);
 
     const onEvent = new Channel<DownloadEvent>();
-    onEvent.onmessage = (msg) => {
+    onEvent.onmessage = async (msg) => {
       switch (msg.event) {
         case 'started':
           break;
@@ -94,8 +98,9 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
         }
         case 'finished':
           setParakeetDownloading(false);
-          // Refresh model list so parakeetDownloaded becomes true
-          loadModels().catch(console.error);
+          // Refresh model list then auto-select Parakeet (implicitly sets engine)
+          await loadModels();
+          await handleModelSelect('parakeet-tdt-v2');
           break;
         case 'error':
           setParakeetError(msg.data.message);
@@ -112,12 +117,6 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
     }
   }
 
-  const parakeetModel = models.find((m) => m.id === 'parakeet-tdt-v2');
-  const parakeetDownloaded = parakeetModel?.downloaded ?? false;
-  const whisperModels = models.filter((m) => m.id !== 'parakeet-tdt-v2');
-  // GPU is present if any model with gpuOnly characteristics exists (large-v3-turbo or parakeet-tdt-v2)
-  const hasGpu = models.some((m) => m.id === 'large-v3-turbo' || m.id === 'parakeet-tdt-v2');
-
   return (
     <div>
       <h1 className="mb-1 text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
@@ -127,82 +126,23 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
         Select the transcription model. Additional models can be downloaded here.
       </p>
 
-      {/* Engine selector — GPU users only */}
-      {hasGpu && (
-        <div className="mb-6">
-          <h2 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-            Transcription Engine
-          </h2>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleEngineChange('whisper')}
-              className={`rounded-lg border-2 px-4 py-2 text-sm font-medium transition-colors ${
-                currentEngine === 'whisper'
-                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-950 dark:text-indigo-300'
-                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400'
-              }`}
-            >
-              Whisper
-              <span className="ml-1 text-xs text-gray-400">(Accurate)</span>
-            </button>
-            <button
-              onClick={() => handleEngineChange('parakeet')}
-              disabled={!parakeetDownloaded}
-              className={`rounded-lg border-2 px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                currentEngine === 'parakeet'
-                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-950 dark:text-indigo-300'
-                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400'
-              }`}
-            >
-              Parakeet TDT
-              <span className="ml-1 text-xs text-gray-400">(Fast)</span>
-            </button>
-          </div>
-          {currentEngine === 'parakeet' && (
-            <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
-              Parakeet doesn't support vocabulary prompting. Your corrections dictionary still applies.
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Parakeet download prompt — GPU users who don't have it yet */}
-      {hasGpu && !parakeetDownloaded && (
-        <div className="mb-4 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 p-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Parakeet TDT</p>
-              <p className="text-xs text-gray-400">661 MB — Download to enable fast engine</p>
-            </div>
-            <button
-              onClick={handleParakeetDownload}
-              disabled={parakeetDownloading}
-              className="rounded-md bg-indigo-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50 transition-colors"
-            >
-              {parakeetDownloading ? `${parakeetPercent}%` : 'Download'}
-            </button>
-          </div>
-          {parakeetDownloading && (
-            <div className="mt-2 h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-indigo-500 transition-all"
-                style={{ width: `${parakeetPercent}%` }}
-              />
-            </div>
-          )}
-          {parakeetError && (
-            <p className="mt-2 text-xs text-red-600 dark:text-red-400 break-all">{parakeetError}</p>
-          )}
-        </div>
-      )}
-
       <ModelSelector
-        models={whisperModels}
+        models={models}
         selectedId={selectedModel}
         onSelect={handleModelSelect}
         loading={loading}
         onDownloadComplete={handleDownloadComplete}
+        onParakeetDownload={handleParakeetDownload}
+        parakeetDownloading={parakeetDownloading}
+        parakeetPercent={parakeetPercent}
+        parakeetError={parakeetError}
       />
+
+      {currentEngine === 'parakeet' && (
+        <p className="mt-3 text-xs text-gray-400 dark:text-gray-500">
+          Parakeet doesn't support vocabulary prompting. Your corrections dictionary still applies.
+        </p>
+      )}
     </div>
   );
 }
