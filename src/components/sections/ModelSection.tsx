@@ -1,15 +1,48 @@
+import { useEffect, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { ModelSelector, ModelInfo } from '../ModelSelector';
+import { getStore } from '../../lib/store';
+
 interface ModelSectionProps {
   selectedModel: string;
   onSelectedModelChange: (id: string) => void;
 }
 
 export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSectionProps) {
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadModels() {
+      const modelList = await invoke<ModelInfo[]>('list_models');
+      setModels(modelList);
+      setLoading(false);
+    }
+    loadModels();
+  }, []);
+
+  async function handleModelSelect(modelId: string) {
+    onSelectedModelChange(modelId);
+    const store = await getStore();
+    await store.set('selectedModel', modelId);
+    await invoke('set_model', { modelId });
+  }
+
   return (
     <div>
-      <h1 className="mb-5 text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+      <h1 className="mb-1 text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
         Model
       </h1>
-      <p className="text-sm text-gray-400">Loading models...</p>
+      <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+        Select the whisper model for transcription.
+      </p>
+
+      <ModelSelector
+        models={models}
+        selectedId={selectedModel}
+        onSelect={handleModelSelect}
+        loading={loading}
+      />
     </div>
   );
 }
