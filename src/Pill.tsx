@@ -145,7 +145,6 @@ export function Pill() {
         ${animState === "exiting" ? "pill-exiting" : ""}
         ${animState === "hidden" ? "opacity-0 pointer-events-none" : ""}
         ${displayState === "processing" ? "pill-processing" : ""}
-        ${displayState === "recording" ? "pill-rainbow-border" : ""}
       `}
     >
       {/* Recording state: frequency bars only — no red dot */}
