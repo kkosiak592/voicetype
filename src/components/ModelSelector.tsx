@@ -21,6 +21,10 @@ interface ModelSelectorProps {
   onSelect: (id: string) => void;
   loading: boolean;
   onDownloadComplete?: (modelId: string) => void;
+  onParakeetDownload?: () => void;
+  parakeetDownloading?: boolean;
+  parakeetPercent?: number;
+  parakeetError?: string | null;
 }
 
 function formatMB(bytes: number): string {
@@ -33,6 +37,10 @@ export function ModelSelector({
   onSelect,
   loading,
   onDownloadComplete,
+  onParakeetDownload,
+  parakeetDownloading = false,
+  parakeetPercent = 0,
+  parakeetError = null,
 }: ModelSelectorProps) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -100,9 +108,22 @@ export function ModelSelector({
       {models.map((model) => {
         const isSelected = selectedId === model.id;
         const isLoading = loadingId === model.id;
-        const isDownloading = downloadingId === model.id;
-        const hasError = downloadingId === null && downloadError !== null && !model.downloaded;
-        const disabled = !model.downloaded || loadingId !== null || downloadingId !== null;
+        const isParakeet = model.id === 'parakeet-tdt-v2';
+        const isParakeetDownloading = isParakeet && parakeetDownloading;
+        const isDownloading = isParakeet ? isParakeetDownloading : downloadingId === model.id;
+        const hasWhisperError =
+          !isParakeet &&
+          downloadingId === null &&
+          downloadError !== null &&
+          !model.downloaded;
+        const hasParakeetError = isParakeet && !model.downloaded && parakeetError !== null;
+        const disabled = !model.downloaded || loadingId !== null || downloadingId !== null || parakeetDownloading;
+
+        // Determine border style for undownloaded cards
+        const undownloadedBorder =
+          isParakeet && onParakeetDownload
+            ? 'border-dashed border-gray-300 dark:border-gray-600'
+            : 'border-gray-200 dark:border-gray-700';
 
         return (
           <div key={model.id}>
@@ -114,7 +135,7 @@ export function ModelSelector({
               className={[
                 'w-full rounded-lg border-2 px-4 py-3 text-left transition-colors duration-150',
                 !model.downloaded
-                  ? 'cursor-default border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
+                  ? `cursor-default bg-white dark:bg-gray-800 ${undownloadedBorder}`
                   : isSelected
                     ? 'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-950 cursor-pointer focus:outline-none'
                     : disabled
@@ -141,10 +162,21 @@ export function ModelSelector({
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {!model.downloaded && !isDownloading && (
+                  {/* Parakeet download button */}
+                  {isParakeet && !model.downloaded && onParakeetDownload && !isParakeetDownloading && (
                     <button
-                      onClick={() => handleDownload(model.id)}
-                      disabled={downloadingId !== null}
+                      onClick={(e) => { e.stopPropagation(); onParakeetDownload(); }}
+                      disabled={parakeetDownloading || downloadingId !== null}
+                      className="rounded-md bg-indigo-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Download
+                    </button>
+                  )}
+                  {/* Whisper download button */}
+                  {!isParakeet && !model.downloaded && !isDownloading && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDownload(model.id); }}
+                      disabled={downloadingId !== null || parakeetDownloading}
                       className="rounded-md bg-indigo-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       Download
@@ -158,8 +190,38 @@ export function ModelSelector({
               <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{model.description}</p>
             </div>
 
-            {/* Progress bar for active download */}
-            {isDownloading && (
+            {/* Progress bar for Parakeet download */}
+            {isParakeet && isParakeetDownloading && (
+              <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-gray-700 dark:bg-gray-800/50">
+                <div className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-indigo-500 transition-all duration-200"
+                    style={{ width: `${parakeetPercent}%` }}
+                  />
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {parakeetPercent}%
+                </p>
+              </div>
+            )}
+
+            {/* Error message for Parakeet */}
+            {hasParakeetError && parakeetError && (
+              <div className="mt-1 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-2 dark:border-red-800 dark:bg-red-900/20">
+                <p className="text-xs text-red-600 dark:text-red-400 truncate">{parakeetError}</p>
+                {onParakeetDownload && (
+                  <button
+                    onClick={onParakeetDownload}
+                    className="ml-3 shrink-0 text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    Retry
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Progress bar for active Whisper download */}
+            {!isParakeet && isDownloading && (
               <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-gray-700 dark:bg-gray-800/50">
                 <div className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
                   <div
@@ -175,8 +237,8 @@ export function ModelSelector({
               </div>
             )}
 
-            {/* Error message */}
-            {hasError && downloadingId === null && downloadError && (
+            {/* Error message for Whisper download */}
+            {hasWhisperError && downloadError && (
               <div className="mt-1 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-2 dark:border-red-800 dark:bg-red-900/20">
                 <p className="text-xs text-red-600 dark:text-red-400 truncate">{downloadError}</p>
                 <button
