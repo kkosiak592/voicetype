@@ -13,13 +13,14 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadModels() {
-      const modelList = await invoke<ModelInfo[]>('list_models');
-      setModels(modelList);
-      setLoading(false);
-    }
     loadModels();
   }, []);
+
+  async function loadModels() {
+    const modelList = await invoke<ModelInfo[]>('list_models');
+    setModels(modelList);
+    setLoading(false);
+  }
 
   async function handleModelSelect(modelId: string) {
     onSelectedModelChange(modelId);
@@ -28,13 +29,20 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
     await invoke('set_model', { modelId });
   }
 
+  async function handleDownloadComplete(modelId: string) {
+    const modelList = await invoke<ModelInfo[]>('list_models');
+    setModels(modelList);
+    // Auto-select the freshly downloaded model
+    await handleModelSelect(modelId);
+  }
+
   return (
     <div>
       <h1 className="mb-1 text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
         Model
       </h1>
       <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-        Select the whisper model for transcription.
+        Select the whisper model for transcription. Additional models can be downloaded here.
       </p>
 
       <ModelSelector
@@ -42,6 +50,7 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
         selectedId={selectedModel}
         onSelect={handleModelSelect}
         loading={loading}
+        onDownloadComplete={handleDownloadComplete}
       />
     </div>
   );

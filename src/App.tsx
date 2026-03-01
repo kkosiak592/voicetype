@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { getStore, DEFAULTS } from './lib/store';
 import { Sidebar, SectionId } from './components/Sidebar';
 import { GeneralSection } from './components/sections/GeneralSection';
@@ -6,6 +7,13 @@ import { ProfilesSection } from './components/sections/ProfilesSection';
 import { ModelSection } from './components/sections/ModelSection';
 import { MicrophoneSection } from './components/sections/MicrophoneSection';
 import { AppearanceSection } from './components/sections/AppearanceSection';
+import { FirstRun } from './components/FirstRun';
+
+interface FirstRunStatus {
+  needsSetup: boolean;
+  gpuDetected: boolean;
+  recommendedModel: string;
+}
 
 function App() {
   const [activeSection, setActiveSection] = useState<SectionId>('general');
@@ -16,9 +24,13 @@ function App() {
   const [selectedMic, setSelectedMic] = useState(DEFAULTS.selectedMic);
   const [selectedModel, setSelectedModel] = useState(DEFAULTS.selectedModel);
   const [loaded, setLoaded] = useState(false);
+  const [firstRunStatus, setFirstRunStatus] = useState<FirstRunStatus | null>(null);
 
   useEffect(() => {
     async function loadSettings() {
+      const status = await invoke<FirstRunStatus>('check_first_run');
+      setFirstRunStatus(status);
+
       const store = await getStore();
       const savedHotkey = await store.get<string>('hotkey');
       const savedTheme = await store.get<'light' | 'dark'>('theme');
@@ -56,6 +68,18 @@ function App() {
     return (
       <div className="flex h-screen items-center justify-center bg-white dark:bg-gray-900">
         <div className="text-sm text-gray-400">Loading...</div>
+      </div>
+    );
+  }
+
+  if (firstRunStatus?.needsSetup) {
+    return (
+      <div className="flex h-screen bg-white dark:bg-gray-900">
+        <FirstRun
+          gpuDetected={firstRunStatus.gpuDetected}
+          recommendedModel={firstRunStatus.recommendedModel}
+          onComplete={() => setFirstRunStatus({ ...firstRunStatus, needsSetup: false })}
+        />
       </div>
     );
   }
