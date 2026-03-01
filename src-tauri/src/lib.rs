@@ -315,6 +315,238 @@ fn save_test_wav(app: tauri::AppHandle, state: tauri::State<'_, audio::AudioCapt
     Ok(path_str)
 }
 
+/// Read the saved active profile ID from settings.json.
+/// Returns "general" on first launch, file missing, or parse error.
+fn read_saved_profile_id(app: &tauri::App) -> String {
+    let data_dir = match app.path().app_data_dir() {
+        Ok(d) => d,
+        Err(_) => return "general".to_string(),
+    };
+    let settings_path = data_dir.join("settings.json");
+    let contents = match std::fs::read_to_string(&settings_path) {
+        Ok(c) => c,
+        Err(_) => return "general".to_string(),
+    };
+    let json: serde_json::Value = match serde_json::from_str(&contents) {
+        Ok(j) => j,
+        Err(_) => return "general".to_string(),
+    };
+    json.get("active_profile_id")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_owned())
+        .unwrap_or_else(|| "general".to_string())
+}
+
+/// Read the saved user corrections for a specific profile from settings.json.
+/// Returns an empty HashMap on first launch, file missing, or parse error.
+fn read_saved_corrections(app: &tauri::App, profile_id: &str) -> std::collections::HashMap<String, String> {
+    let data_dir = match app.path().app_data_dir() {
+        Ok(d) => d,
+        Err(_) => return std::collections::HashMap::new(),
+    };
+    let settings_path = data_dir.join("settings.json");
+    let contents = match std::fs::read_to_string(&settings_path) {
+        Ok(c) => c,
+        Err(_) => return std::collections::HashMap::new(),
+    };
+    let json: serde_json::Value = match serde_json::from_str(&contents) {
+        Ok(j) => j,
+        Err(_) => return std::collections::HashMap::new(),
+    };
+    let key = format!("corrections.{}", profile_id);
+    json.get(&key)
+        .and_then(|v| v.as_object())
+        .map(|obj| {
+            obj.iter()
+                .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Read the saved ALL CAPS flag for a specific profile from settings.json.
+/// Returns false on first launch, file missing, or parse error.
+fn read_saved_all_caps(app: &tauri::App, profile_id: &str) -> bool {
+    let data_dir = match app.path().app_data_dir() {
+        Ok(d) => d,
+        Err(_) => return false,
+    };
+    let settings_path = data_dir.join("settings.json");
+    let contents = match std::fs::read_to_string(&settings_path) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    let json: serde_json::Value = match serde_json::from_str(&contents) {
+        Ok(j) => j,
+        Err(_) => return false,
+    };
+    let key = format!("profiles.{}.all_caps", profile_id);
+    json.get(&key)
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+}
+
+/// Profile info returned by get_profiles command — lightweight, no corrections dictionary.
+#[derive(serde::Serialize)]
+struct ProfileInfo {
+    id: String,
+    name: String,
+    is_active: bool,
+}
+
+/// Returns the list of available profiles with their IDs, names, and active flag.
+#[tauri::command]
+fn get_profiles(app: tauri::AppHandle) -> Vec<ProfileInfo> {
+    let active_id = {
+        let state = app.state::<profiles::ActiveProfile>();
+        let guard = state.0.lock().unwrap();
+        guard.id.clone()
+    };
+    profiles::get_all_profiles()
+        .into_iter()
+        .map(|p| ProfileInfo {
+            is_active: p.id == active_id,
+            id: p.id,
+            name: p.name,
+        })
+        .collect()
+}
+
+/// Switch the active profile by ID. Rebuilds the CorrectionsEngine from the new profile's
+/// corrections merged with any user-saved corrections for that profile.
+/// Persists the active profile ID to settings.json.
+#[tauri::command]
+fn set_active_profile(app: tauri::AppHandle, profile_id: String) -> Result<(), String> {
+    // Build the new profile
+    let mut new_profile = match profile_id.as_str() {
+        "structural-engineering" => profiles::structural_engineering_profile(),
+        "general" => profiles::general_profile(),
+        _ => return Err(format!("Unknown profile id: {}", profile_id)),
+    };
+
+    // Merge saved user corrections (user overrides defaults)
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let settings_path = data_dir.join("settings.json");
+    let mut json: serde_json::Value = std::fs::read_to_string(&settings_path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+
+    let user_corrections_key = format!("corrections.{}", profile_id);
+    if let Some(user_map) = json.get(&user_corrections_key).and_then(|v| v.as_object()) {
+        for (k, v) in user_map {
+            if let Some(s) = v.as_str() {
+                new_profile.corrections.insert(k.clone(), s.to_string());
+            }
+        }
+    }
+
+    // Load saved ALL CAPS flag for this profile
+    let all_caps_key = format!("profiles.{}.all_caps", profile_id);
+    if let Some(flag) = json.get(&all_caps_key).and_then(|v| v.as_bool()) {
+        new_profile.all_caps = flag;
+    }
+
+    // Rebuild corrections engine from merged corrections
+    let engine = corrections::CorrectionsEngine::from_map(&new_profile.corrections)?;
+
+    // Update managed states
+    {
+        let profile_state = app.state::<profiles::ActiveProfile>();
+        let mut guard = profile_state.0.lock().unwrap();
+        *guard = new_profile;
+    }
+    {
+        let corrections_state = app.state::<corrections::CorrectionsState>();
+        let mut guard = corrections_state.0.lock().unwrap();
+        *guard = engine;
+    }
+
+    // Persist active profile ID
+    json["active_profile_id"] = serde_json::Value::String(profile_id.clone());
+    std::fs::write(&settings_path, serde_json::to_string_pretty(&json).unwrap())
+        .map_err(|e| e.to_string())?;
+
+    log::info!("Active profile set to: {}", profile_id);
+    Ok(())
+}
+
+/// Returns the current active profile's corrections dictionary (for the UI editor).
+#[tauri::command]
+fn get_corrections(app: tauri::AppHandle) -> std::collections::HashMap<String, String> {
+    let state = app.state::<profiles::ActiveProfile>();
+    let guard = state.0.lock().unwrap();
+    guard.corrections.clone()
+}
+
+/// Save user corrections for the active profile. Merges with defaults and rebuilds engine.
+/// Persists to settings.json under `corrections.{profile_id}`.
+#[tauri::command]
+fn save_corrections(app: tauri::AppHandle, corrections_map: std::collections::HashMap<String, String>) -> Result<(), String> {
+    let profile_id = {
+        let state = app.state::<profiles::ActiveProfile>();
+        let mut guard = state.0.lock().unwrap();
+        // Merge user corrections into profile
+        guard.corrections.extend(corrections_map.clone());
+        guard.id.clone()
+    };
+
+    // Rebuild engine from updated corrections
+    let engine = {
+        let state = app.state::<profiles::ActiveProfile>();
+        let guard = state.0.lock().unwrap();
+        corrections::CorrectionsEngine::from_map(&guard.corrections)?
+    };
+    {
+        let corrections_state = app.state::<corrections::CorrectionsState>();
+        let mut guard = corrections_state.0.lock().unwrap();
+        *guard = engine;
+    }
+
+    // Persist user corrections to settings.json
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let settings_path = data_dir.join("settings.json");
+    let mut json: serde_json::Value = std::fs::read_to_string(&settings_path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+
+    let key = format!("corrections.{}", profile_id);
+    json[&key] = serde_json::to_value(&corrections_map).unwrap();
+    std::fs::write(&settings_path, serde_json::to_string_pretty(&json).unwrap())
+        .map_err(|e| e.to_string())?;
+
+    log::info!("Corrections saved for profile '{}'", profile_id);
+    Ok(())
+}
+
+/// Toggle ALL CAPS for the active profile. Persists to settings.json.
+#[tauri::command]
+fn set_all_caps(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let profile_id = {
+        let state = app.state::<profiles::ActiveProfile>();
+        let mut guard = state.0.lock().unwrap();
+        guard.all_caps = enabled;
+        guard.id.clone()
+    };
+
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let settings_path = data_dir.join("settings.json");
+    let mut json: serde_json::Value = std::fs::read_to_string(&settings_path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+
+    let key = format!("profiles.{}.all_caps", profile_id);
+    json[&key] = serde_json::Value::Bool(enabled);
+    std::fs::write(&settings_path, serde_json::to_string_pretty(&json).unwrap())
+        .map_err(|e| e.to_string())?;
+
+    log::info!("ALL CAPS set to {} for profile '{}'", enabled, profile_id);
+    Ok(())
+}
+
 /// Reads a WAV file and decodes it to mono f32 samples.
 ///
 /// Supports float and integer WAV formats. Downmixes multi-channel audio to mono.
@@ -406,7 +638,7 @@ async fn transcribe_test_file(
     // Run inference on a blocking thread to avoid stalling the Tauri async runtime
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let _ = tx.send(transcribe::transcribe_audio(&ctx, &audio_f32));
+        let _ = tx.send(transcribe::transcribe_audio(&ctx, &audio_f32, ""));
     });
     let result = rx.recv()
         .map_err(|e| format!("Inference thread failed: {}", e))?
@@ -446,7 +678,7 @@ async fn force_cpu_transcribe(path: String) -> Result<String, String> {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let ctx_result = transcribe::load_whisper_context(&model_str, &cpu_mode);
-        let result = ctx_result.and_then(|ctx| transcribe::transcribe_audio(&ctx, &audio_f32));
+        let result = ctx_result.and_then(|ctx| transcribe::transcribe_audio(&ctx, &audio_f32, ""));
         let _ = tx.send(result);
     });
 
@@ -489,6 +721,11 @@ pub fn run() {
             start_recording,
             stop_recording,
             save_test_wav,
+            get_profiles,
+            set_active_profile,
+            get_corrections,
+            save_corrections,
+            set_all_caps,
             #[cfg(feature = "whisper")]
             transcribe_test_file,
             #[cfg(feature = "whisper")]
@@ -547,6 +784,35 @@ pub fn run() {
             log::info!("Recording mode: {:?}", saved_mode);
             app.manage(RecordingMode::new(saved_mode));
             app.manage(VadWorkerState(std::sync::Mutex::new(None)));
+
+            // Load and register vocabulary profile + corrections engine
+            {
+                let profile_id = read_saved_profile_id(app);
+                let mut active_profile = match profile_id.as_str() {
+                    "structural-engineering" => profiles::structural_engineering_profile(),
+                    _ => profiles::general_profile(),
+                };
+
+                // Merge user-saved corrections for this profile (user overrides defaults)
+                let user_corrections = read_saved_corrections(app, &profile_id);
+                for (k, v) in user_corrections {
+                    active_profile.corrections.insert(k, v);
+                }
+
+                // Load saved ALL CAPS flag for this profile
+                active_profile.all_caps = read_saved_all_caps(app, &profile_id);
+
+                // Build corrections engine from merged corrections
+                let engine = corrections::CorrectionsEngine::from_map(&active_profile.corrections)
+                    .unwrap_or_else(|e| {
+                        log::error!("Failed to build corrections engine at startup: {}", e);
+                        corrections::CorrectionsEngine::from_map(&std::collections::HashMap::new()).unwrap()
+                    });
+
+                log::info!("Active vocabulary profile: '{}' (all_caps={})", active_profile.id, active_profile.all_caps);
+                app.manage(profiles::ActiveProfile(std::sync::Mutex::new(active_profile)));
+                app.manage(corrections::CorrectionsState(std::sync::Mutex::new(engine)));
+            }
 
             // Register global hotkey plugin (desktop only — no Android/iOS support)
             #[cfg(desktop)]

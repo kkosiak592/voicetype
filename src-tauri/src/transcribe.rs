@@ -140,8 +140,13 @@ pub fn load_whisper_context(model_path: &str, mode: &ModelMode) -> Result<Whispe
 /// one utterance. A fresh WhisperState is created per call — this is thread-safe and the
 /// recommended approach (see RESEARCH.md Pitfall 6).
 ///
+/// `initial_prompt`: Domain-specific vocabulary prompt for whisper. When non-empty, it is
+/// injected via `set_initial_prompt` and `set_no_context(false)` — whisper uses the prompt
+/// as a prior to bias transcription toward domain terminology. When empty, `set_no_context(true)`
+/// is preserved to avoid context carryover between recordings.
+///
 /// Returns the trimmed transcription text, or an error string on failure.
-pub fn transcribe_audio(ctx: &WhisperContext, audio: &[f32]) -> Result<String, String> {
+pub fn transcribe_audio(ctx: &WhisperContext, audio: &[f32], initial_prompt: &str) -> Result<String, String> {
     let start = Instant::now();
 
     let mut state = ctx.create_state().map_err(|e| e.to_string())?;
@@ -154,8 +159,17 @@ pub fn transcribe_audio(ctx: &WhisperContext, audio: &[f32]) -> Result<String, S
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
     params.set_single_segment(true);   // short dictation = one segment
-    params.set_no_context(true);       // no prior context carryover
     params.set_temperature_inc(0.0);   // disable temperature fallback retries
+
+    // When initial_prompt is set, whisper uses it as a prior for domain vocabulary.
+    // CRITICAL: set_no_context(true) suppresses initial_prompt — must be false when prompt is used.
+    // When prompt is empty, enable no_context to prevent context carryover between recordings.
+    if !initial_prompt.is_empty() {
+        params.set_initial_prompt(initial_prompt);
+        params.set_no_context(false);
+    } else {
+        params.set_no_context(true);   // no prior context carryover
+    }
 
     state.full(params, audio).map_err(|e| e.to_string())?;
 

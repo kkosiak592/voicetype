@@ -86,6 +86,14 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
     );
     let _ = sample_count; // used for logging above; suppress unused warning
 
+    // Read active profile's initial_prompt for whisper bias (before spawn_blocking — AppHandle not Send)
+    #[cfg(feature = "whisper")]
+    let initial_prompt: String = {
+        let profile = app.state::<crate::profiles::ActiveProfile>();
+        let guard = profile.0.lock().unwrap();
+        guard.initial_prompt.clone()
+    };
+
     // 3. Run whisper inference (blocking — whisper-rs is sync)
     #[cfg(feature = "whisper")]
     let transcription: String = {
@@ -101,7 +109,7 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
             }
         };
         match tauri::async_runtime::spawn_blocking(move || {
-            crate::transcribe::transcribe_audio(&ctx, &samples)
+            crate::transcribe::transcribe_audio(&ctx, &samples, &initial_prompt)
         })
         .await
         {
@@ -147,7 +155,22 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
             reset_to_idle(&app);
             return;
         }
-        let to_inject = format!("{} ", trimmed); // trailing space per CONTEXT.md
+
+        // Apply corrections (word-level find-and-replace per active profile dictionary)
+        let corrected = {
+            let engine = app.state::<crate::corrections::CorrectionsState>();
+            let guard = engine.0.lock().unwrap();
+            guard.apply(trimmed)
+        };
+
+        // Apply ALL CAPS if active profile flag is set
+        let formatted = {
+            let profile = app.state::<crate::profiles::ActiveProfile>();
+            let guard = profile.0.lock().unwrap();
+            if guard.all_caps { corrected.to_uppercase() } else { corrected }
+        };
+
+        let to_inject = format!("{} ", formatted); // trailing space per CONTEXT.md
 
         log::info!(
             "Pipeline: injecting '{}' ({} chars)",
@@ -165,7 +188,7 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
                 log::info!("Pipeline: injection complete");
                 // Tray tooltip for development debugging: show last transcription
                 if let Some(tray) = app.tray_by_id("tray") {
-                    let _ = tray.set_tooltip(Some(&format!("VoiceType — last: {}", trimmed)));
+                    let _ = tray.set_tooltip(Some(&format!("VoiceType — last: {}", formatted)));
                 }
                 // Pill: success flash before hide
                 app.emit_to("pill", "pill-result", "success").ok();
