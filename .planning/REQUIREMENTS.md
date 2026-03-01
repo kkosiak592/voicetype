@@ -33,12 +33,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Vocabulary & Corrections
 
-- [ ] **VOC-01**: App applies a user-editable word correction dictionary (JSON find-and-replace) after each transcription
-- [ ] **VOC-02**: User can create and switch between vocabulary profiles (each profile bundles a whisper initial_prompt + correction dictionary + output formatting)
-- [ ] **VOC-03**: App ships with a pre-configured "Structural Engineering" profile (I-beam, W-section, MPa, rebar, AISC, ACI 318, kips, PSI, prestressed)
-- [ ] **VOC-04**: App ships with a "General" profile (no domain bias, default corrections only)
-- [ ] **VOC-05**: User can enable ALL CAPS output mode per profile (for engineering drawing annotations and PDF markups)
-- [ ] **VOC-06**: Whisper initial_prompt is set per profile to bias the model toward domain-specific vocabulary
+- [x] **VOC-01**: App applies a user-editable word correction dictionary (JSON find-and-replace) after each transcription
+- [x] **VOC-02**: User can create and switch between vocabulary profiles (each profile bundles a whisper initial_prompt + correction dictionary + output formatting)
+- [x] **VOC-03**: App ships with a pre-configured "Structural Engineering" profile (I-beam, W-section, MPa, rebar, AISC, ACI 318, kips, PSI, prestressed)
+- [x] **VOC-04**: App ships with a "General" profile (no domain bias, default corrections only)
+- [x] **VOC-05**: User can enable ALL CAPS output mode per profile (for engineering drawing annotations and PDF markups)
+- [x] **VOC-06**: Whisper initial_prompt is set per profile to bias the model toward domain-specific vocabulary
 
 ### Settings & Configuration
 
@@ -114,12 +114,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UI-03 | Phase 4 | Complete |
 | UI-04 | Phase 4 | Complete |
 | UI-05 | Phase 1 | Complete |
-| VOC-01 | Phase 6 | Pending |
-| VOC-02 | Phase 6 | Pending |
-| VOC-03 | Phase 6 | Pending |
-| VOC-04 | Phase 6 | Pending |
-| VOC-05 | Phase 6 | Pending |
-| VOC-06 | Phase 6 | Pending |
+| VOC-01 | Phase 6 | Complete |
+| VOC-02 | Phase 6 | Complete |
+| VOC-03 | Phase 6 | Complete |
+| VOC-04 | Phase 6 | Complete |
+| VOC-05 | Phase 6 | Complete |
+| VOC-06 | Phase 6 | Complete |
 | SET-01 | Phase 6 | Pending |
 | SET-02 | Phase 1 | Complete |
 | SET-03 | Phase 6 | Pending |

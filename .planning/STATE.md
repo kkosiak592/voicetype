@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: (determining...)
-status: Resuming
-last_updated: "2026-03-01T02:17:31Z"
+current_phase: 06-vocabulary-settings
+status: In Progress
+last_updated: "2026-03-01T02:53:55Z"
 progress:
   total_phases: 6
-  completed_phases: 6
+  completed_phases: 5
   total_plans: 14
   completed_plans: 14
 ---
@@ -21,10 +21,11 @@ See: .planning/PROJECT.md
 ## Position
 
 **Milestone:** v1.0 milestone
-**Current phase:** (determining...)
-**Status:** Resuming
+**Current phase:** 06-vocabulary-settings
+**Current plan:** 06-02 (next)
+**Status:** In Progress
 
-Last activity: 2026-03-01 - Completed quick task 6: Remove checkmark from pill after successful processing — pill now exits immediately on success identical to error path
+Last activity: 2026-03-01 - Completed 06-01: Corrections engine and vocabulary profile system (corrections.rs, profiles.rs, pipeline integration, 5 Tauri commands)
 
 ## Session Log
 
@@ -32,6 +33,14 @@ Last activity: 2026-03-01 - Completed quick task 6: Remove checkmark from pill a
 - 2026-03-01: Quick task 4 (waveform bar bounce amplification) — task 1 complete (commit 78d2835), awaiting human visual verification
 - 2026-03-01: Quick task 4 verified and completed
 - 2026-03-01: Quick task 6 (remove checkmark from pill) — completed (commit 8bb5ed5)
+- 2026-03-01: 06-01 (corrections engine + profiles) — completed (commits 3fcffd7, 58531c9)
+
+## Decisions
+
+- 06-vocabulary-settings: regex crate for word-boundary corrections matching using (?i)\b{escaped}\b patterns
+- 06-vocabulary-settings: set_no_context(false) when initial_prompt is non-empty — whisper silently suppresses prompt otherwise
+- 06-vocabulary-settings: sequential rule application in CorrectionsEngine (Vec<Rule>) acceptable for v1 dictionary size
+- 06-vocabulary-settings: ProfileInfo excludes corrections dict from get_profiles — UI only needs id/name/active
 
 ### Roadmap Evolution
 

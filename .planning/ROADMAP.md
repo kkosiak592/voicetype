@@ -126,7 +126,7 @@ Plans:
   3. With ALL CAPS mode enabled on a profile, all injected text is uppercased — enabling engineering drawing annotation and PDF markup workflows
   4. User can select which microphone and which whisper model to use from the settings panel; selections persist across restarts
   5. Settings panel opens from the system tray context menu and provides access to all configurable options: hotkey, profile, model, microphone, and correction dictionary editor
-**Plans:** 4 plans
+**Plans:** 1/4 plans executed
 
 Plans:
 - [ ] 06-01-PLAN.md — Corrections engine + profile system backend (corrections.rs, profiles.rs, pipeline integration, initial_prompt)
@@ -172,5 +172,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 4.1 -> 5 -> 6 -> 7
 | 4. Pill Overlay | 2/2 | Complete   | 2026-02-28 |
 | 4.1 Premium Pill UI | 0/2 | Not started | - |
 | 5. VAD + Toggle Mode | 2/2 | Complete   | 2026-03-01 |
-| 6. Vocabulary + Settings | 0/4 | Not started | - |
+| 6. Vocabulary + Settings | 1/4 | In Progress|  |
 | 7. Distribution | 0/3 | Not started | - |
