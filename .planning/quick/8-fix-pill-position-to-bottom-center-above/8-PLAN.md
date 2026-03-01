@@ -115,12 +115,19 @@ pub fn show_pill(app: &tauri::AppHandle) {
 
         // 3. Get the work area (excludes taskbar) of that monitor
         // Fall back to primary monitor if cursor isn't found on any
+        //
+        // NOTE: work_area() may not exist on all Tauri 2 patch versions.
+        // If it fails to compile, fall back to computing work area from
+        // monitor.size() minus a fixed taskbar offset (e.g., 48px):
+        //   let wa_pos = mon.position().clone();
+        //   let wa_size_w = mon.size().width;
+        //   let wa_size_h = mon.size().height - 48;
         let work_area = if let Some(mon) = target_monitor {
             mon.work_area().clone()
         } else if let Some(primary) = monitors.first() {
             primary.work_area().clone()
         } else {
-            log::warn!("No monitors detected, skipping pill positioning");
+            log::warn!("No monitors detected, emitting pill-show without positioning");
             app.emit_to("pill", "pill-show", ()).ok();
             return;
         };
@@ -140,16 +147,34 @@ pub fn show_pill(app: &tauri::AppHandle) {
 
         let _ = pill_window.set_position(tauri::PhysicalPosition::new(x, y));
         log::debug!("Pill positioned at ({}, {}) on monitor work area", x, y);
-    }
 
-    // Emit pill-show after positioning
-    app.emit_to("pill", "pill-show", ()).ok();
+        // Emit pill-show AFTER positioning, inside the pill_window guard
+        app.emit_to("pill", "pill-show", ()).ok();
+    } else {
+        log::warn!("Pill window not found, cannot position or show pill");
+    }
 }
 ```
 
 Note: Use `app.get_webview_window("pill")` which requires `use tauri::Manager;` — this is already imported in lib.rs but pill.rs will need it too. Add `use tauri::Manager;` at the top of pill.rs. Also add `use tauri::Emitter;` for the emit_to call.
 
 The `work_area()` method returns a reference to `PhysicalRect` which has `position: PhysicalPosition<i32>` and `size: PhysicalSize<u32>`. Clone it to own the data.
+
+**IMPORTANT: `work_area()` availability.** If `work_area()` does not compile on your Tauri 2 version, replace the `work_area` variable computation with this fallback that uses `monitor.size()` minus a fixed 48px taskbar offset:
+```rust
+        // Fallback if work_area() is unavailable:
+        let (wa_pos, wa_w, wa_h) = if let Some(mon) = target_monitor.or(monitors.first()) {
+            let p = mon.position();
+            let s = mon.size();
+            (*p, s.width as i32, s.height as i32 - 48)
+        } else {
+            log::warn!("No monitors detected, emitting pill-show without positioning");
+            app.emit_to("pill", "pill-show", ()).ok();
+            return;
+        };
+        let wa_x = wa_pos.x;
+        let wa_y = wa_pos.y;
+```
 
 **In src-tauri/src/lib.rs**, make these changes:
 
@@ -194,12 +219,14 @@ Remove all drag/position code from Pill.tsx:
 4. **Delete the `handleMouseUp` callback** (lines 122-132):
    This saves position to store and restores non-focusable state. Remove entirely.
 
-5. **Remove drag event handlers and cursor classes from the root div** (line 136-148):
+5. **Remove drag event handlers and cursor classes from the root div** (line 123-137):
    - Remove `onMouseDown={handleMouseDown}`
    - Remove `onMouseUp={handleMouseUp}`
    - Remove `cursor-grab active:cursor-grabbing` from the className
+   - **Do NOT change any animation classes or conditionals** — preserve the existing className logic exactly as-is, minus only the drag-related attributes listed above.
+   - **Do NOT re-add `pill-rainbow-border`** — it was removed in quick-7 and must stay removed.
 
-The root div should become:
+   **IMPORTANT:** Before editing, read the current file state. The root div in the current codebase looks like this (the source of truth). Only remove the three items listed above. The result should be:
 ```tsx
 <div
   className={`
@@ -207,13 +234,15 @@ The root div should become:
     w-[170px] h-[38px] rounded-full
     flex items-center justify-center
     select-none
-    ${animState === "entering" ? "pill-entering" : ""}
     ${animState === "exiting" ? "pill-exiting" : ""}
     ${animState === "hidden" ? "opacity-0 pointer-events-none" : ""}
     ${displayState === "processing" ? "pill-processing" : ""}
+    ${displayState === "recording" ? "pill-rainbow-border" : ""}
   `}
 >
 ```
+
+Wait — `pill-rainbow-border` is present in the current file but was supposed to be removed in quick-7. If it is still present, leave it as-is for now (that is a separate issue, not in scope for this task). Do NOT add it if it is missing. Do NOT remove it if it is present — that is out of scope. Only remove drag-related attributes.
 
 After these removals, the only imports should be:
 ```tsx
