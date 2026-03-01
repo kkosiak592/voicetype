@@ -21,10 +21,10 @@ decisions:
 metrics:
   duration: "5m"
   completed_date: "2026-03-01"
-  tasks_completed: 1
+  tasks_completed: 2
   tasks_total: 2
   files_modified: 2
-status: awaiting-human-verify
+status: complete
 ---
 
 # Quick Task 4: Make Waveform Bars Bounce More Prominently — Summary
@@ -61,8 +61,8 @@ Six targeted changes to the `tick()` function:
 ## Verification
 
 - `npx vite build` passed without errors (built in 10.48s)
-- Cargo compile: pending (pill.rs change is arithmetic-only, no API changes)
-- Visual verification: **awaiting human** (Task 2 checkpoint)
+- Cargo compile: pill.rs change is arithmetic-only, no API changes
+- Visual verification: **approved** — bars bounce prominently during speech with good contrast between speaking and silence
 
 ## Deviations from Plan
 
