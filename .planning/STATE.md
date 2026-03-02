@@ -120,21 +120,21 @@ Last activity: 2026-03-02 - Completed quick task 19: Remove Parakeet int8 model 
 
 ### Quick Tasks Completed
 
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 4 | Make waveform bars in pill bounce more prominently | 2026-03-01 | 78d2835 | [4-make-waveform-bars-in-pill-bounce-more-p](./quick/4-make-waveform-bars-in-pill-bounce-more-p/) |
-| 5 | Apply pipeline latency optimizations: greedy decoding, flash attention, whisper parameter tuning, and injection delay reduction | 2026-03-01 | 72ea1fd | [5-apply-pipeline-latency-optimizations-gre](./quick/5-apply-pipeline-latency-optimizations-gre/) |
-| 6 | Remove checkmark from pill after successful processing — immediate exit identical to error path | 2026-03-01 | 8bb5ed5 | [6-remove-checkmark-from-pill-after-process](./quick/6-remove-checkmark-from-pill-after-process/) |
-| 7 | Remove rainbow rotating border from pill recording state — dark glass + waveform bars only | 2026-03-01 | 8d36805 | [7-remove-rainbow-startup-animation-from-pi](./quick/7-remove-rainbow-startup-animation-from-pi/) |
-| 8 | Fix pill position to bottom-center above taskbar, remove dragging, add multi-monitor support | 2026-03-01 | 000463d | [8-fix-pill-position-to-bottom-center-above](./quick/8-fix-pill-position-to-bottom-center-above/) |
-| 10 | Enable CUDA GPU acceleration for Parakeet TDT — cuda feature on parakeet-rs, CUDA ExecutionProvider with CPU fallback | 2026-03-01 | 1f2a9c5 | [10-enable-cuda-gpu-acceleration-for-parakee](./quick/10-enable-cuda-gpu-acceleration-for-parakee/) |
-| 11 | Switch Parakeet transcription to TimestampMode::Sentences — activates group_by_sentences -> deduplicate_words pipeline | 2026-03-01 | 2a30c48 | [11-switch-parakeet-transcription-from-times](./quick/11-switch-parakeet-transcription-from-times/) |
-| 12 | VAD silence trimming: strip leading/trailing silence before engine dispatch, 1-chunk padding, fail-open | 2026-03-02 | 05266f5 | [12-implement-vad-silence-trimming-for-parak](./quick/12-implement-vad-silence-trimming-for-parak/) |
-| 15 | Skip redundant Whisper model reload when already loaded — early-return guard in set_model() using settings.json as source of truth | 2026-03-01 | c5e7126 | [15-skip-redundant-whisper-model-reload-when](./quick/15-skip-redundant-whisper-model-reload-when/) |
-| 13 | Add fp32 Parakeet model variant as selectable option — separate download dir, variant-aware engine dispatch, independent per-variant download state | 2026-03-01 | c4e3cf0 | [13-add-fp32-parakeet-model-variant-as-selec](./quick/13-add-fp32-parakeet-model-variant-as-selec/) |
-| 17 | Remove Fastest badge from FirstRun, move Recommended badge to Parakeet TDT fp32 for GPU users | 2026-03-02 | ccd1e5d | [17-remove-fastest-badge-and-move-recommende](./quick/17-remove-fastest-badge-and-move-recommende/) |
-| 18 | Enable GPU acceleration for Whisper small.en — CachedGpuMode used for all Whisper model GPU selection, no model_id hardcoding | 2026-03-02 | da85907 | [18-enable-gpu-acceleration-for-whisper-smal](./quick/18-enable-gpu-acceleration-for-whisper-smal/) |
-| 19 | Remove Parakeet int8 model from entire codebase — fp32 only remains; FirstRun 3 GPU cards, simplified ModelSelector/ModelSection | 2026-03-02 | 0ef9a61 | [19-remove-herakeet-int8-model-from-entire-c](./quick/19-remove-herakeet-int8-model-from-entire-c/) |
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 4 | Make waveform bars in pill bounce more prominently | 2026-03-01 | 78d2835 | | [4-make-waveform-bars-in-pill-bounce-more-p](./quick/4-make-waveform-bars-in-pill-bounce-more-p/) |
+| 5 | Apply pipeline latency optimizations: greedy decoding, flash attention, whisper parameter tuning, and injection delay reduction | 2026-03-01 | 72ea1fd | | [5-apply-pipeline-latency-optimizations-gre](./quick/5-apply-pipeline-latency-optimizations-gre/) |
+| 6 | Remove checkmark from pill after successful processing — immediate exit identical to error path | 2026-03-01 | 8bb5ed5 | | [6-remove-checkmark-from-pill-after-process](./quick/6-remove-checkmark-from-pill-after-process/) |
+| 7 | Remove rainbow rotating border from pill recording state — dark glass + waveform bars only | 2026-03-01 | 8d36805 | | [7-remove-rainbow-startup-animation-from-pi](./quick/7-remove-rainbow-startup-animation-from-pi/) |
+| 8 | Fix pill position to bottom-center above taskbar, remove dragging, add multi-monitor support | 2026-03-01 | 000463d | | [8-fix-pill-position-to-bottom-center-above](./quick/8-fix-pill-position-to-bottom-center-above/) |
+| 10 | Enable CUDA GPU acceleration for Parakeet TDT — cuda feature on parakeet-rs, CUDA ExecutionProvider with CPU fallback | 2026-03-01 | 1f2a9c5 | | [10-enable-cuda-gpu-acceleration-for-parakee](./quick/10-enable-cuda-gpu-acceleration-for-parakee/) |
+| 11 | Switch Parakeet transcription to TimestampMode::Sentences — activates group_by_sentences -> deduplicate_words pipeline | 2026-03-01 | 2a30c48 | | [11-switch-parakeet-transcription-from-times](./quick/11-switch-parakeet-transcription-from-times/) |
+| 12 | VAD silence trimming: strip leading/trailing silence before engine dispatch, 1-chunk padding, fail-open | 2026-03-02 | 05266f5 | | [12-implement-vad-silence-trimming-for-parak](./quick/12-implement-vad-silence-trimming-for-parak/) |
+| 15 | Skip redundant Whisper model reload when already loaded — early-return guard in set_model() using settings.json as source of truth | 2026-03-01 | c5e7126 | | [15-skip-redundant-whisper-model-reload-when](./quick/15-skip-redundant-whisper-model-reload-when/) |
+| 13 | Add fp32 Parakeet model variant as selectable option — separate download dir, variant-aware engine dispatch, independent per-variant download state | 2026-03-01 | c4e3cf0 | | [13-add-fp32-parakeet-model-variant-as-selec](./quick/13-add-fp32-parakeet-model-variant-as-selec/) |
+| 17 | Remove Fastest badge from FirstRun, move Recommended badge to Parakeet TDT fp32 for GPU users | 2026-03-02 | ccd1e5d | | [17-remove-fastest-badge-and-move-recommende](./quick/17-remove-fastest-badge-and-move-recommende/) |
+| 18 | Enable GPU acceleration for Whisper small.en — CachedGpuMode used for all Whisper model GPU selection, no model_id hardcoding | 2026-03-02 | da85907 | | [18-enable-gpu-acceleration-for-whisper-smal](./quick/18-enable-gpu-acceleration-for-whisper-smal/) |
+| 19 | Remove Parakeet int8 model from entire codebase — fp32 only remains; FirstRun 3 GPU cards, simplified ModelSelector/ModelSection | 2026-03-02 | 0ef9a61 | Verified | [19-remove-herakeet-int8-model-from-entire-c](./quick/19-remove-herakeet-int8-model-from-entire-c/) |
 
 ## Accumulated Context
 
