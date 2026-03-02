@@ -133,6 +133,11 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
     );
     let _ = sample_count; // used for logging above; suppress unused warning
 
+    // VAD silence trim: remove leading/trailing silence before engine dispatch.
+    // Applies to both Whisper and Parakeet — engine-agnostic improvement.
+    // Cost: ~2-5ms (one Silero VAD pass over the buffer).
+    let samples = vad::vad_trim_silence(&samples);
+
     // Read active engine before any async work (AppHandle not Send into spawn_blocking).
     let active_engine = {
         let state = app.state::<crate::ActiveEngine>();
