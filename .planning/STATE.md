@@ -26,7 +26,7 @@ See: .planning/PROJECT.md
 **Current plan:** 08-01 complete
 **Status:** Executing
 
-Last activity: 2026-03-01 - Completed quick task 15: Skip redundant Whisper model reload — early-return guard in set_model()
+Last activity: 2026-03-01 - Completed quick task 13: Add fp32 Parakeet model variant — separate download, variant-aware engine dispatch
 
 ## Session Log
 
@@ -99,6 +99,9 @@ Last activity: 2026-03-01 - Completed quick task 15: Skip redundant Whisper mode
 - [quick-12-vad-trim]: 1-chunk (512 samples = 32ms) padding on each side of speech boundaries — prevents onset/offset clipping
 - [quick-12-vad-trim]: Fail-open on no-speech detection — returns full buffer rather than empty buffer
 - [quick-12-vad-trim]: Single trim point in pipeline.rs before engine dispatch — applies to both Whisper and Parakeet without per-engine changes
+- [quick-13-fp32]: set_engine always reloads Parakeet model (no is_none guard) — required for int8<->fp32 variant switching to take effect without app restart
+- [quick-13-fp32]: fp32 dir is models/parakeet-tdt-v2-fp32 (separate from int8 dir models/parakeet-tdt-v2)
+- [quick-13-fp32]: isFastest badge kept on int8 only — quantization makes it faster than fp32
 
 ### Roadmap Evolution
 
@@ -119,6 +122,7 @@ Last activity: 2026-03-01 - Completed quick task 15: Skip redundant Whisper mode
 | 11 | Switch Parakeet transcription to TimestampMode::Sentences — activates group_by_sentences -> deduplicate_words pipeline | 2026-03-01 | 2a30c48 | [11-switch-parakeet-transcription-from-times](./quick/11-switch-parakeet-transcription-from-times/) |
 | 12 | VAD silence trimming: strip leading/trailing silence before engine dispatch, 1-chunk padding, fail-open | 2026-03-02 | 05266f5 | [12-implement-vad-silence-trimming-for-parak](./quick/12-implement-vad-silence-trimming-for-parak/) |
 | 15 | Skip redundant Whisper model reload when already loaded — early-return guard in set_model() using settings.json as source of truth | 2026-03-01 | c5e7126 | [15-skip-redundant-whisper-model-reload-when](./quick/15-skip-redundant-whisper-model-reload-when/) |
+| 13 | Add fp32 Parakeet model variant as selectable option — separate download dir, variant-aware engine dispatch, independent per-variant download state | 2026-03-01 | c4e3cf0 | [13-add-fp32-parakeet-model-variant-as-selec](./quick/13-add-fp32-parakeet-model-variant-as-selec/) |
 
 ## Accumulated Context
 
