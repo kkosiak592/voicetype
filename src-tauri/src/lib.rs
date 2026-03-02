@@ -921,6 +921,17 @@ async fn set_model(app: tauri::AppHandle, model_id: String) -> Result<(), String
         return Err(format!("Model file not downloaded: {}", model_path.display()));
     }
 
+    // Skip reload if the requested model is already loaded
+    {
+        let json = read_settings(&app)?;
+        if let Some(current) = json.get("whisper_model_id").and_then(|v| v.as_str()) {
+            if current == model_id {
+                log::info!("Whisper model '{}' already loaded, skipping reload", model_id);
+                return Ok(());
+            }
+        }
+    }
+
     let path_str = model_path.to_string_lossy().to_string();
     let model_id_clone = model_id.clone();
 
