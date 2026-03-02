@@ -311,14 +311,14 @@ unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) 
     CallNextHookEx(None, ncode, wparam, lparam)
 }
 
-/// Dispatch a HookEvent to the application.
+/// Dispatch a HookEvent to the application by calling handle_hotkey_event().
 ///
-/// Plan 03 will wire this to handle_shortcut().
-/// For now, log the event for verification.
+/// Both the WH_KEYBOARD_LL hook path (this function) and the global-shortcut path
+/// (handle_shortcut in lib.rs) converge on handle_hotkey_event, avoiding the need
+/// to construct the private ShortcutEvent type from tauri-plugin-global-shortcut.
 fn dispatch_hook_event(app: &tauri::AppHandle, event: HookEvent) {
-    let _ = app; // used in Plan 03
     match event {
-        HookEvent::Pressed => log::info!("Hook dispatch: Pressed"),
-        HookEvent::Released => log::info!("Hook dispatch: Released"),
+        HookEvent::Pressed => crate::handle_hotkey_event(app, true),
+        HookEvent::Released => crate::handle_hotkey_event(app, false),
     }
 }

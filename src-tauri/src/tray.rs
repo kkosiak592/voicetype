@@ -97,7 +97,23 @@ pub fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                     w.set_focus().unwrap();
                 }
             }
-            "quit" => app.exit(0),
+            "quit" => {
+                // Explicitly uninstall the keyboard hook before exit.
+                // HookHandle::Drop is the safety net; this ensures clean shutdown
+                // even if managed state outlives Drop ordering.
+                #[cfg(windows)]
+                {
+                    use crate::HookHandleState;
+                    if let Some(hook_state) = app.try_state::<HookHandleState>() {
+                        let guard = hook_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                        if let Some(ref handle) = *guard {
+                            handle.uninstall();
+                            log::info!("Keyboard hook uninstalled on quit");
+                        }
+                    }
+                }
+                app.exit(0);
+            }
             _ => {}
         })
         .build(app)?;

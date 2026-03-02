@@ -98,6 +98,18 @@ impl RecordingMode {
 /// with None) on second tap, pipeline entry, or any early-stop path.
 pub struct VadWorkerState(pub std::sync::Mutex<Option<vad::VadWorkerHandle>>);
 
+/// Managed state holding the keyboard hook handle (if installed).
+/// Used for cleanup on app shutdown.
+#[cfg(windows)]
+pub struct HookHandleState(pub std::sync::Mutex<Option<keyboard_hook::HookHandle>>);
+
+/// Returns true if the hotkey string represents a modifier-only combo
+/// that requires the WH_KEYBOARD_LL hook (e.g. "ctrl+win").
+/// Standard combos with a letter/number key use tauri-plugin-global-shortcut.
+fn is_hook_hotkey(hotkey: &str) -> bool {
+    hotkey.eq_ignore_ascii_case("ctrl+win")
+}
+
 // WhisperState and related types are only available with the whisper feature.
 #[cfg(feature = "whisper")]
 use whisper_rs::WhisperContext;
@@ -366,130 +378,139 @@ fn set_engine(app: tauri::AppHandle, engine: String, parakeet_model: Option<Stri
     Ok(())
 }
 
-/// Shared hotkey handler body — called from both setup() and rebind_hotkey() handlers.
-fn handle_shortcut(app: &tauri::AppHandle, event: &tauri_plugin_global_shortcut::ShortcutEvent) {
-    use tauri_plugin_global_shortcut::ShortcutState;
+/// Hotkey handler body — called from both handle_shortcut() (global-shortcut path)
+/// and dispatch_hook_event in keyboard_hook.rs (WH_KEYBOARD_LL path).
+///
+/// `pressed=true` maps to the Pressed branch; `pressed=false` to Released.
+pub(crate) fn handle_hotkey_event(app: &tauri::AppHandle, pressed: bool) {
     use std::sync::atomic::Ordering;
     use tauri::Emitter;
 
     let pipeline = app.state::<pipeline::PipelineState>();
 
+    if pressed {
+        let mode = app.state::<RecordingMode>().get();
+
+        match mode {
+            Mode::HoldToTalk => {
+                if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
+                    let audio_mutex = app.state::<audio::AudioCaptureMutex>();
+                    let guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
+                    let audio = match guard.as_ref() {
+                        Some(a) => a,
+                        None => {
+                            log::error!("No microphone — cannot record");
+                            pipeline.reset_to_idle();
+                            return;
+                        }
+                    };
+                    audio.clear_buffer();
+                    audio.recording.store(true, Ordering::Relaxed);
+                    let buffer_clone = audio.buffer.clone();
+                    drop(guard);
+                    tray::set_tray_state(app, tray::TrayState::Recording);
+                    pill::show_pill(app);
+                    app.emit_to("pill", "pill-state", "recording").ok();
+
+                    let stream_active = app.state::<LevelStreamActive>();
+                    stream_active.0.store(true, Ordering::Relaxed);
+                    pill::start_level_stream(
+                        app.clone(),
+                        buffer_clone,
+                        stream_active.0.clone(),
+                    );
+
+                    log::info!("Pipeline: IDLE -> RECORDING (hold-to-talk)");
+                }
+            }
+            Mode::Toggle => {
+                if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
+                    let audio_mutex = app.state::<audio::AudioCaptureMutex>();
+                    let guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
+                    let audio = match guard.as_ref() {
+                        Some(a) => a,
+                        None => {
+                            log::error!("No microphone — cannot record (toggle)");
+                            pipeline.reset_to_idle();
+                            return;
+                        }
+                    };
+                    audio.clear_buffer();
+                    audio.recording.store(true, Ordering::Relaxed);
+                    let buffer_clone = audio.buffer.clone();
+                    drop(guard);
+                    tray::set_tray_state(app, tray::TrayState::Recording);
+                    pill::show_pill(app);
+                    app.emit_to("pill", "pill-state", "recording").ok();
+                    let stream_active = app.state::<LevelStreamActive>();
+                    stream_active.0.store(true, Ordering::Relaxed);
+                    pill::start_level_stream(
+                        app.clone(),
+                        buffer_clone.clone(),
+                        stream_active.0.clone(),
+                    );
+
+                    let vad_handle = vad::spawn_vad_worker(
+                        app.clone(),
+                        buffer_clone,
+                    );
+                    let vad_state = app.state::<VadWorkerState>();
+                    if let Ok(mut guard) = vad_state.0.lock() {
+                        *guard = Some(vad_handle);
+                    }
+
+                    log::info!("Pipeline: IDLE -> RECORDING (toggle mode, VAD worker started)");
+                } else if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
+                    let vad_state = app.state::<VadWorkerState>();
+                    if let Ok(mut guard) = vad_state.0.lock() {
+                        if let Some(mut handle) = guard.take() {
+                            handle.cancel();
+                        }
+                    }
+
+                    let stream_active = app.state::<LevelStreamActive>();
+                    stream_active.0.store(false, Ordering::Relaxed);
+                    app.emit_to("pill", "pill-state", "processing").ok();
+                    tray::set_tray_state(app, tray::TrayState::Processing);
+                    log::info!("Pipeline: RECORDING -> PROCESSING (toggle mode, second tap)");
+
+                    let app_handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        pipeline::run_pipeline(app_handle).await;
+                    });
+                }
+            }
+        }
+    } else {
+        // pressed=false — Released
+        let mode = app.state::<RecordingMode>().get();
+        match mode {
+            Mode::HoldToTalk => {
+                if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
+                    let stream_active = app.state::<LevelStreamActive>();
+                    stream_active.0.store(false, Ordering::Relaxed);
+                    app.emit_to("pill", "pill-state", "processing").ok();
+                    tray::set_tray_state(app, tray::TrayState::Processing);
+                    log::info!("Pipeline: RECORDING -> PROCESSING");
+                    let app_handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        pipeline::run_pipeline(app_handle).await;
+                    });
+                }
+            }
+            Mode::Toggle => {
+                // Toggle mode: release is ignored — VAD or second tap stops
+            }
+        }
+    }
+}
+
+/// Thin wrapper so the global-shortcut plugin handler can call handle_hotkey_event.
+fn handle_shortcut(app: &tauri::AppHandle, event: &tauri_plugin_global_shortcut::ShortcutEvent) {
+    use tauri_plugin_global_shortcut::ShortcutState;
     match event.state {
-        ShortcutState::Pressed => {
-            let mode = app.state::<RecordingMode>().get();
-
-            match mode {
-                Mode::HoldToTalk => {
-                    if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
-                        let audio_mutex = app.state::<audio::AudioCaptureMutex>();
-                        let guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
-                        let audio = match guard.as_ref() {
-                            Some(a) => a,
-                            None => {
-                                log::error!("No microphone — cannot record");
-                                pipeline.reset_to_idle();
-                                return;
-                            }
-                        };
-                        audio.clear_buffer();
-                        audio.recording.store(true, Ordering::Relaxed);
-                        let buffer_clone = audio.buffer.clone();
-                        drop(guard);
-                        tray::set_tray_state(app, tray::TrayState::Recording);
-                        pill::show_pill(app);
-                        app.emit_to("pill", "pill-state", "recording").ok();
-
-                        let stream_active = app.state::<LevelStreamActive>();
-                        stream_active.0.store(true, Ordering::Relaxed);
-                        pill::start_level_stream(
-                            app.clone(),
-                            buffer_clone,
-                            stream_active.0.clone(),
-                        );
-
-                        log::info!("Pipeline: IDLE -> RECORDING (hold-to-talk)");
-                    }
-                }
-                Mode::Toggle => {
-                    if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
-                        let audio_mutex = app.state::<audio::AudioCaptureMutex>();
-                        let guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
-                        let audio = match guard.as_ref() {
-                            Some(a) => a,
-                            None => {
-                                log::error!("No microphone — cannot record (toggle)");
-                                pipeline.reset_to_idle();
-                                return;
-                            }
-                        };
-                        audio.clear_buffer();
-                        audio.recording.store(true, Ordering::Relaxed);
-                        let buffer_clone = audio.buffer.clone();
-                        drop(guard);
-                        tray::set_tray_state(app, tray::TrayState::Recording);
-                        pill::show_pill(app);
-                        app.emit_to("pill", "pill-state", "recording").ok();
-                        let stream_active = app.state::<LevelStreamActive>();
-                        stream_active.0.store(true, Ordering::Relaxed);
-                        pill::start_level_stream(
-                            app.clone(),
-                            buffer_clone.clone(),
-                            stream_active.0.clone(),
-                        );
-
-                        let vad_handle = vad::spawn_vad_worker(
-                            app.clone(),
-                            buffer_clone,
-                        );
-                        let vad_state = app.state::<VadWorkerState>();
-                        if let Ok(mut guard) = vad_state.0.lock() {
-                            *guard = Some(vad_handle);
-                        }
-
-                        log::info!("Pipeline: IDLE -> RECORDING (toggle mode, VAD worker started)");
-                    } else if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
-                        let vad_state = app.state::<VadWorkerState>();
-                        if let Ok(mut guard) = vad_state.0.lock() {
-                            if let Some(mut handle) = guard.take() {
-                                handle.cancel();
-                            }
-                        }
-
-                        let stream_active = app.state::<LevelStreamActive>();
-                        stream_active.0.store(false, Ordering::Relaxed);
-                        app.emit_to("pill", "pill-state", "processing").ok();
-                        tray::set_tray_state(app, tray::TrayState::Processing);
-                        log::info!("Pipeline: RECORDING -> PROCESSING (toggle mode, second tap)");
-
-                        let app_handle = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            pipeline::run_pipeline(app_handle).await;
-                        });
-                    }
-                }
-            }
-        }
-        ShortcutState::Released => {
-            let mode = app.state::<RecordingMode>().get();
-            match mode {
-                Mode::HoldToTalk => {
-                    if pipeline.transition(pipeline::RECORDING, pipeline::PROCESSING) {
-                        let stream_active = app.state::<LevelStreamActive>();
-                        stream_active.0.store(false, Ordering::Relaxed);
-                        app.emit_to("pill", "pill-state", "processing").ok();
-                        tray::set_tray_state(app, tray::TrayState::Processing);
-                        log::info!("Pipeline: RECORDING -> PROCESSING");
-                        let app_handle = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            pipeline::run_pipeline(app_handle).await;
-                        });
-                    }
-                }
-                Mode::Toggle => {
-                    // Toggle mode: release is ignored — VAD or second tap stops
-                }
-            }
-        }
+        ShortcutState::Pressed => handle_hotkey_event(app, true),
+        ShortcutState::Released => handle_hotkey_event(app, false),
     }
 }
 
@@ -1364,6 +1385,13 @@ pub fn run() {
     // setup() will overwrite with the saved value from settings.json.
     builder = builder.manage(ActiveEngine(std::sync::Mutex::new(TranscriptionEngine::Whisper)));
 
+    // HookHandleState starts as None — populated in setup() if hotkey is "ctrl+win".
+    // Registered on Builder so it's available for cleanup in the run() callback.
+    #[cfg(windows)]
+    {
+        builder = builder.manage(HookHandleState(std::sync::Mutex::new(None)));
+    }
+
     // ParakeetStateMutex starts as None — model is loaded on demand (engine switch)
     // or at startup if saved engine is Parakeet.
     #[cfg(feature = "parakeet")]
@@ -1428,9 +1456,11 @@ pub fn run() {
                 log::info!("Pill overlay window configured (focusable=false, no-shadow)");
             }
 
-            // Determine hotkey to register: use saved setting if present, else default
+            // Determine hotkey to register: use saved setting if present, else default.
+            // Default is "ctrl+win" for fresh installs (handled by hook path).
+            // Existing users keep their saved hotkey unchanged.
             let hotkey = read_saved_hotkey(app)
-                .unwrap_or_else(|| "ctrl+shift+space".to_owned());
+                .unwrap_or_else(|| "ctrl+win".to_owned());
 
             log::info!("Registering hotkey: {}", hotkey);
 
@@ -1549,16 +1579,45 @@ pub fn run() {
                 app.manage(corrections::CorrectionsState(std::sync::Mutex::new(engine)));
             }
 
-            // Register global hotkey plugin (desktop only — no Android/iOS support)
+            // Conditional hotkey routing:
+            // - "ctrl+win" (modifier-only): install WH_KEYBOARD_LL hook (Windows only)
+            // - Standard combos: use tauri-plugin-global-shortcut as before
+            #[cfg(windows)]
+            let hook_active = if is_hook_hotkey(&hotkey) {
+                match keyboard_hook::install(app.handle().clone()) {
+                    Ok(handle) => {
+                        log::info!("Keyboard hook installed for hotkey: {}", hotkey);
+                        let hook_state = app.state::<HookHandleState>();
+                        let mut guard = hook_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                        *guard = Some(handle);
+                        true
+                    }
+                    Err(e) => {
+                        log::error!("Failed to install keyboard hook: {} — falling back to global shortcut", e);
+                        false
+                    }
+                }
+            } else {
+                false
+            };
+
+            #[cfg(not(windows))]
+            let hook_active = false;
+
+            // Register global hotkey plugin (desktop only — no Android/iOS support).
+            // Skipped when the hook is active (hook handles Ctrl+Win directly).
+            // Always registered for standard combos (non-hook hotkeys).
             #[cfg(desktop)]
-            app.handle().plugin(
-                tauri_plugin_global_shortcut::Builder::new()
-                    .with_shortcuts([hotkey.as_str()])?
-                    .with_handler(|app, _shortcut, event| {
-                        handle_shortcut(app, &event);
-                    })
-                    .build(),
-            )?;
+            if !hook_active {
+                app.handle().plugin(
+                    tauri_plugin_global_shortcut::Builder::new()
+                        .with_shortcuts([hotkey.as_str()])?
+                        .with_handler(|app, _shortcut, event| {
+                            handle_shortcut(app, &event);
+                        })
+                        .build(),
+                )?;
+            }
 
             // Start persistent audio capture stream.
             // Prefer saved mic device if found; fall back to system default silently (RESEARCH.md Pitfall 6).
