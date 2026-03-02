@@ -40,6 +40,42 @@ pub fn set_tray_state(app: &tauri::AppHandle, state: TrayState) {
     }
 }
 
+/// Show or hide the "Update Available" indicator in the tray context menu.
+///
+/// When `available == true`, prepends an "Update Available" item above Settings.
+/// When `available == false`, restores the default menu (Settings + Quit only).
+///
+/// Tauri 2 tray menus are immutable after creation — a new Menu is constructed
+/// and swapped in via `tray.set_menu(Some(new_menu))`.
+///
+/// Clicking "Update Available" opens the settings window (same as "settings" item).
+/// Failures are silently ignored — tray menu is non-critical UI.
+pub fn set_tray_update_indicator(app: &tauri::AppHandle, available: bool) {
+    let Some(tray) = app.tray_by_id("tray") else {
+        return;
+    };
+
+    let result: tauri::Result<()> = (|| {
+        if available {
+            let update_i = MenuItem::with_id(app, "update_available", "Update Available", true, None::<&str>)?;
+            let settings_i = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+            let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&update_i, &settings_i, &quit_i])?;
+            tray.set_menu(Some(menu))?;
+        } else {
+            let settings_i = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+            let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&settings_i, &quit_i])?;
+            tray.set_menu(Some(menu))?;
+        }
+        Ok(())
+    })();
+
+    if let Err(e) = result {
+        log::warn!("Failed to update tray menu for update indicator: {}", e);
+    }
+}
+
 pub fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let settings_i = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
     let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -55,7 +91,7 @@ pub fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(false) // left-click does nothing per spec
         .on_menu_event(|app, event| match event.id.as_ref() {
-            "settings" => {
+            "settings" | "update_available" => {
                 if let Some(w) = app.get_webview_window("settings") {
                     w.show().unwrap();
                     w.set_focus().unwrap();

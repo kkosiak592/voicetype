@@ -8,6 +8,8 @@ import { ModelSection } from './components/sections/ModelSection';
 import { MicrophoneSection } from './components/sections/MicrophoneSection';
 import { AppearanceSection } from './components/sections/AppearanceSection';
 import { FirstRun } from './components/FirstRun';
+import { useUpdater } from './lib/updater';
+import { UpdateBanner } from './components/UpdateBanner';
 
 interface FirstRunStatus {
   needsSetup: boolean;
@@ -19,6 +21,7 @@ interface FirstRunStatus {
 
 function App() {
   const [activeSection, setActiveSection] = useState<SectionId>('general');
+  const updater = useUpdater();
   const [hotkey, setHotkey] = useState(DEFAULTS.hotkey);
   const [theme, setTheme] = useState<'light' | 'dark'>(DEFAULTS.theme);
   const [recordingMode, setRecordingMode] = useState<'hold' | 'toggle'>(DEFAULTS.recordingMode);
@@ -128,37 +131,50 @@ function App() {
   return (
     <div className="flex h-screen bg-white dark:bg-gray-900">
       <Sidebar activeSection={activeSection} onSelect={setActiveSection} />
-      <main className="flex-1 overflow-y-auto px-6 py-5 text-gray-900 dark:text-gray-100">
-        {activeSection === 'general' && (
-          <GeneralSection
-            hotkey={hotkey}
-            onHotkeyChange={setHotkey}
-            recordingMode={recordingMode}
-            onRecordingModeChange={setRecordingMode}
-          />
-        )}
-        {activeSection === 'profiles' && (
-          <ProfilesSection
-            activeProfileId={activeProfile}
-            onActiveProfileChange={setActiveProfile}
-          />
-        )}
-        {activeSection === 'model' && (
-          <ModelSection
-            selectedModel={selectedModel}
-            onSelectedModelChange={setSelectedModel}
-          />
-        )}
-        {activeSection === 'microphone' && (
-          <MicrophoneSection
-            selectedMic={selectedMic}
-            onSelectedMicChange={setSelectedMic}
-          />
-        )}
-        {activeSection === 'appearance' && (
-          <AppearanceSection theme={theme} onThemeChange={setTheme} />
-        )}
-      </main>
+      <div className="flex flex-1 flex-col">
+        <UpdateBanner
+          state={updater.state}
+          onDownload={updater.startDownload}
+          onCancel={updater.cancelDownload}
+          onRestart={updater.restartNow}
+          onLater={updater.restartLater}
+          onDismiss={updater.dismiss}
+          onRetry={updater.checkNow}
+        />
+        <main className="flex-1 overflow-y-auto px-6 py-5 text-gray-900 dark:text-gray-100">
+          {activeSection === 'general' && (
+            <GeneralSection
+              hotkey={hotkey}
+              onHotkeyChange={setHotkey}
+              recordingMode={recordingMode}
+              onRecordingModeChange={setRecordingMode}
+              updaterState={updater.state}
+              onCheckForUpdates={updater.checkNow}
+            />
+          )}
+          {activeSection === 'profiles' && (
+            <ProfilesSection
+              activeProfileId={activeProfile}
+              onActiveProfileChange={setActiveProfile}
+            />
+          )}
+          {activeSection === 'model' && (
+            <ModelSection
+              selectedModel={selectedModel}
+              onSelectedModelChange={setSelectedModel}
+            />
+          )}
+          {activeSection === 'microphone' && (
+            <MicrophoneSection
+              selectedMic={selectedMic}
+              onSelectedMicChange={setSelectedMic}
+            />
+          )}
+          {activeSection === 'appearance' && (
+            <AppearanceSection theme={theme} onThemeChange={setTheme} />
+          )}
+        </main>
+      </div>
     </div>
   );
 }

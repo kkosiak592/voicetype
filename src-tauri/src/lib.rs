@@ -1083,6 +1083,25 @@ async fn enable_autostart(app: tauri::AppHandle) -> Result<(), String> {
     autostart.enable().map_err(|e| e.to_string())
 }
 
+/// Notify the tray menu whether an update is available.
+///
+/// When `available == true`, adds an "Update Available" item at the top of the tray menu.
+/// When `available == false`, restores the default menu.
+/// Fire-and-forget — the frontend calls this after a successful update check.
+#[tauri::command]
+fn set_update_available(app: tauri::AppHandle, available: bool) {
+    tray::set_tray_update_indicator(&app, available);
+}
+
+/// Check whether the recording/transcription pipeline is currently active.
+///
+/// Returns true if audio capture or transcription is in progress (LevelStreamActive flag is set).
+/// Used by the frontend's restartNow() to defer relaunch until the user finishes dictating.
+#[tauri::command]
+fn is_pipeline_active(state: tauri::State<'_, LevelStreamActive>) -> bool {
+    state.0.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Switch the active whisper model. Reloads the WhisperContext without app restart.
 ///
 /// Uses spawn_blocking because model loading is CPU-intensive.
@@ -1371,6 +1390,8 @@ pub fn run() {
             download::download_parakeet_fp32_model,
             enable_autostart,
             updater::check_for_update,
+            set_update_available,
+            is_pipeline_active,
             #[cfg(feature = "whisper")]
             check_first_run,
             #[cfg(feature = "whisper")]
