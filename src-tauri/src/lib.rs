@@ -889,28 +889,24 @@ fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
         ModelInfo {
             id: "large-v3-turbo".to_string(),
             name: "Large v3 Turbo".to_string(),
-            description: "Best accuracy — 574 MB — requires NVIDIA GPU".to_string(),
+            description: "Most accurate — 574 MB — requires NVIDIA GPU".to_string(),
             recommended: false,
             downloaded: dir.join("ggml-large-v3-turbo-q5_0.bin").exists(),
         },
         ModelInfo {
             id: "small-en".to_string(),
             name: "Small (English)".to_string(),
-            description: if gpu_mode {
-                "Fast — 190 MB — GPU accelerated".to_string()
-            } else {
-                "Fast — 190 MB — works on any CPU".to_string()
-            },
+            description: "Lightweight — 190 MB — GPU accelerated when available".to_string(),
             recommended: !gpu_mode,
             downloaded: dir.join("ggml-small.en-q5_1.bin").exists(),
         },
     ];
 
-    // Parakeet TDT fp32 — full precision variant, recommended for GPU users
+    // Parakeet TDT fp32 — fast and accurate, supports CUDA, DirectML, and CPU
     models.push(ModelInfo {
         id: "parakeet-tdt-v2-fp32".to_string(),
         name: "Parakeet TDT (fp32)".to_string(),
-        description: "Full precision — 2.56 GB — requires NVIDIA GPU (ONNX)".to_string(),
+        description: "Fast and accurate — 2.56 GB — GPU accelerated (CUDA or DirectML)".to_string(),
         recommended: gpu_mode,
         downloaded: crate::download::parakeet_fp32_model_exists(),
     });
