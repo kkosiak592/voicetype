@@ -87,10 +87,10 @@ Plans:
   1. A documented release runbook exists listing the exact commands to cut a release
   2. A changelog/release notes template exists that produces consistent GitHub Release descriptions
   3. Following the runbook from a clean state produces a working release with no gaps or ambiguity
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 14-01: Write release runbook and changelog template; validate against a test tag push
+- [ ] 14-01-PLAN.md — Create RELEASING.md runbook and CHANGELOG.md template
 
 ## Progress
 
