@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 [##########------------------------------------------] 0% (0/4 phases)
 
-Last activity: 2026-03-02 — Roadmap created for v1.2
+Last activity: 2026-03-02 — v1.1 milestone completed, v1.2 roadmap ready
 
 ## Performance Metrics
 
@@ -44,10 +44,6 @@ Last activity: 2026-03-02 — Roadmap created for v1.2
 
 ### Decisions
 
-- v1.1: tauri-plugin-updater + GitHub Releases chosen (Option A) — zero cost, official Tauri approach, best UX for <20 users
-- v1.1: Public GitHub repo required — updater needs unauthenticated access to release assets
-- v1.1: Ed25519 signing — private key stored only in GitHub secrets + local backup
-- v1.1: bundle.createUpdaterArtifacts set to "v1Compatible" for Tauri 2 backward-compatible signature format
 - v1.2: WH_KEYBOARD_LL on dedicated thread — no Tokio task, no main thread; Win32 GetMessage loop required
 - v1.2: AtomicBool + mpsc::try_send only in hook callback — never lock Mutex, never allocate, never async
 - v1.2: DeviceEventFilter::Always applied before build() — mandatory fix for Tauri issue #13919
@@ -73,5 +69,5 @@ None active.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Roadmap defined for v1.2 Keyboard Hook — ready to plan Phase 15
+Stopped at: v1.1 milestone archived — ready to plan Phase 15
 Resume file: None

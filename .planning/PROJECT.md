@@ -37,6 +37,12 @@ Voice dictation must feel instant — sub-1500ms from end-of-speech to text appe
 
 ### Active
 
+- [ ] WH_KEYBOARD_LL keyboard hook module on dedicated thread
+- [ ] Ctrl+Win modifier-only hotkey with 50ms debounce
+- [ ] Start menu suppression when Ctrl+Win combo is active
+- [ ] Fallback to standard hotkey if hook installation fails
+- [ ] Frontend modifier-only combo capture and display
+
 ## Current Milestone: v1.2 Keyboard Hook
 
 **Goal:** Replace tauri-plugin-global-shortcut with a custom WH_KEYBOARD_LL low-level keyboard hook, enabling Ctrl+Win modifier-only hotkey activation with debounce for reliable key ordering.
@@ -61,12 +67,14 @@ Voice dictation must feel instant — sub-1500ms from end-of-speech to text appe
 
 ## Context
 
-**Current state (v1.0 shipped 2026-03-02):**
-- 9,474 LOC across Rust backend + React/TypeScript frontend
-- Tech stack: Tauri 2.0, whisper-rs, parakeet-rs, cpal/WASAPI, Silero VAD, React, Tailwind CSS
+**Current state (v1.1 shipped 2026-03-02):**
+- 18,261 LOC across Rust backend + React/TypeScript frontend + planning docs
+- Tech stack: Tauri 2.0, whisper-rs, parakeet-rs, cpal/WASAPI, Silero VAD, React, Tailwind CSS, tauri-plugin-updater, tauri-plugin-process
 - Dual engine: Whisper (CUDA) for broad compatibility, Parakeet TDT (CUDA/DirectML) for GPU users
-- 237 commits over 4 days of development
+- 268 commits over 4 days of development
 - NSIS installer ~9 MB, models downloaded on first run (300MB-1.3GB depending on selection)
+- Auto-update pipeline: Ed25519 signing, GitHub Actions CI/CD, in-app update UX
+- Public repo: https://github.com/kkosiak592/voicetype
 
 **Technical environment:**
 - Windows 10 Pro, NVIDIA Quadro P2000 (5GB VRAM, Pascal arch, CUDA 11.7)
@@ -101,8 +109,14 @@ Voice dictation must feel instant — sub-1500ms from end-of-speech to text appe
 | VAD gate bypass for hold-to-talk | Saves 20-30ms by skipping Silero scan when user explicitly controls recording | ✓ Good — noticeable latency reduction |
 
 ---
-| tauri-plugin-updater + GitHub Releases | Zero cost, excellent UX, official Tauri approach, simplest for <20 users | ✓ Good |
+| tauri-plugin-updater + GitHub Releases | Zero cost, excellent UX, official Tauri approach, simplest for <20 users | ✓ Good — first CI release published |
 | Public GitHub repo | Updater needs unauthenticated access to release assets, source visibility acceptable | ✓ Good |
+| Ed25519 signing over RSA | Tauri default, small signatures, fast verification | ✓ Good |
+| bundle.createUpdaterArtifacts v1Compatible | Backward-compatible signature format for Tauri 2 | ✓ Good |
+| JS plugin API for download (not Rust IPC) | Progress callbacks in frontend without custom channel piping | ✓ Good |
+| CUDA minimal sub-packages in CI | Avoids 4 GB full toolkit; installs only nvcc/cudart/cublas needed for whisper-rs | ✓ Good |
+| CMAKE_CUDA_ARCHITECTURES=61;75;86;89 | Single binary supports Pascal through Ada Lovelace GPUs | ✓ Good |
+| Annotated git tags for releases | Store tagger info, work with git describe, better practice | ✓ Good |
 
 ---
-*Last updated: 2026-03-02 after v1.2 milestone start*
+*Last updated: 2026-03-02 after v1.1 milestone completion*

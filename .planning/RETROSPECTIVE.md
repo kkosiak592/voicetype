@@ -53,6 +53,52 @@
 
 ---
 
+## Milestone: v1.1 — Auto-Updates & CI/CD
+
+**Shipped:** 2026-03-02
+**Phases:** 4 | **Plans:** 5
+**Timeline:** 1 day (2026-03-02) | **Commits:** 31
+
+### What Was Built
+- Ed25519 signing infrastructure (keypair, GitHub secrets, public key in tauri.conf.json)
+- Public GitHub repo kkosiak592/voicetype
+- tauri-plugin-updater + tauri-plugin-process with Rust backend and JS frontend
+- UpdateBanner component with full update lifecycle (check, download with progress, install, relaunch)
+- GitHub Actions CI/CD workflow with CUDA 12.6.3 + LLVM 18 build environment
+- RELEASING.md runbook and CHANGELOG.md template
+
+### What Worked
+- Linear phase dependency chain (signing → plugin → CI → docs) meant no integration surprises
+- Splitting plugin integration into two plans (Rust backend, then frontend UI) kept each plan tightly scoped
+- Human checkpoint in Phase 11 (private key backup confirmation) was the right gate for irreversible security step
+- JS plugin API for download (instead of Rust IPC) simplified progress callback wiring
+- tauri-action handled signing + latest.json generation — no custom build scripts needed
+- CUDA minimal sub-packages in CI avoided 4 GB download while providing all needed headers
+
+### What Was Inefficient
+- Updater config initially placed under wrong tauri.conf.json key (v1 format instead of v2 plugins section) — caught post-checkpoint but should have been caught during planning
+- Phase numbering jumped from 8 to 11 (gap of 9-10 not used) — legacy from roadmap creation
+- Mid-download close limitation (banner resets to available state) acknowledged but not resolved — plugin API limitation
+
+### Patterns Established
+- Plugin registration split: setup()-requiring plugins in setup(), stateless plugins on Builder chain
+- Tray menu rebuild pattern: Tauri 2 menus are immutable, so create new Menu + set_menu() for updates
+- Keep a Changelog format for consistent release notes
+- Annotated git tags with git push --follow-tags for atomic release publishing
+
+### Key Lessons
+1. Verify Tauri config format version (v1 vs v2) at planning time — config placement errors are silent until runtime
+2. Minimal CI dependency installation (sub-packages over full toolkit) significantly reduces build times
+3. Infrastructure milestones (signing, CI, docs) are low-risk and fast when the app code is stable
+4. tauri-action abstracts most release complexity — custom build scripts are rarely needed for standard Tauri apps
+
+### Cost Observations
+- Model mix: predominantly sonnet for execution, opus for phase planning
+- Completed in a single session (~3 hours wall clock)
+- Notable: all 5 plans executed with zero deviations from plan — infrastructure work is highly predictable
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -60,7 +106,10 @@
 | Milestone | Sessions | Phases | Key Change |
 |-----------|----------|--------|------------|
 | v1.0 | ~20 | 10 | Initial process — bottom-up build with quick task polish |
+| v1.1 | 1 | 4 | Infrastructure milestone — linear dependencies, zero deviations |
 
 ### Top Lessons (Verified Across Milestones)
 
-1. (Will be populated after v1.1 — need multiple milestones to identify cross-validated patterns)
+1. Human verification checkpoints catch issues automated tests miss (v1.0: UI bugs; v1.1: config format)
+2. Phase dependency ordering (bottom-up in v1.0, linear in v1.1) prevents integration surprises when respected
+3. Planning pays off — phases that follow plans closely execute fastest (v1.1: 0 deviations across 5 plans)
