@@ -25,14 +25,6 @@ const MODELS = [
     gpuOnly: true,
   },
   {
-    id: 'parakeet-tdt-v2',
-    name: 'Parakeet TDT (int8)',
-    size: '661 MB',
-    quality: 'Fast (GPU)',
-    requirement: 'Requires NVIDIA GPU',
-    gpuOnly: true,
-  },
-  {
     id: 'parakeet-tdt-v2-fp32',
     name: 'Parakeet TDT (fp32)',
     size: '2.56 GB',
@@ -77,8 +69,8 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
         // Non-blocking — user can toggle autostart later in settings
       }
 
-      // If the user chose a Parakeet variant, activate that engine immediately
-      if (downloadingId === 'parakeet-tdt-v2' || downloadingId === 'parakeet-tdt-v2-fp32') {
+      // If the user chose Parakeet fp32, activate that engine immediately
+      if (downloadingId === 'parakeet-tdt-v2-fp32') {
         try {
           await invoke('set_engine', { engine: 'parakeet', parakeetModel: downloadingId });
         } catch (e) {
@@ -133,9 +125,7 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
     };
 
     try {
-      if (modelId === 'parakeet-tdt-v2') {
-        await invoke('download_parakeet_model', { onEvent });
-      } else if (modelId === 'parakeet-tdt-v2-fp32') {
+      if (modelId === 'parakeet-tdt-v2-fp32') {
         await invoke('download_parakeet_fp32_model', { onEvent });
       } else {
         await invoke('download_model', { modelId, onEvent });
@@ -171,7 +161,7 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
 
   const gridClass =
     gpuDetected
-      ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6'
+      ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6'
       : 'grid grid-cols-1 gap-4 mb-6';
 
   return (

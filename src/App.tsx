@@ -65,13 +65,13 @@ function App() {
       try {
         const backendEngine = await invoke<string>('get_engine');
         if (backendEngine === 'parakeet') {
-          setSelectedModel('parakeet-tdt-v2');
-        } else if (savedSelectedModel && savedSelectedModel !== 'parakeet-tdt-v2') {
+          setSelectedModel('parakeet-tdt-v2-fp32');
+        } else if (savedSelectedModel && savedSelectedModel !== 'parakeet-tdt-v2-fp32') {
           setSelectedModel(savedSelectedModel);
         } else {
           // Backend is whisper but store says parakeet — pick the active whisper model
           const models = await invoke<{ id: string; available: boolean }[]>('list_models');
-          const available = models.find(m => m.available && m.id !== 'parakeet-tdt-v2');
+          const available = models.find(m => m.available && m.id !== 'parakeet-tdt-v2-fp32');
           setSelectedModel(available?.id ?? '');
         }
       } catch {
