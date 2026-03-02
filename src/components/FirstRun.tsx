@@ -209,6 +209,29 @@ export function FirstRun({ gpuDetected, gpuName, directmlAvailable, recommendedM
           )}
         </div>
 
+        {/* Download Recommended button */}
+        {(() => {
+          const recModel = MODELS.find((m) => m.id === recommendedModel);
+          if (!recModel || downloadState !== 'idle') return null;
+          return (
+            <div className="mb-6 text-center">
+              <button
+                onClick={() => handleDownload(recommendedModel)}
+                disabled={downloadState !== 'idle'}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-8 py-3 font-semibold text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Download Recommended
+                <span className="block text-xs opacity-80 font-normal mt-0.5">
+                  {recModel.name} &mdash; {recModel.size}
+                </span>
+              </button>
+              <p className="mt-3 text-xs text-gray-400 dark:text-gray-500">
+                or choose a different model below
+              </p>
+            </div>
+          );
+        })()}
+
         {/* Model cards */}
         <div className={gridClass}>
           {visibleModels.map((model) => {
