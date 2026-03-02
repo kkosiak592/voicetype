@@ -9,6 +9,13 @@ type DownloadEvent =
   | { event: 'finished' }
   | { event: 'error'; data: { message: string } };
 
+interface GpuInfo {
+  gpuName: string;
+  executionProvider: string;
+  activeModel: string;
+  activeEngine: string;
+}
+
 interface ModelSectionProps {
   selectedModel: string;
   onSelectedModelChange: (id: string) => void;
@@ -21,6 +28,7 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
   const [fp32Downloading, setFp32Downloading] = useState(false);
   const [fp32Percent, setFp32Percent] = useState(0);
   const [fp32Error, setFp32Error] = useState<string | null>(null);
+  const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(null);
 
   useEffect(() => {
     loadModels().catch(err => {
@@ -31,6 +39,10 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
       console.error('Failed to load engine:', err);
     });
   }, []);
+
+  useEffect(() => {
+    invoke<GpuInfo>('get_gpu_info').then(setGpuInfo).catch(console.error);
+  }, [selectedModel, currentEngine]);
 
   async function loadEngine() {
     try {
@@ -137,6 +149,28 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
         fp32Percent={fp32Percent}
         fp32Error={fp32Error}
       />
+
+      {gpuInfo && (
+        <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-4 py-3">
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+            Inference Status
+          </p>
+          <div className="space-y-1">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500 dark:text-gray-400">GPU</span>
+              <span className="text-gray-900 dark:text-gray-100 font-medium">{gpuInfo.gpuName}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500 dark:text-gray-400">Provider</span>
+              <span className="text-gray-900 dark:text-gray-100 font-medium">{gpuInfo.executionProvider}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500 dark:text-gray-400">Engine</span>
+              <span className="text-gray-900 dark:text-gray-100 font-medium capitalize">{gpuInfo.activeEngine}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {currentEngine === 'parakeet' && (
         <p className="mt-3 text-xs text-gray-400 dark:text-gray-500">

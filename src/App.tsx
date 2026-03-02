@@ -12,6 +12,8 @@ import { FirstRun } from './components/FirstRun';
 interface FirstRunStatus {
   needsSetup: boolean;
   gpuDetected: boolean;
+  gpuName: string;
+  directmlAvailable: boolean;
   recommendedModel: string;
 }
 
@@ -33,7 +35,7 @@ function App() {
         setFirstRunStatus(status);
       } catch {
         // check_first_run unavailable (whisper feature not compiled) — skip first-run gate
-        setFirstRunStatus({ needsSetup: false, gpuDetected: false, recommendedModel: '' });
+        setFirstRunStatus({ needsSetup: false, gpuDetected: false, gpuName: '', directmlAvailable: false, recommendedModel: '' });
       }
 
       const store = await getStore();
@@ -100,6 +102,8 @@ function App() {
       <div className="flex h-screen bg-white dark:bg-gray-900">
         <FirstRun
           gpuDetected={firstRunStatus.gpuDetected}
+          gpuName={firstRunStatus.gpuName}
+          directmlAvailable={firstRunStatus.directmlAvailable}
           recommendedModel={firstRunStatus.recommendedModel}
           onComplete={async (downloadedModelId) => {
             try {

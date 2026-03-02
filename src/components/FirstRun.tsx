@@ -11,6 +11,8 @@ type DownloadState = 'idle' | 'downloading' | 'validating' | 'complete' | 'error
 
 interface FirstRunProps {
   gpuDetected: boolean;
+  gpuName: string;
+  directmlAvailable: boolean;
   recommendedModel: string;
   onComplete: (downloadedModelId: string) => void;
 }
@@ -29,8 +31,8 @@ const MODELS = [
     name: 'Parakeet TDT (fp32)',
     size: '2.56 GB',
     quality: 'Full precision (GPU)',
-    requirement: 'Requires NVIDIA GPU',
-    gpuOnly: true,
+    requirement: 'Requires GPU (CUDA or DirectML)',
+    gpuOnly: false,
   },
   {
     id: 'small-en',
@@ -46,7 +48,7 @@ function formatMB(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRunProps) {
+export function FirstRun({ gpuDetected, gpuName, directmlAvailable, recommendedModel, onComplete }: FirstRunProps) {
   const [downloadState, setDownloadState] = useState<DownloadState>('idle');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadedBytes, setDownloadedBytes] = useState(0);
@@ -54,7 +56,15 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
   const [errorMsg, setErrorMsg] = useState('');
   const cancelledRef = useRef(false);
 
-  const visibleModels = gpuDetected ? MODELS : MODELS.filter((m) => !m.gpuOnly);
+  const visibleModels = MODELS.filter((m) => {
+    if (m.id === 'parakeet-tdt-v2-fp32') {
+      return gpuDetected || directmlAvailable;
+    }
+    if (m.gpuOnly) {
+      return gpuDetected;
+    }
+    return true;
+  });
 
   useEffect(() => {
     if (downloadState !== 'complete') return;
@@ -160,9 +170,11 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
     totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : null;
 
   const gridClass =
-    gpuDetected
+    visibleModels.length >= 3
       ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6'
-      : 'grid grid-cols-1 gap-4 mb-6';
+      : visibleModels.length === 2
+        ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 mb-6'
+        : 'grid grid-cols-1 gap-4 mb-6';
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center px-8 py-10 bg-white dark:bg-gray-900">
@@ -182,7 +194,12 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
           {gpuDetected ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
               <span className="h-2 w-2 rounded-full bg-green-500" />
-              NVIDIA GPU Detected
+              {gpuName || 'NVIDIA GPU Detected'}
+            </span>
+          ) : directmlAvailable ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
+              <span className="h-2 w-2 rounded-full bg-blue-500" />
+              GPU Detected (DirectML)
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
