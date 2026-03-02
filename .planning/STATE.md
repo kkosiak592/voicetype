@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 **Milestone:** v1.0 MVP — SHIPPED 2026-03-02
 **Status:** Milestone complete, archived to .planning/milestones/
 
-Last activity: 2026-03-02 - Completed quick task 21: Update model descriptions across Settings and First Run screens to be accurate and consistent
+Last activity: 2026-03-02 - Completed quick task 22: Add 42 new structural engineering corrections and expand initial_prompt (55 total corrections)
 
 ## Accumulated Context
 
@@ -42,3 +42,4 @@ Last activity: 2026-03-02 - Completed quick task 21: Update model descriptions a
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 21 | Update model descriptions across Settings and First Run screens to be accurate and consistent | 2026-03-02 | 2e291b9 | [21-update-model-descriptions-across-setting](./quick/21-update-model-descriptions-across-setting/) |
+| 22 | Add 42 new structural engineering corrections and expand initial_prompt | 2026-03-02 | 7ce36f0 | [22-add-42-new-structural-engineering-correc](./quick/22-add-42-new-structural-engineering-correc/) |
