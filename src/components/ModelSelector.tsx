@@ -137,10 +137,7 @@ export function ModelSelector({
         const disabled = !model.downloaded || loadingId !== null || downloadingId !== null || parakeetDownloading || fp32Downloading;
 
         // Determine border style for undownloaded cards
-        const undownloadedBorder =
-          isParakeet && thisOnDownload
-            ? 'border-dashed border-gray-300 dark:border-gray-600'
-            : 'border-gray-200 dark:border-gray-700';
+        const undownloadedBorder = 'border-dashed border-gray-300 dark:border-gray-600';
 
         return (
           <div key={model.id}>
