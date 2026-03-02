@@ -111,9 +111,11 @@ impl ModelConfig {
 
             #[cfg(feature = "cuda")]
             ExecutionProvider::Cuda => {
-                eprintln!("[parakeet-rs] Registering CUDA ExecutionProvider (with CPU fallback)");
+                eprintln!("[parakeet-rs] Registering CUDA ExecutionProvider (TF32 enabled, with CPU fallback)");
                 builder.with_execution_providers([
-                    ort::execution_providers::CUDAExecutionProvider::default().build(),
+                    ort::execution_providers::CUDAExecutionProvider::default()
+                        .with_tf32(true)
+                        .build(),
                     CPUExecutionProvider::default().build().error_on_failure(),
                 ])?
             }
