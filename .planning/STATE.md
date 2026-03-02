@@ -52,6 +52,7 @@ Last activity: 2026-03-02 - Completed quick task 17: Remove Fastest badge, move 
 - 2026-03-01: Quick task 11 (switch Parakeet transcription to TimestampMode::Sentences) — TimestampMode imported, None -> Some(TimestampMode::Sentences) at transcribe_samples call site, activates group_by_sentences -> deduplicate_words pipeline (commit 2a30c48)
 - 2026-03-02: Quick task 12 (VAD silence trimming) — vad_trim_silence() added to vad.rs (fresh VAD, 1-chunk padding, fail-open); integrated into pipeline.rs after speech gate before engine dispatch (commits 70c66c4, 05266f5)
 - 2026-03-02: Quick task 17 (remove Fastest badge, move Recommended to fp32) — list_models fp32 recommended=gpu_mode, large-v3-turbo recommended=false, check_first_run recommended_model="parakeet-tdt-v2-fp32" for GPU; FirstRun isFastest removed, Fastest badge JSX removed, int8 quality label updated to "Fast (GPU)" (commits 0b90832, ccd1e5d)
+- 2026-03-02: Quick task 18 (enable GPU acceleration for Whisper small.en) — replaced hardcoded model_id GPU checks in set_model() and startup loader with CachedGpuMode lookup; small-en description now dynamically reflects GPU capability (commit da85907)
 
 ## Decisions
 
@@ -105,6 +106,7 @@ Last activity: 2026-03-02 - Completed quick task 17: Remove Fastest badge, move 
 - [quick-13-fp32]: isFastest badge kept on int8 only — quantization makes it faster than fp32 (NOTE: Fastest badge removed entirely in quick-17)
 - [quick-17]: parakeet-tdt-v2-fp32 is recommended for GPU users — recommended=gpu_mode in list_models, recommended_model="parakeet-tdt-v2-fp32" in check_first_run
 - [quick-17]: Fastest badge removed from FirstRun entirely; int8 quality label changed to "Fast (GPU)"
+- [quick-18]: All Whisper models use CachedGpuMode for GPU selection — no model_id-to-mode hardcoding remains; small-en description dynamically reflects GPU capability
 - [Phase quick-16]: LSTM state updates only on non-blank token emission — matches onnx-asr prev_state = state inside if token != blank_idx block
 - [Phase quick-16]: Frame advancement check unconditional on duration_step > 0 — no emitted_tokens guard, applies at utterance start and after blank sequences
 
@@ -129,6 +131,7 @@ Last activity: 2026-03-02 - Completed quick task 17: Remove Fastest badge, move 
 | 15 | Skip redundant Whisper model reload when already loaded — early-return guard in set_model() using settings.json as source of truth | 2026-03-01 | c5e7126 | [15-skip-redundant-whisper-model-reload-when](./quick/15-skip-redundant-whisper-model-reload-when/) |
 | 13 | Add fp32 Parakeet model variant as selectable option — separate download dir, variant-aware engine dispatch, independent per-variant download state | 2026-03-01 | c4e3cf0 | [13-add-fp32-parakeet-model-variant-as-selec](./quick/13-add-fp32-parakeet-model-variant-as-selec/) |
 | 17 | Remove Fastest badge from FirstRun, move Recommended badge to Parakeet TDT fp32 for GPU users | 2026-03-02 | ccd1e5d | [17-remove-fastest-badge-and-move-recommende](./quick/17-remove-fastest-badge-and-move-recommende/) |
+| 18 | Enable GPU acceleration for Whisper small.en — CachedGpuMode used for all Whisper model GPU selection, no model_id hardcoding | 2026-03-02 | da85907 | [18-enable-gpu-acceleration-for-whisper-smal](./quick/18-enable-gpu-acceleration-for-whisper-smal/) |
 
 ## Accumulated Context
 
