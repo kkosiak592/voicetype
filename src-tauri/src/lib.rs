@@ -191,45 +191,42 @@ fn read_saved_engine(app: &tauri::App) -> TranscriptionEngine {
 }
 
 /// Read the saved Parakeet model variant from settings.json.
-/// Returns "parakeet-tdt-v2" (int8) by default.
+/// Returns "parakeet-tdt-v2-fp32" by default.
 fn read_saved_parakeet_model(app_handle: &tauri::AppHandle) -> String {
     let json = read_settings(app_handle).unwrap_or_else(|_| serde_json::json!({}));
     json.get("parakeet_model")
         .and_then(|v| v.as_str())
         .filter(|s| !s.is_empty())
-        .unwrap_or("parakeet-tdt-v2")
+        .unwrap_or("parakeet-tdt-v2-fp32")
         .to_string()
 }
 
 /// Read the saved Parakeet model variant from settings.json at startup.
-/// Returns "parakeet-tdt-v2" (int8) by default.
+/// Returns "parakeet-tdt-v2-fp32" by default.
 fn read_saved_parakeet_model_startup(app: &tauri::App) -> String {
     let data_dir = match app.path().app_data_dir() {
         Ok(d) => d,
-        Err(_) => return "parakeet-tdt-v2".to_string(),
+        Err(_) => return "parakeet-tdt-v2-fp32".to_string(),
     };
     let settings_path = data_dir.join("settings.json");
     let contents = match std::fs::read_to_string(&settings_path) {
         Ok(c) => c,
-        Err(_) => return "parakeet-tdt-v2".to_string(),
+        Err(_) => return "parakeet-tdt-v2-fp32".to_string(),
     };
     let json: serde_json::Value = match serde_json::from_str(&contents) {
         Ok(j) => j,
-        Err(_) => return "parakeet-tdt-v2".to_string(),
+        Err(_) => return "parakeet-tdt-v2-fp32".to_string(),
     };
     json.get("parakeet_model")
         .and_then(|v| v.as_str())
         .filter(|s| !s.is_empty())
-        .unwrap_or("parakeet-tdt-v2")
+        .unwrap_or("parakeet-tdt-v2-fp32")
         .to_string()
 }
 
 /// Resolve the model directory for a Parakeet variant.
-fn resolve_parakeet_dir(model_id: &str) -> std::path::PathBuf {
-    match model_id {
-        "parakeet-tdt-v2-fp32" => download::parakeet_fp32_model_dir(),
-        _ => download::parakeet_model_dir(), // default to int8
-    }
+fn resolve_parakeet_dir(_model_id: &str) -> std::path::PathBuf {
+    download::parakeet_fp32_model_dir()
 }
 
 #[tauri::command]
@@ -896,16 +893,6 @@ fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
         },
     ];
 
-    // Parakeet TDT int8 — always listed regardless of the parakeet feature flag
-    // (download.rs is not feature-gated, so parakeet_model_exists() is always available).
-    models.push(ModelInfo {
-        id: "parakeet-tdt-v2".to_string(),
-        name: "Parakeet TDT (int8)".to_string(),
-        description: "Fastest — 661 MB — requires NVIDIA GPU (ONNX)".to_string(),
-        recommended: false,
-        downloaded: crate::download::parakeet_model_exists(),
-    });
-
     // Parakeet TDT fp32 — full precision variant, recommended for GPU users
     models.push(ModelInfo {
         id: "parakeet-tdt-v2-fp32".to_string(),
@@ -942,11 +929,10 @@ fn check_first_run(app: tauri::AppHandle) -> FirstRunStatus {
     let dir = models_dir();
     let large_exists = dir.join("ggml-large-v3-turbo-q5_0.bin").exists();
     let small_exists = dir.join("ggml-small.en-q5_1.bin").exists();
-    // Parakeet variants are also valid installed models — skip first-run if any is present
-    let parakeet_exists = crate::download::parakeet_model_exists();
+    // Parakeet fp32 is also a valid installed model — skip first-run if it is present
     let parakeet_fp32_exists = crate::download::parakeet_fp32_model_exists();
     FirstRunStatus {
-        needs_setup: !large_exists && !small_exists && !parakeet_exists && !parakeet_fp32_exists,
+        needs_setup: !large_exists && !small_exists && !parakeet_fp32_exists,
         gpu_detected: gpu_mode,
         recommended_model: if gpu_mode {
             "parakeet-tdt-v2-fp32".to_string()
@@ -1240,7 +1226,6 @@ pub fn run() {
             save_corrections,
             set_all_caps,
             download::download_model,
-            download::download_parakeet_model,
             download::download_parakeet_fp32_model,
             enable_autostart,
             #[cfg(feature = "whisper")]

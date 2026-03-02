@@ -11,7 +11,7 @@ use std::time::Instant;
 /// Loads a Parakeet TDT model from a directory of ONNX files.
 ///
 /// `model_dir` must contain the encoder, decoder_joint, vocab, and config files
-/// from the `istupakov/parakeet-tdt-0.6b-v2-onnx` HuggingFace repo (int8 variant).
+/// from the `istupakov/parakeet-tdt-0.6b-v2-onnx` HuggingFace repo (fp32 variant).
 ///
 /// Uses CUDA execution provider when use_cuda=true, CPU otherwise.
 /// ort automatically falls back to CPU if CUDA is unavailable at runtime.
