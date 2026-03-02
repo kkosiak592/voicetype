@@ -880,7 +880,7 @@ fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
             id: "large-v3-turbo".to_string(),
             name: "Large v3 Turbo".to_string(),
             description: "Best accuracy — 574 MB — requires NVIDIA GPU".to_string(),
-            recommended: gpu_mode,
+            recommended: false,
             downloaded: dir.join("ggml-large-v3-turbo-q5_0.bin").exists(),
         },
         ModelInfo {
@@ -898,16 +898,16 @@ fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
         id: "parakeet-tdt-v2".to_string(),
         name: "Parakeet TDT (int8)".to_string(),
         description: "Fastest — 661 MB — requires NVIDIA GPU (ONNX)".to_string(),
-        recommended: false, // Whisper is recommended per locked decision
+        recommended: false,
         downloaded: crate::download::parakeet_model_exists(),
     });
 
-    // Parakeet TDT fp32 — full precision variant, larger but higher accuracy potential
+    // Parakeet TDT fp32 — full precision variant, recommended for GPU users
     models.push(ModelInfo {
         id: "parakeet-tdt-v2-fp32".to_string(),
         name: "Parakeet TDT (fp32)".to_string(),
         description: "Full precision — 2.56 GB — requires NVIDIA GPU (ONNX)".to_string(),
-        recommended: false,
+        recommended: gpu_mode,
         downloaded: crate::download::parakeet_fp32_model_exists(),
     });
 
@@ -945,7 +945,7 @@ fn check_first_run(app: tauri::AppHandle) -> FirstRunStatus {
         needs_setup: !large_exists && !small_exists && !parakeet_exists && !parakeet_fp32_exists,
         gpu_detected: gpu_mode,
         recommended_model: if gpu_mode {
-            "large-v3-turbo".to_string()
+            "parakeet-tdt-v2-fp32".to_string()
         } else {
             "small-en".to_string()
         },
