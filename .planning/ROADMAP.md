@@ -74,10 +74,10 @@ Plans:
   3. Workflow generates a valid latest.json with correct download URLs and Ed25519 signature
   4. A GitHub Release is created with the installer, latest.json, and release notes attached as assets
   5. An existing v1.0 install can receive and verify the update from the published release
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 13-01: Create GitHub Actions release workflow using tauri-action with signing and latest.json upload
+- [ ] 13-01-PLAN.md — Create GitHub Actions release workflow with CUDA/LLVM build environment, tauri-action signing, and latest.json upload
 
 ### Phase 14: Release Workflow
 **Goal**: Any future release requires only a version bump, commit, tag, and push — the process is documented and the changelog format is consistent
