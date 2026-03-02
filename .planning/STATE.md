@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Auto-Updates & CI/CD
-current_phase: null
+current_phase: 11
 current_plan: null
-status: defining_requirements
-last_updated: "2026-03-02T20:00:00Z"
+status: ready_to_plan
+last_updated: "2026-03-02"
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
-  total_plans: 0
+  total_plans: 5
   completed_plans: 0
 ---
 
@@ -20,17 +20,25 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** v1.1 Auto-Updates & CI/CD
+**Current focus:** Phase 11 — Signing & Repo Setup
 
 ## Position
 
 **Milestone:** v1.1 Auto-Updates & CI/CD
-**Phase:** Not started (defining requirements)
-**Plan:** —
-**Status:** Defining requirements
-Last activity: 2026-03-02 — Milestone v1.1 started
+**Phase:** 11 of 14 (Signing & Repo Setup)
+**Plan:** — (not started)
+**Status:** Ready to plan
+Last activity: 2026-03-02 — Roadmap created for v1.1
+
+Progress: [░░░░░░░░░░] 0% (0/5 plans)
 
 ## Accumulated Context
+
+### Decisions
+
+- v1.1: tauri-plugin-updater + GitHub Releases chosen (Option A) — zero cost, official Tauri approach, best UX for <20 users
+- v1.1: Public GitHub repo required — updater needs unauthenticated access to release assets
+- v1.1: Ed25519 signing — private key stored only in GitHub secrets + local backup; loss means existing installs cannot receive future updates
 
 ### Pending Todos
 
@@ -38,11 +46,12 @@ Last activity: 2026-03-02 — Milestone v1.1 started
 2. Implement sub-500ms transcription latency improvements (area: backend)
 3. Simplify profiles to shared dictionary and editable prompts (area: ui)
 
-### Quick Tasks Completed
+### Blockers/Concerns
 
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 21 | Update model descriptions across Settings and First Run screens to be accurate and consistent | 2026-03-02 | 2e291b9 | [21-update-model-descriptions-across-setting](./quick/21-update-model-descriptions-across-setting/) |
-| 22 | Add 42 new structural engineering corrections and expand initial_prompt | 2026-03-02 | 7ce36f0 | [22-add-42-new-structural-engineering-correc](./quick/22-add-42-new-structural-engineering-correc/) |
-| 23 | Implement Tier 1 Parakeet latency optimizations: TF32 CUDA EP + background warm-up inference | 2026-03-02 | 2c50f6b | [23-implement-tier-1-parakeet-latency-optimi](./quick/23-implement-tier-1-parakeet-latency-optimi/) |
-| 24 | Change default engine to GPU-aware: Parakeet on GPU, Whisper on CPU-only | 2026-03-02 | f4c22a3 | [24-change-default-engine-from-whisper-to-pa](./quick/24-change-default-engine-from-whisper-to-pa/) |
+- Ed25519 private key backup is critical — must be stored in password manager before adding to GitHub secrets; key loss is irreversible
+
+## Session Continuity
+
+Last session: 2026-03-02
+Stopped at: v1.1 roadmap created — ready to plan Phase 11
+Resume file: None

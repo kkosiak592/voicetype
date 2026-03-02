@@ -60,29 +60,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| UPD-01 | — | Pending |
-| UPD-02 | — | Pending |
-| UPD-03 | — | Pending |
-| UPD-04 | — | Pending |
-| UPD-05 | — | Pending |
-| UPD-06 | — | Pending |
-| UPD-07 | — | Pending |
-| CICD-01 | — | Pending |
-| CICD-02 | — | Pending |
-| CICD-03 | — | Pending |
-| CICD-04 | — | Pending |
-| CICD-05 | — | Pending |
-| CICD-06 | — | Pending |
-| REL-01 | — | Pending |
-| REL-02 | — | Pending |
-| REL-03 | — | Pending |
-| REL-04 | — | Pending |
+| UPD-01 | Phase 11 | Pending |
+| UPD-02 | Phase 12 | Pending |
+| UPD-03 | Phase 12 | Pending |
+| UPD-04 | Phase 12 | Pending |
+| UPD-05 | Phase 12 | Pending |
+| UPD-06 | Phase 12 | Pending |
+| UPD-07 | Phase 12 | Pending |
+| CICD-01 | Phase 13 | Pending |
+| CICD-02 | Phase 13 | Pending |
+| CICD-03 | Phase 13 | Pending |
+| CICD-04 | Phase 13 | Pending |
+| CICD-05 | Phase 13 | Pending |
+| CICD-06 | Phase 11 | Pending |
+| REL-01 | Phase 11 | Pending |
+| REL-02 | Phase 12 | Pending |
+| REL-03 | Phase 14 | Pending |
+| REL-04 | Phase 14 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 17 total
-- Mapped to phases: 0
-- Unmapped: 17 ⚠️
+- Mapped to phases: 17
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-02*
-*Last updated: 2026-03-02 after initial definition*
+*Last updated: 2026-03-02 after roadmap creation*
