@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-03-02
+## [1.1.0] - 2026-03-02
 
 ### Added
 
@@ -24,5 +24,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - NSIS installer for Windows distribution
 - Auto-update infrastructure (updater plugin, Ed25519 signing)
 
-[Unreleased]: https://github.com/kkosiak592/voicetype/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/kkosiak592/voicetype/releases/tag/v0.1.0
+[Unreleased]: https://github.com/kkosiak592/voicetype/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/kkosiak592/voicetype/releases/tag/v1.1.0
