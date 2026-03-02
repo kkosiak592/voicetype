@@ -1,259 +1,236 @@
 # Project Research Summary
 
-**Project:** VoiceType — Local Voice-to-Text Desktop Tool
-**Domain:** Offline desktop dictation tool (Windows, GPU-accelerated, hotkey-activated)
-**Researched:** 2026-02-27
-**Confidence:** HIGH (core stack and architecture validated against BridgeVoice production app; features grounded in competitor analysis; pitfalls verified against official GitHub issue trackers)
+**Project:** VoiceType v1.2 — Ctrl+Win Modifier-Only Hotkey (Keyboard Hook Milestone)
+**Domain:** Win32 WH_KEYBOARD_LL integration into existing Tauri 2.0 voice-to-text app
+**Researched:** 2026-03-02
+**Confidence:** HIGH
+
+> **Note:** This summary covers only the v1.2 milestone research (modifier-only hotkey via WH_KEYBOARD_LL). The full project research (v1.0 core pipeline, audio, transcription, UI) is in git history as of 2026-02-27.
+
+---
 
 ## Executive Summary
 
-VoiceType is a local-first Windows desktop dictation tool that captures microphone audio via a global hotkey, transcribes it offline using whisper.cpp running on the local GPU, applies post-processing corrections, and injects the result as text into the active application via clipboard paste. The validated reference implementation for this architecture is BridgeVoice (macOS, Tauri 2.0 + whisper.cpp), and the open-source Voquill and Keyless projects demonstrate the same pattern on Windows. The recommended stack — Tauri 2.0, whisper-rs 0.15.1, cpal 0.16.0, silero-vad-rust, and enigo 0.5.0 — is the only viable combination for the target hardware: a Pascal-architecture GPU (NVIDIA P2000) with CUDA Toolkit 11.7. The primary alternative, faster-whisper/CTranslate2, hard-requires CUDA 12 and is incompatible.
+VoiceType v1.0/v1.1 ships with a working global hotkey system using `tauri-plugin-global-shortcut` (Win32 `RegisterHotKey`). The v1.2 goal is adding Ctrl+Win as a supported activation hotkey — a modifier-only combination that `RegisterHotKey` fundamentally cannot represent because it requires a non-zero virtual key code. The solution is well-understood: a custom `WH_KEYBOARD_LL` low-level keyboard hook running on a dedicated thread with a Win32 message loop. All candidate library alternatives (`win-hotkeys`, `rdev`, `windows-hotkeys`) are disqualified by concrete, verified technical reasons. The implementation requires two surgical changes to the existing project: three new feature flags on the `windows` v0.58 crate and one line in the Tauri builder (`device_event_filter(Always)`). No new Cargo dependencies, no version bumps.
 
-The product's primary differentiator is domain-specific vocabulary profiles — bundles of a Whisper `initial_prompt`, a regex correction dictionary, and per-profile output settings (e.g., ALL CAPS mode). No competitor offers this: BridgeVoice has a dictionary but no profiles; Wispr Flow uses cloud LLM cleanup that is incompatible with the offline premise; Superwhisper's custom modes are macOS-only and LLM-based. The structural engineering profile ships out of the box and directly targets the primary user's workflow. The v1 feature set is larger than typical MVPs because vocabulary profiles and toggle mode (which requires Silero VAD) are core to the value proposition, not optional additions.
+The architecture is additive: a new `keyboard_hook.rs` module (~200 LOC) handles all hook logic and bridges to the existing `handle_shortcut()` function in `lib.rs` via an `mpsc` channel and a dispatcher thread. The existing audio pipeline, transcription, VAD, and UI are untouched. `tauri-plugin-global-shortcut` is kept as the active backend for standard hotkeys and as a fallback when WH_KEYBOARD_LL installation fails. The implementation is a hybrid that routes based on hotkey type — modifier-only combos go through the hook, everything else stays on `RegisterHotKey`.
 
-The three highest-risk implementation areas are: (1) the floating pill overlay stealing focus from the target application — a confirmed Tauri 2.0 Windows bug that requires Win32 `WS_EX_NOACTIVATE` as the authoritative fix, not config alone; (2) the CUDA build silently falling back to CPU-only inference — detectable via Task Manager GPU utilization and must be verified as an acceptance criterion; and (3) Windows Defender flagging the binary as malware due to `SendInput` usage — a distribution-phase concern that requires code signing for any distribution beyond personal use. Each of these must be addressed in the phase that introduces the relevant component, not retrofitted.
+All five critical pitfalls concentrate in Phase 1. The three highest-priority ones are: (1) WH_KEYBOARD_LL callbacks silently not firing when the Tauri window has focus — fixed with `DeviceEventFilter::Always` applied before `build()`, no other workaround works; (2) the hook being silently removed by Windows after exceeding the 1-second callback timeout with no error notification — prevented by a strictly non-blocking callback that only sets `AtomicBool` flags and calls `try_send`; and (3) the Start menu opening on Win key release despite the hook consuming the event — requires a VK 0xE8 mask-key injection technique that must also guard against infinite recursion via the `LLKHF_INJECTED` flag. A fourth risk is distribution-time: the combination of global keyboard hook + key injection matches the Defender ML classifier for credential-stealing malware (expanded in September 2024), requiring a VirusTotal pre-release check and code signing.
+
+---
 
 ## Key Findings
 
 ### Recommended Stack
 
-The stack is determined primarily by hardware constraints (CUDA 11.7, Pascal sm_61) and the offline-first requirement. Tauri 2.0 provides a minimal runtime (20-40 MB RAM, ~2.5 MB installer) with native Rust FFI that makes whisper-rs integration straightforward. The GPU model default should be `ggml-large-v3-turbo-q5_0.bin` (547 MB, fits in the P2000's 5 GB VRAM) rather than the full-precision `large-v3-turbo` (1.5 GB) — 45% smaller, 19% faster, same accuracy. Models must not be bundled in the installer; Tauri's NSIS builder hard-fails for bundles over 2 GB.
+The existing stack requires only two additions. No version bumps, no new crates.
 
 **Core technologies:**
-- **Tauri 2.0 (2.10.2):** Desktop framework — smallest footprint, native Rust FFI, BridgeVoice production-validated
-- **whisper-rs 0.15.1 (wrapping whisper.cpp):** STT engine — only GPU option compatible with CUDA 11.7; faster-whisper requires CUDA 12
-- **cpal 0.16.0:** Audio capture — WASAPI on Windows, callback-based audio thread, resamples to 16kHz
-- **silero-vad-rust:** Voice activity detection — bundles ONNX model internally, enables auto-stop in toggle mode
-- **enigo 0.5.0:** Text injection — clipboard paste (Ctrl+V) as primary; char-by-char SendInput as fallback only
-- **tauri-plugin-global-shortcut 2.3.1:** System-wide hotkey registration — works when Tauri window is not focused
-- **tauri-plugin-store 2.4.2:** Settings persistence — JSON-based, writes to %APPDATA%
-- **React 18 + Vite 5 + TypeScript 5:** Frontend — official Tauri template, good TypeScript safety for IPC boundaries
-- **Tailwind CSS 4.2.1:** Styling — v4 first-party Vite plugin, no config file required
+- `windows` v0.58 + 3 new feature flags (`Win32_Foundation`, `Win32_UI_WindowsAndMessaging`, `Win32_UI_Input_KeyboardAndMouse`): provides `SetWindowsHookExW`, `GetMessageW`, `PostThreadMessageW`, `UnhookWindowsHookEx`, `KBDLLHOOKSTRUCT`, `VK_LWIN`, `VK_RWIN`, `VK_LCONTROL`, `VK_RCONTROL`, `LRESULT` — additive, no API breaks, confirmed stable across windows crate 0.48–0.62
+- `tauri::DeviceEventFilter::Always` (one builder call): resolves confirmed Tauri 2.0 defect #13919 — without it, WH_KEYBOARD_LL callbacks are silently swallowed when the Tauri window has focus; this must be applied before `build()` and before hook installation
+- `tauri-plugin-global-shortcut` (kept as-is): standard hotkey fallback; mutually exclusive with hook path at runtime; never both active for the same key combo
+- `std::sync::mpsc` + `std::sync::OnceLock` (std only, no new crates): channel-based non-blocking hook-to-dispatcher bridge mandated by the 1-second Win32 callback timeout constraint
+
+**What not to use — all evaluated and disqualified:**
+- `win-hotkeys` crate: `windows = "0.60"` version conflict with project's `windows = "0.58"` pin; API requires a trigger key plus modifiers with no modifier-only variant
+- `rdev` crate: confirmed open bug — keyboard events dropped when Tauri window is focused (tauri-apps/tauri #14770, unresolved March 2026)
+- `windows-hotkeys` (dnlmlr): uses `RegisterHotKey` internally; same modifier-only limitation as the existing plugin
+- `VK_07` for Start menu mask injection: opens Xbox Game Bar on Windows 10 1909+ — use `VK_E8` (documented Microsoft "unassigned") instead
 
 ### Expected Features
 
-**Must have (table stakes) — all targeted for v1:**
-- Global hotkey activation — tool is unusable without it
-- Hold-to-talk mode — simpler mode; validates core pipeline without VAD dependency
-- Toggle mode with Silero VAD auto-stop — toggle without VAD degrades to manual-stop only
-- Floating pill overlay with recording state and frequency bar visualizer — universal pattern in this category
-- Clipboard paste text injection with save/restore — core value proposition
-- System tray with Quit and Settings — Windows convention for background tools
-- Configurable hotkey — hardcoded keys conflict with existing application shortcuts
-- Settings panel — hotkey, model, microphone, profile selection
-- Multiple Whisper model sizes with GPU auto-detection — CPU fallback required for non-NVIDIA machines
-- Model download on first run — installer cannot bundle 1.5 GB+ model files
-- Word correction dictionary — domain accuracy without corrections is unacceptable for engineering use
-- Clipboard restoration after paste — well-known UX bug if omitted
+The v1.2 feature set is non-divisible. All six P1 features depend on the WH_KEYBOARD_LL hook module and must ship together. There is no viable MVP subset because Start menu suppression and press-order independence are prerequisites for usability, not polish.
 
-**Should have (differentiators) — targeted for v1:**
-- Vocabulary profiles (structural engineering + general) — the primary competitive differentiator
-- Caps lock output mode as profile property — engineering drawing and PDF markup use case
-- Whisper `initial_prompt` support per profile — dramatically improves domain accuracy without fine-tuning
-- Local-only privacy guarantee — explicit differentiator vs. Wispr Flow (cloud) and Superwhisper (cloud-optional)
-- CUDA 11.x (Pascal) compatibility — targets enterprise engineering workstations excluded by competitors
+**Must have (P1 — all required for v1.2):**
+- WH_KEYBOARD_LL hook module — foundational dependency for all other features in this milestone
+- Ctrl+Win combo detection with 50ms debounce — press-order independence is required; without it users get inconsistent activation on physical keyboards (5–30ms natural press stagger)
+- Start menu suppression via Win keyup consumption — without this the feature is unusable (Start menu opens on every dictation)
+- Hold-to-talk behavior on modifier-only combo — Wispr Flow (the direct Windows competitor) uses Ctrl+Win hold-to-talk as its default; this is the expected UX model
+- Frontend hotkey capture dialog accepts modifier-only combos — users must be able to configure Ctrl+Win in settings; the existing capture dialog cannot represent it
+- Fallback to RegisterHotKey if WH_KEYBOARD_LL installation fails — prevents complete hotkey breakage; must surface failure state to user in settings
 
-**Defer (v1.x after validation):**
-- Transcription history log with re-inject
-- Regex-based post-processing corrections (level 2 phonetic matching)
-- Quick-add to dictionary from system tray
-- NSIS installer with auto-update
+**Should have (P2 — add after v1.2 validation):**
+- Hook persistence across Win+L lock/unlock — add if users report hotkey stops working after screen lock (requires `WTSRegisterSessionNotification`)
+- Left vs. right modifier distinction in binding — low complexity once hook is in place; `VK_LCONTROL` vs. `VK_RCONTROL` already disambiguated by `KBDLLHOOKSTRUCT.vkCode`
 
-**Defer (v2+):**
-- Additional domain profiles (legal, medical, software)
-- Moonshine CPU streaming model
-- Per-app profile auto-switching
+**Defer (v2+ only):**
+- Double-tap modifier combo for toggle mode entry — Wispr Flow has it but complexity is high and demand is unclear
+- Additional modifier-only combos (double-Ctrl, Shift+Win) — out of scope for this milestone
 
 **Anti-features to avoid:**
-- Streaming/real-time partial transcription — whisper.cpp is chunk-based; streaming degrades accuracy and adds architecture complexity
-- LLM-based text cleanup — breaks offline premise; Whisper initial_prompt + regex covers the engineering case
-- Preview/confirmation before paste — destroys workflow speed advantage
-- Cloud/API transcription fallback — contradicts privacy value proposition
+- Suppressing all Win key combos (Win+L, Win+D, Win+Tab) — only suppress when Ctrl+Win combo is active; all other Win key usage must pass through unmodified
+- Registry-based Win key disable — requires elevated privileges, survives app crash, breaks Win key globally until manually restored
+- Debounce window under 50ms — below that, press-order sensitivity causes inconsistent activation for normal typing speed
 
 ### Architecture Approach
 
-The architecture is a Tauri 2.0 Rust backend with three concurrent processing threads: an OS-managed WASAPI audio thread (cpal), a VAD thread consuming 30ms chunks via mpsc channel, and a tokio blocking thread pool for whisper inference. The key architectural constraint is that the cpal audio callback must be kept microsecond-fast — no locking, no I/O, only mpsc sends. whisper-rs inference (300ms-4s) must always run inside `tokio::task::spawn_blocking` to avoid freezing the async Tauri command executor. The React frontend communicates with the Rust backend via Tauri's typed invoke/emit IPC; high-frequency audio level data uses channels, not events. The pill overlay and settings panel are two separate Tauri windows with distinct properties (transparent/frameless/no-activate vs. standard chrome).
+Three-thread design: the existing Tauri main thread (unchanged), a new `keyboard-hook` thread that owns the WH_KEYBOARD_LL installation and Win32 `GetMessage` / `DispatchMessage` message pump, and a new `hook-dispatcher` thread that reads from the `mpsc` channel and calls the existing `handle_shortcut_pressed/released()` functions in `lib.rs`. The hook thread cannot block, cannot lock mutexes, and cannot call async functions — it only updates `AtomicBool` state flags and calls `try_send` with primitive values. All business logic stays in the existing `lib.rs`.
 
 **Major components:**
-1. **hotkeys.rs** — Global shortcut registration and event routing; triggers recording state changes
-2. **audio.rs** — cpal WASAPI capture at device native rate; resamples to 16kHz; sends via mpsc
-3. **vad.rs** — Silero VAD on 30ms chunks; detects speech start/end for toggle mode auto-stop
-4. **transcribe.rs** — whisper-rs inference in spawn_blocking; returns raw text string
-5. **corrections.rs** — Post-processing dictionary (HashMap lookup); applies profile's regex corrections
-6. **injector.rs** — Clipboard save/restore + enigo Ctrl+V with 50-100ms delay
-7. **profiles.rs** — Profile loading; initial_prompt selection; case normalization settings
-8. **Pill.tsx** — Floating transparent always-on-top overlay; frequency bar visualizer; recording state
-9. **Settings.tsx** — Full config panel in separate Tauri window; hotkey, model, profile, corrections editor
-10. **AppState (state.rs)** — Single Arc<Mutex<T>> per field; managed by Tauri; accessed by all commands and background threads
+1. `keyboard_hook.rs` (NEW, ~200 LOC) — `SetWindowsHookExW` installation, Win32 `GetMessage` loop, modifier state machine with `AtomicBool` flags (`CTRL_DOWN`, `WIN_DOWN`, `COMBO_ACTIVE`), 50ms debounce via `KBDLLHOOKSTRUCT.time`, Win keyup suppression via `LRESULT(1)`, VK_E8 mask key injection, `mpsc::Sender::try_send`, clean shutdown via `PostThreadMessageW(WM_QUIT)`
+2. `lib.rs` (MODIFIED) — `mod keyboard_hook`; conditional hook startup in `setup()` based on saved hotkey format; routing in `rebind_hotkey`, `register_hotkey`, `unregister_hotkey` commands; teardown call to `keyboard_hook::stop()`
+3. Frontend hotkey capture UI (MODIFIED) — must accept and display modifier-only combos (`"ctrl+win"` with no letter key suffix) as a valid distinct hotkey string format
+4. `OnceLock<AppHandle<Wry>>` (NEW static in `keyboard_hook.rs`) — sole bridge between the fixed-signature `extern "system"` callback and the Tauri runtime; `AppHandle` is `Send` in Tauri 2.x (historical issue #2343 was Tauri 1.x, resolved)
+
+**Key invariants:**
+- Hook callback execution time must stay under ~5ms (Windows enforces 1-second max; 11 cumulative timeouts = silent permanent hook removal with no notification)
+- Only one hotkey backend active at a time for a given key combo; the `rebind_hotkey` command manages the switch
+- `UnhookWindowsHookEx` must be called from the hook thread itself (before it exits), triggered by `PostThreadMessageW(WM_QUIT)` breaking the `GetMessage` loop
 
 ### Critical Pitfalls
 
-1. **Overlay window steals focus** — Use Win32 `WS_EX_NOACTIVATE` extended style via Tauri's Rust window builder; `focus: false` in config is insufficient on Windows (confirmed bug #11566). Record foreground HWND before hotkey fires and verify before injection. Must be addressed and verified before any text injection work.
+1. **WH_KEYBOARD_LL callbacks silently never fire when Tauri window is focused** — apply `.device_event_filter(tauri::DeviceEventFilter::Always)` to the Tauri builder before `.build()`; install the hook on a dedicated `std::thread` (not a Tokio task, not the Tauri main thread); verify by opening settings window, giving it focus, pressing Ctrl+Win — must fire (Tauri issue #13919, confirmed closed July 2025)
 
-2. **CUDA build silently falls back to CPU** — Set `CMAKE_CUDA_ARCHITECTURES="61"` explicitly for Pascal P2000; set `CUDA_PATH` and `LIBCLANG_PATH` env vars; verify GPU usage in Task Manager after every CUDA-enabled build. Latency under 500ms is the acceptance criterion for the transcription phase.
+2. **Start menu opens despite hook suppression, especially on Windows 11** — suppress both Win KEYDOWN and Win KEYUP (return `LRESULT(1)` for both); inject VK 0xE8 via `keybd_event` before returning from KEYDOWN to mask the Win key in the OS's internal state machine; check `LLKHF_INJECTED` flag at the top of the callback to skip re-processing synthetic events and prevent infinite recursion
 
-3. **Clipboard paste race condition** — Insert 50-100ms delay between `SetClipboardData` and Ctrl+V send; insert 100-150ms delay before clipboard restore; use `CF_UNICODETEXT` not `CF_TEXT`; check `GetOpenClipboardWindow` before writing. Never retrofit this — build in from day one.
+3. **Hook silently removed by Windows after exceeding 1-second callback timeout** — the callback must only update `AtomicBool` flags and call `try_send` (non-blocking); all debounce evaluation, state machine logic, and `AppHandle` calls go in the dispatcher thread; never lock a `Mutex`, never allocate, never call async code inside the callback
 
-4. **Windows Defender malware flag** — `SendInput` and clipboard APIs match keylogger heuristics. An OV/EV code signing certificate is required for any distribution. For personal use: document manual Defender exclusion. Default to clipboard paste (fewer SendInput calls) over char-by-char injection.
+4. **Rust panic crossing `extern "system"` FFI boundary causes undefined behavior** — wrap the entire callback body in `std::panic::catch_unwind`; alternatively, keep the callback so minimal (one atomic store, one channel send, one return) that no panic is possible; zero `.unwrap()` or index operations in the callback
 
-5. **Whisper hallucinations on silence** — Gate whisper.cpp with Silero VAD; discard buffers with less than 300ms of detected speech; implement hallucination detection heuristics (output length ratio, repetition patterns). VAD gate must be in place before end-to-end testing.
+5. **RegisterHotKey + WH_KEYBOARD_LL double-firing or deadlocking during coexistence** — scope the WH_KEYBOARD_LL callback to only process `VK_LWIN`/`VK_RWIN` events; unregister the overlapping standard hotkey from `tauri-plugin-global-shortcut` when the hook is active; never acquire a `Mutex` inside the hook callback (only `AtomicBool` via `Ordering::Relaxed`)
+
+---
 
 ## Implications for Roadmap
 
-The architecture research provides a clear build order with explicit dependency relationships. The phase structure maps directly to the component build order validated by the reference implementations.
+The dependency tree for v1.2 is unusually flat: WH_KEYBOARD_LL is the single prerequisite for everything. The phase structure follows directly from this constraint and from the requirement that all five critical pitfalls must be embedded in Phase 1 architecture (they cannot be retrofitted).
 
-### Phase 1: Foundation — Tauri Scaffold + Global Hotkey
-**Rationale:** Zero dependencies; validates the framework setup, IPC, and window creation before any audio or ML work. Catches Tauri 2.0 configuration issues early.
-**Delivers:** Working Tauri app with global hotkey that prints to console; two-window architecture (pill + settings); system tray presence.
-**Addresses:** Configurable hotkey, system tray (table stakes).
-**Avoids:** Prematurely wiring audio or ML before the framework is confirmed working.
-**Research flag:** Standard pattern — no additional research needed.
+### Phase 1: WH_KEYBOARD_LL Hook Module
 
-### Phase 2: Audio Capture Pipeline
-**Rationale:** Audio is the prerequisite for both transcription and VAD. Must validate WASAPI access, sample rate handling, and the mpsc channel threading pattern before adding whisper.
-**Delivers:** Microphone capture at device native rate, resampled to 16kHz; WAV file output for verification; confirmed audio thread isolation via mpsc.
-**Addresses:** Audio level visualizer data source; VAD input stream.
-**Avoids:** cpal sample rate mismatch (WASAPI does not natively output 16kHz — resampling with `rubato` or `dasp` required).
-**Research flag:** Standard pattern — cpal WASAPI docs are thorough; resampling is well-documented.
+**Rationale:** Every v1.2 feature depends on a working hook. The critical architectural decisions — non-blocking callback, dedicated thread, Win32 message loop, `AtomicBool` state machine, `LLKHF_INJECTED` guard — cannot be retrofitted after the fact. They must be correct from the first commit. A strict incremental build order within this phase is required to verify each sub-component before the next depends on it.
 
-### Phase 3: Whisper Integration (GPU-Verified)
-**Rationale:** Transcription is the highest-complexity and highest-risk component. Must be isolated from audio and UI during initial integration to verify CUDA build flags, model loading, and spawn_blocking pattern independently.
-**Delivers:** Transcription of a test WAV file via whisper-rs with GPU acceleration verified; latency under 500ms on GPU confirmed as acceptance criterion.
-**Addresses:** whisper.cpp transcription (P1 table stakes); GPU/CPU fallback detection.
-**Avoids:** CUDA silent fallback to CPU (Pitfall 2) — GPU verification must be acceptance criterion for this phase, not a later check.
-**Research flag:** Standard pattern for whisper-rs integration. CUDA build flags for Windows/MSVC are documented in BUILDING.md. No additional research needed.
+**Delivers:** A working, tested `keyboard_hook.rs` that detects Ctrl+Win with 50ms debounce and drives hold-to-talk recording with proper Start menu suppression on both Windows 10 and Windows 11, and a clean shutdown path that does not leave a dangling hook.
 
-### Phase 4: End-to-End Core Pipeline
-**Rationale:** Wire audio capture to whisper transcription (hotkey → audio → whisper → console output). No UI, no injection. Validates the full data flow timing. This is the proof-of-concept gate — if latency exceeds 500ms here, the architecture needs adjustment before more is built on top of it.
-**Delivers:** Hold-to-talk dictation printing to console; confirmed sub-500ms latency on GPU.
-**Addresses:** Hold-to-talk mode, audio capture integration.
-**Avoids:** Overlay and injection complexity masking pipeline timing issues.
-**Research flag:** No additional research needed — all components validated in Phases 1-3.
+**Addresses (from FEATURES.md):** WH_KEYBOARD_LL hook module (P1), Ctrl+Win combo detection with 50ms debounce (P1), Start menu suppression (P1), hold-to-talk on modifier-only combo (P1)
 
-### Phase 5: Text Injection
-**Rationale:** Clipboard paste with save/restore is a non-trivial integration that must be built correctly once and not retrofitted. Testing against multiple target apps (Chrome, VS Code, Windows Terminal, Notepad) before adding UI catches injection failures early.
-**Delivers:** Transcription injected into active application via clipboard paste; original clipboard restored; 50-100ms delays built in.
-**Addresses:** Automatic text injection at cursor, clipboard restoration (table stakes).
-**Avoids:** Clipboard race condition (Pitfall 3) — delays must be built in here, not added later after user reports.
-**Research flag:** Standard pattern — enigo and Win32 clipboard docs are clear. No additional research needed.
+**Avoids (from PITFALLS.md):** All five critical pitfalls — hook dead when Tauri focused (#1), Start menu not suppressed (#2), hook silently removed on timeout (#3), panic across FFI (#4), double-firing with RegisterHotKey (#5); also moderate pitfall recursive re-entry from synthetic key injection (#6)
 
-### Phase 6: Pill Overlay UI
-**Rationale:** The overlay window has two confirmed Tauri 2.0 Windows bugs (transparent window issues #8308, #13270; focus stealing #11566) that require Win32-level fixes. This must be built and verified against multiple target apps before any injection work relies on focus being preserved.
-**Delivers:** Floating transparent always-on-top pill window; recording state indicator; frequency bar visualizer; Win32 WS_EX_NOACTIVATE applied.
-**Addresses:** Floating visual indicator, audio level visualizer (P1 table stakes).
-**Avoids:** Overlay focus steal (Pitfall 1) — the Win32 fix must be in place and manually tested before this phase is considered done.
-**Research flag:** May need research during planning. The Win32 `WS_EX_NOACTIVATE` integration via Tauri's window builder has sparse documentation — reference the GitHub issues (#11566, #13070) and Tauri v2 win32 window attribute API.
+**Build order within phase (must be sequential):**
+1. `keyboard_hook.rs` skeleton — `HookEvent` enum, `OnceLock` statics, stub `start()`/`stop()` — verify compilation
+2. `DeviceEventFilter::Always` added to Tauri builder — verify before hook is installed
+3. Modifier state machine unit tests — `CTRL_DOWN`/`WIN_DOWN`/`COMBO_ACTIVE` logic with mock timestamps, no Win32 calls
+4. WH_KEYBOARD_LL installation + Win32 `GetMessage` loop + logging only — verify callback fires for every keystroke
+5. `mpsc` channel wiring — `try_send` in hook proc → dispatcher prints events — verify Pressed/Released arrive correctly for Ctrl+Win
+6. Connect to `handle_shortcut_pressed/released` — replace print with actual calls — verify hold-to-talk end-to-end
+7. Start menu suppression — `COMBO_ACTIVE` tracking + `LRESULT(1)` on Win keyup + VK_E8 mask injection — test on Windows 10 AND Windows 11; verify Win key alone still works
+8. Shutdown — `PostThreadMessageW(WM_QUIT)` + `UnhookWindowsHookEx` in hook thread — verify clean exit with no dangling hook
 
-### Phase 7: Silero VAD + Toggle Mode
-**Rationale:** VAD is a dependency for toggle mode. Building toggle mode before VAD is working produces broken UX (no auto-stop). VAD also gates whisper against hallucination on silence.
-**Delivers:** Silero VAD silence detection on 30ms chunks; toggle mode with auto-stop; hallucination gate (discard buffers with <300ms speech).
-**Addresses:** Toggle mode, VAD auto-stop (P1 table stakes); whisper hallucination prevention (Pitfall 5).
-**Avoids:** Toggle mode without VAD requires manual stop — degrades to hold-to-talk equivalent.
-**Research flag:** May need research during planning. silero-vad-rust crate version is not pinned (MEDIUM confidence) — confirm current version on crates.io. Silence threshold tuning requires testing in real acoustic environments.
+**Research flag:** The Windows 11 Start menu suppression timing (whether VK_E8 injection on KEYDOWN alone is sufficient, or also required on KEYUP) needs empirical validation during implementation — the AutoHotkey community documents a Windows 11 behavioral change but does not specify exact requirements. Standard pattern otherwise.
 
-### Phase 8: Corrections + Vocabulary Profiles
-**Rationale:** No new infrastructure needed — pure Rust logic layered on top of the working transcription pipeline. Build after the pipeline is validated so corrections can be tested against real transcriptions.
-**Delivers:** Word correction dictionary (HashMap lookup); structural engineering profile with initial_prompt and regex corrections; general profile; ALL CAPS output mode as profile property; profile switching.
-**Addresses:** Word correction dictionary, vocabulary profiles, caps lock mode, structural engineering profile, Whisper initial_prompt per profile (primary differentiators).
-**Avoids:** Long initial_prompt consuming model context — keep to 50-100 words per profile.
-**Research flag:** Standard pattern — no additional research needed. Correction logic is straightforward Rust string processing.
+### Phase 2: Rebind and Coexistence Logic
 
-### Phase 9: Settings Panel
-**Rationale:** Settings require the two-window Tauri architecture to be exercised. All features that settings configure (hotkey, profile, model) must already work before building the UI around them.
-**Delivers:** Full settings Tauri window; hotkey configuration with runtime apply (no restart); model selection; microphone selection; correction dictionary editor UI.
-**Addresses:** Settings panel, configurable hotkey (table stakes).
-**Avoids:** Mixing pill window and settings window properties in one window (Architecture Anti-Pattern 4).
-**Research flag:** Standard pattern — tauri-plugin-store docs are thorough. Nested JSON settings structure must be established from day one (flat key-value is a known debt trap from PITFALLS.md).
+**Rationale:** Once the hook works in isolation, wire it into the hotkey rebind flow and define the state ownership boundary with `tauri-plugin-global-shortcut`. This is where the double-firing and deadlock risks concentrate outside of the callback itself.
 
-### Phase 10: Model Download + First-Run UX
-**Rationale:** Model download must be built last because it requires all the infrastructure it depends on (GPU detection, model selection, progress events) to already be working.
-**Delivers:** First-run detection of missing model; progress UI; SHA256 checksum validation; GPU auto-detection with model recommendation (large-v3-turbo-q5_0 vs. small-q5_1).
-**Addresses:** Model download on first run (P1 table stakes); multiple model sizes.
-**Avoids:** Bundling model in installer (NSIS hard-fails above 2 GB — Pitfall confirmed via issue #7372).
-**Research flag:** Standard pattern — Hugging Face CDN download is straightforward. SHA256 validation for model files needs checksums sourced from whisper.cpp models README.
+**Delivers:** The `rebind_hotkey` Tauri IPC command correctly routes between the hook path and the plugin path based on hotkey type; runtime hotkey switching works cleanly; fallback to `RegisterHotKey` on WH_KEYBOARD_LL installation failure is detected and surfaced to the user in settings.
 
-### Phase 11: Distribution + Code Signing
-**Rationale:** Distribution is the final phase because code signing and NSIS packaging require a stable, tested binary. The Defender false-positive risk makes this a hard blocker for sharing with any colleagues.
-**Delivers:** NSIS installer (~2.5 MB, models excluded); code signing with OV/EV certificate; verified clean Defender scan on fresh Windows 10 VM.
-**Addresses:** Distribution; Windows Defender false positive prevention (Pitfall 4).
-**Avoids:** Shipping unsigned binary — OV certificate required; EV provides immediate SmartScreen reputation.
-**Research flag:** May need research during planning. OV vs EV certificate comparison (cost, turnaround, SmartScreen reputation difference) and Tauri NSIS signing configuration should be researched. Certificate costs $300-500/year minimum.
+**Addresses:** Fallback to RegisterHotKey on hook failure (P1), rebind flow as specified in ARCHITECTURE.md integration points
+
+**Avoids:** Pitfall 5 (double-firing from both backends observing the same key), pitfall from leaving both backends registered simultaneously
+
+**Implements (from ARCHITECTURE.md):** Routing logic in `lib.rs` `rebind_hotkey`, `register_hotkey`, `unregister_hotkey` commands; `keyboard_hook::rebind(combo: HookCombo)` for atomic modifier set updates
+
+**Research flag:** Standard pattern — complete specification is in ARCHITECTURE.md. No additional research needed.
+
+### Phase 3: Frontend Modifier-Only Capture UI
+
+**Rationale:** The frontend settings change has no dependency on Phase 2 internals and can be developed in parallel with Phase 2. Isolated as a separate phase for scope clarity; can be started after Phase 1 is stable.
+
+**Delivers:** Hotkey capture dialog accepts `"ctrl+win"` (no letter key required) as a valid input; stores modifier-only combos in a distinct format from standard hotkey strings; displays them as "Ctrl + Win" in the settings panel.
+
+**Addresses:** Frontend hotkey capture dialog for modifier-only combos (P1 feature)
+
+**Avoids:** UX pitfall documented in PITFALLS.md — the existing capture mode expects a trigger key and cannot represent modifier-only combos; must be a new capture mode, not a workaround in the existing flow
+
+**Research flag:** Standard pattern — React state management; hotkey format is already defined (`"ctrl+win"` string). No additional research needed.
+
+### Phase 4: Integration Testing and Distribution Verification
+
+**Rationale:** Several critical pitfalls only manifest under specific runtime conditions (Tauri window focused, Windows 11 vs. Windows 10, antivirus active, CPU load) that unit tests cannot cover. Dedicated integration testing pass is required before any distribution.
+
+**Delivers:** Verified behavior across the full "looks done but isn't" checklist from PITFALLS.md; VirusTotal scan of the signed v1.2 binary before any distribution.
+
+**Addresses:** All five critical pitfalls have explicit test cases here; Pitfall 10 (Defender false positive escalation for WH_KEYBOARD_LL + SendInput combination)
+
+**Key verification tests (from PITFALLS.md checklist):**
+- Settings window focused → press Ctrl+Win → must fire (validates DeviceEventFilter fix)
+- Windows 11 machine: Ctrl+Win must not open Start menu; Win key alone must still work after fix (validates mask-key technique)
+- Alt+Tab away while holding Ctrl → release → verify no phantom trigger on return (validates modifier state desync recovery)
+- Press Win before Ctrl (reversed order) → verify hotkey fires (validates debounce)
+- Close VoiceType while hook is active → verify no lingering hook (validates shutdown path)
+- Trigger Ctrl+Win 20 times rapidly → verify exactly 20 recording sessions, not 40 (validates coexistence with RegisterHotKey)
+- VirusTotal scan of v1.2 signed binary vs. v1.1 baseline — any new detections are a blocking issue
+
+**Research flag:** Distribution Defender behavior without OV/EV code signing cannot be researched in advance — requires testing the actual binary. Treat any VirusTotal detection escalation vs. v1.1 as a blocking issue.
 
 ### Phase Ordering Rationale
 
-- Phases 1-4 establish the core pipeline in strict dependency order: framework → audio → transcription → integration. Each phase must be verified before the next is started.
-- Phase 5 (injection) and Phase 6 (overlay) are ordered to test injection before the overlay is introduced, preventing focus-steal bugs from hiding injection failures during testing.
-- Phase 7 (VAD) comes after the full injection pipeline is working because VAD is a refinement that adds auto-stop; hold-to-talk without VAD is a valid v1 entry point for early testing.
-- Phases 8-10 add the differentiating features and UX polish after the core loop is proven.
-- Phase 11 (distribution) is always last — it validates the full product as built, not individual components.
+- Phase 1 must be first and fully verified before anything else starts: all features in this milestone depend on a working hook; the five critical architectural decisions cannot be retrofitted
+- Phase 2 before Phase 3: the `rebind_hotkey` routing logic determines the hotkey string format the frontend must produce; if backend format changes after Phase 3 is complete, the frontend must change again
+- Phase 3 is parallelizable with Phase 2: frontend capture UI has no dependency on the Rust backend routing logic; can be developed in parallel after Phase 1 is stable
+- Phase 4 last: integration testing requires all components to be complete; VirusTotal check requires the final binary
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 6 (Pill Overlay):** Win32 `WS_EX_NOACTIVATE` integration in Tauri 2.0 window builder is sparsely documented; reference issues #11566 and #13070; may need to examine Keyless or Voquill source code for working examples.
-- **Phase 7 (Silero VAD):** silero-vad-rust crate version is unverified (MEDIUM confidence); threshold tuning is empirical and environment-dependent; confirm crate API stability before planning implementation details.
-- **Phase 11 (Distribution):** OV vs EV certificate selection and Tauri NSIS code signing configuration need concrete documentation review; costs and CA selection need decision.
+Phases needing deeper investigation during planning or implementation:
+- **Phase 1 (Windows 11 Start menu suppression):** AutoHotkey community confirms Windows 11 changed Win key handling; exact VK_E8 injection timing requirements for Windows 11 need empirical verification against an actual Windows 11 machine during implementation — STACK.md documents the technique but notes community uncertainty on Windows 11 specifics
+- **Phase 4 (Defender false positive rate):** Defender ML sensitivity for WH_KEYBOARD_LL + SendInput was expanded September 2024 (documented in PITFALLS.md Pitfall 10); the exact impact on unsigned vs. signed v1.2 binaries cannot be determined without testing the actual built binary
 
-Phases with standard, well-documented patterns:
-- **Phase 1 (Tauri scaffold):** Official Tauri 2.0 docs are comprehensive.
-- **Phase 2 (Audio capture):** cpal WASAPI docs plus resampling crates are well-documented.
-- **Phase 3 (Whisper integration):** whisper-rs BUILDING.md covers Windows CUDA build exactly.
-- **Phase 4 (Pipeline integration):** No new components; wiring known pieces.
-- **Phase 5 (Text injection):** enigo and Win32 clipboard docs are clear.
-- **Phase 8 (Corrections + Profiles):** Pure Rust string processing; no external integrations.
-- **Phase 9 (Settings panel):** tauri-plugin-store docs are thorough.
-- **Phase 10 (Model download):** HTTP download + SHA256 + progress events are standard patterns.
+Phases with standard patterns where no additional research is needed:
+- **Phase 2 (rebind routing):** ARCHITECTURE.md provides complete specification including code flow diagrams and component responsibility table
+- **Phase 3 (frontend capture UI):** Standard React state management; hotkey format fully defined in ARCHITECTURE.md (`"ctrl+win"` string, no virtual key suffix)
+
+---
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Core stack (Tauri, whisper-rs, cpal, enigo) verified against official crate docs and BridgeVoice production use. CUDA 11.7/Pascal compatibility confirmed via community reports and whisper.cpp CUDA feature docs. ort (RC) and silero-vad-rust (unpinned version) are MEDIUM. |
-| Features | HIGH | Grounded in BridgeVoice documentation, Wispr Flow feature page, VoiceTypr/OpenWhispr source, and competitor analysis. Feature prioritization is based on multiple reference implementations. |
-| Architecture | HIGH | Threading patterns (cpal mpsc, spawn_blocking) verified against official Tauri and tokio docs. Two-window pattern validated against known Tauri behavior. Build order confirmed by reference project structure. |
-| Pitfalls | HIGH | Five critical pitfalls verified against official Tauri GitHub issues (with issue numbers), whisper.cpp issue tracker, and cpal known limitations. Clipboard race condition timing from BridgeVoice validation. |
+| Stack | HIGH | windows crate feature flags verified against win-hotkeys 0.5.1 Cargo.toml source; `DeviceEventFilter::Always` fix confirmed in closed Tauri issue #13919 (July 2025); all Win32 APIs documented on MSDN; library disqualifications verified against official APIs and confirmed open issues |
+| Features | HIGH | Wispr Flow official docs confirm Ctrl+Win hold-to-talk as the reference Windows UX; Windows Speech Recognition official docs confirm the same; feature dependencies mapped precisely from API constraints; P1/P2/v2+ prioritization grounded in implementation complexity and user impact |
+| Architecture | HIGH | Win32 API threading requirements are authoritative MSDN-documented; `OnceLock<AppHandle>` pattern verified against Tauri 2.x community discussions (Tauri Discussion #6309); Tauri 2.x `AppHandle` Send+Sync confirmed resolved (issue #2343 was Tauri 1.x); three-thread design directly implements Win32 specs |
+| Pitfalls | HIGH | Critical pitfalls sourced from official MSDN (`LowLevelKeyboardProc` timeout, `GetAsyncKeyState` restriction), confirmed Tauri GitHub issues (#13919, #14770), Rust Nomicon and RFC 2945 (FFI panic UB); moderate pitfalls sourced from AutoHotkey community documentation (multi-source, consistent) |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **silero-vad-rust version:** Crate version not pinned in research. Confirm current stable version on crates.io before writing Cargo.toml. Verify the bundled ONNX model opset is compatible with the ort version pulled transitively.
-- **cpal resampling implementation:** WASAPI outputs 44.1kHz or 48kHz; Whisper requires 16kHz. The resampling crate choice (`rubato` vs. `dasp`) and configuration (quality vs. latency tradeoff) needs validation with real audio before treating as solved. `AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM` has known quality issues per PITFALLS.md.
-- **Win32 WS_EX_NOACTIVATE in Tauri 2.0:** The exact Rust API call to set this extended window style via Tauri 2.0's window builder needs to be identified from Tauri source or working open-source examples. Config alone is insufficient.
-- **Initial_prompt length limits:** Research notes 50-100 word limit to avoid consuming model context. The specific token budget should be validated against whisper.cpp's context window size before writing the structural engineering profile.
-- **Code signing certificate:** OV vs EV decision, CA selection, and Tauri NSIS signing integration are unresolved. Budget must be confirmed before Phase 11.
+- **Windows 11 Start menu suppression exact technique:** AutoHotkey community documents that Windows 11 changed Win key handling and the VK_E8 masking technique may require injection on both KEYDOWN and KEYUP transitions (vs. KEYDOWN only on Windows 10). This is empirical — must be validated against an actual Windows 11 machine during Phase 1 implementation. There is no documentation that resolves this definitively.
+
+- **Hook health-check mechanism:** PITFALLS.md recommends a periodic health-check timer that detects silent hook removal (after 11 cumulative timeouts) and reinstalls the hook. The specific implementation is not specified in ARCHITECTURE.md. For v1.2 MVP, acceptable compensating control is a visible "hook inactive" status indicator in the system tray tooltip, with health-check deferred to a v1.2.x patch if silent removal is reported in practice.
+
+- **Defender false positive on unsigned v1.2 binary:** The WH_KEYBOARD_LL + SendInput combination is a confirmed expanded Defender ML target as of September 2024. The exact detection threshold on the v1.2 binary — and whether it differs between signed and unsigned — cannot be determined without testing the actual built binary via VirusTotal. This is a Phase 4 gate, not a planning gap.
+
+---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [BridgeVoice Documentation](https://docs.bridgemind.ai/docs/bridgevoice) — recording modes, widget states, dictionary, history, model sizes
-- [Tauri 2.0 official docs](https://v2.tauri.app/) — IPC, state management, window config, plugin system
-- [whisper-rs BUILDING.md](https://github.com/tazz4843/whisper-rs/blob/master/BUILDING.md) — Windows CUDA build requirements
-- [cpal docs.rs](https://docs.rs/cpal) — WASAPI audio capture API
-- [tokio spawn_blocking docs](https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html) — blocking thread pool pattern
-- [enigo 0.5.0 docs.rs](https://docs.rs/enigo/latest/enigo/) — keyboard/clipboard injection API
-- [tauri-plugin-store docs.rs](https://docs.rs/crate/tauri-plugin-store/latest) — settings persistence
-- [tauri-plugin-global-shortcut docs.rs](https://docs.rs/crate/tauri-plugin-global-shortcut/latest) — system-wide hotkeys
-- [whisper.cpp models README](https://github.com/ggml-org/whisper.cpp/blob/master/models/README.md) — model sizes and quantization
-- [Tauri GitHub issue #7372](https://github.com/tauri-apps/tauri/issues/7372) — NSIS 2GB installer limit confirmed
-- [Tauri GitHub issue #11566](https://github.com/tauri-apps/tauri/issues/11566) — focus: false config broken on Windows
-- Artifacts: `artifacts/research/2026-02-27-voice-to-text-desktop-tool-technical.md` — prior deep technical research
+
+- [LowLevelKeyboardProc — Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelkeyboardproc) — callback timeout (300ms default, 1s max on Win10 1709+), message loop requirement, return value semantics, `GetAsyncKeyState` restriction inside callback
+- [SetWindowsHookExW — Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowshookexw) — API signature, `dwThreadId=0` for global scope, thread message loop requirement
+- [KBDLLHOOKSTRUCT — Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-kbdllhookstruct) — `vkCode`, `flags` (`LLKHF_INJECTED` = bit 4), `time` (millisecond timestamp)
+- [RegisterHotKey — Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey) — confirms `vk` is mandatory and non-zero; modifier-only combos impossible
+- [Disabling Shortcut Keys in Games — Microsoft Win32 Docs](https://learn.microsoft.com/en-us/windows/win32/dxtecharts/disabling-shortcut-keys-in-games) — canonical `SetWindowsHookExW` pattern for `VK_LWIN`/`VK_RWIN` suppression
+- [Virtual-Key Codes — Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes) — `VK_LCONTROL` (0xA2), `VK_RCONTROL` (0xA3), `VK_LWIN` (0x5B), `VK_RWIN` (0x5C), `VK_E8` (unassigned)
+- [Tauri issue #13919](https://github.com/tauri-apps/tauri/issues/13919) — WH_KEYBOARD_LL fails to capture system keys when Tauri window focused; `DeviceEventFilter::Always` fix; confirmed closed July 2025
+- [Tauri issue #14770](https://github.com/tauri-apps/tauri/issues/14770) — rdev keyboard events drop when Tauri window focused; same root cause as #13919
+- [win-hotkeys source — iholston/win-hotkeys](https://github.com/iholston/win-hotkeys) — confirms `windows = "0.60"` dependency and exact feature flag names (`Win32_Foundation`, `Win32_UI_WindowsAndMessaging`, `Win32_UI_Input_KeyboardAndMouse`); API requires trigger key, no modifier-only support
+- [Rust Nomicon: FFI and panics](https://doc.rust-lang.org/nomicon/ffi.html) — Rust panic across `extern "C"` / `extern "system"` boundary is undefined behavior
+- [RFC 2945: C-unwind ABI](https://rust-lang.github.io/rfcs/2945-c-unwind-abi.html) — specification for Rust panic/FFI boundary semantics
+- [Microsoft Keylogging Malware Protection — Windows IT Pro Blog, Sep 2024](https://techcommunity.microsoft.com/blog/windows-itpro-blog/keylogging-malware-protection-built-into-windows/4256289) — Defender ML sensitivity expansion for WH_KEYBOARD_LL + SendInput combinations
+- [Wispr Flow — Starting Your First Dictation](https://docs.wisprflow.ai/articles/6409258247-starting-your-first-dictation) — Ctrl+Win as default PC hold-to-talk hotkey; double-tap hands-free mode
+- [Microsoft Support — Windows Speech Recognition Commands](https://support.microsoft.com/en-us/windows/windows-speech-recognition-commands-9d25ef36-994d-f367-a81a-a326160128c7) — Ctrl+Win as WSR toggle activation
 
 ### Secondary (MEDIUM confidence)
-- [Wispr Flow Features Page](https://wisprflow.ai/features) — competitor feature analysis
-- [VoiceTypr GitHub](https://github.com/moinulmoin/voicetypr) — open-source reference implementation
-- [Keyless reference project](https://github.com/hate/keyless) — Tauri v2 voice-to-text reference
-- [Voquill reference project](https://github.com/josiahsrc/voquill) — Tauri + React voice-to-text reference
-- [silero-vad-rust crates.io](https://crates.io/crates/silero-vad-rust) — VAD crate (version unverified)
-- [ort 2.0.0-rc.11 docs.rs](https://docs.rs/crate/ort/latest) — ONNX Runtime (still RC)
-- [Tauri transparent window issue #8308](https://github.com/tauri-apps/tauri/issues/8308) — transparent window Windows bugs
-- [Tauri transparent window issue #13270](https://github.com/tauri-apps/tauri/issues/13270) — overlay window workaround
-- [cpal sample rate issue #593](https://github.com/RustAudio/cpal/issues/593) — WASAPI 16kHz limitation
-- [Whisper hallucination on empty audio — OpenAI community](https://community.openai.com/t/whisper-api-hallucinating-on-empty-sections/93646) — confirmed reproducible
 
-### Tertiary (LOW confidence)
-- Windows Defender HackTool false positives (multiple forum reports 2024-2025) — pattern documented for enigo-adjacent tools; enigo specifically needs validation
+- [AutoHotkey MenuMaskKey docs](https://autohotkey.com/docs/commands/_MenuMaskKey.htm) — VK_E8 as unassigned mask key for Start menu suppression; VK_07 now reserved for Xbox Game Bar
+- [AutoHotkey community — Win key suppression](https://www.autohotkey.com/boards/viewtopic.php?t=101812) — Ctrl+Win naturally does not trigger Start menu on most Windows versions; mask-key technique details
+- [AutoHotkey — Disable left Win key on Windows 11](https://www.autohotkey.com/boards/viewtopic.php?t=96593) — Windows 11 changed Win key behavior; mask-key requirements may differ
+- [Tauri Discussion #6309](https://github.com/orgs/tauri-apps/discussions/6309) — `OnceLock` pattern for `AppHandle` in `extern "system"` callbacks
+- [Tauri Discussion #8538](https://github.com/tauri-apps/tauri/discussions/8538) — `AppHandle` state access across threads in Tauri 2.x
+- [How do I access Windows Low Level Hooks using the Windows rust crate — Microsoft Q&A](https://learn.microsoft.com/en-us/answers/questions/1530452/how-do-i-access-the-windows-low-level-hooks-using) — community-confirmed feature flag set for keyboard hooks in windows-rs
+- [Wispr Flow — Supported/Unsupported Hotkeys](https://docs.wisprflow.ai/articles/2612050838-supported-unsupported-keyboard-hotkey-shortcuts) — confirms Ctrl+Win is viable on Windows; Wispr Flow recommends it as primary
 
 ---
-*Research completed: 2026-02-27*
+*Research completed: 2026-03-02*
 *Ready for roadmap: yes*

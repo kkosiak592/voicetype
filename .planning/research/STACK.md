@@ -1,117 +1,189 @@
 # Stack Research
 
-**Domain:** Local voice-to-text desktop tool (Windows, GPU-accelerated, offline)
-**Researched:** 2026-02-27
-**Confidence:** MEDIUM-HIGH (core stack HIGH, some supporting lib versions MEDIUM)
+**Domain:** Windows low-level keyboard hook for modifier-only global hotkey (Ctrl+Win) — v1.2 milestone addendum
+**Researched:** 2026-03-02
+**Confidence:** HIGH (Win32 API documented by Microsoft; windows crate features verified via win-hotkeys dependency graph; Tauri fix confirmed closed July 2025)
 
 ---
 
-## Recommended Stack
+## Scope
 
-### Core Technologies
+This is an additive milestone document covering only what changes for v1.2. The existing stack (Tauri 2.0, React/TS, windows v0.58 with `Win32_Graphics_Dxgi`, tauri-plugin-global-shortcut) is validated and not re-researched here.
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| Tauri | 2.10.2 | Desktop application framework | Smallest binary (~2.5 MB installer), native Rust FFI to whisper.cpp, WebView2-based frontend, BridgeVoice uses this exact stack in production. 20-40 MB RAM vs Electron's 800 MB. |
-| whisper-rs | 0.15.1 | Rust bindings to whisper.cpp (STT engine) | Only viable GPU option for CUDA 11.7. faster-whisper mandates CUDA 12. whisper-rs 0.15.1 is the latest stable release (2025-09-10), wraps whisper.cpp with safe Rust FFI. |
-| whisper.cpp (via whisper-rs-sys) | 0.14.1 (bundled) | C/C++ inference engine for Whisper models | Supports CUDA 11.x on Pascal architecture (sm_61). Requires building with `-DGGML_CUDA=1 -DCMAKE_CUDA_ARCHITECTURES=61`. Supports GGML quantized models. |
-| React | 18.x | Frontend UI framework | Official Tauri template supports React + Vite natively. Voquill and VoiceTypr reference projects use React. Widely known, good TypeScript support, large component ecosystem. |
-| Vite | 5.x (via create-tauri-app) | Frontend build tool | Official Tauri recommended bundler for React. Dev server on localhost:5173 that Tauri webview consumes. Fast HMR. |
-| TypeScript | 5.x | Frontend language | Strongly recommended by Tauri docs. Type safety for Tauri invoke calls reduces runtime errors in the Rust/JS boundary. |
-
-### Supporting Libraries (Rust)
-
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| cpal | 0.16.0 | Cross-platform audio capture (WASAPI on Windows) | Always — the standard for Rust audio I/O. Callback-based, dedicated audio thread. Used by Keyless, Handy, Voquill. Captures mic at 16kHz for Whisper. |
-| silero-vad-rust | latest (~0.1.x) | Voice Activity Detection — bundled ONNX model | For toggle mode (tap to start, auto-stop on silence). Ships Silero ONNX model (opset 15/16) inside the crate — no separate download needed. Uses `ort` internally. |
-| ort | 2.0.0-rc.11 | ONNX Runtime for Rust (VAD inference) | Required by silero-vad-rust. Wraps Microsoft's ONNX Runtime 1.23. Note: still RC, but production-used. Alternative: use silero-vad-rust which bundles ort internally. |
-| enigo | 0.5.0 | Cross-platform keyboard/mouse input simulation | Text injection via Ctrl+V simulation. Falls back to character-by-character SendInput. Windows-native backend. |
-| tauri-plugin-global-shortcut | 2.3.1 | System-wide hotkey registration | Global hotkey capture when Tauri window is not focused. Official Tauri plugin. |
-| tauri-plugin-store | 2.4.2 | JSON-based persistent settings storage | User preferences (hotkey config, active profile, corrections). Official Tauri plugin. |
-
-### Supporting Libraries (Frontend)
-
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| Tailwind CSS | 4.2.1 | Utility-first CSS styling | UI styling for pill overlay and settings panel. v4 ships a first-party Vite plugin (`@tailwindcss/vite`) — no `tailwind.config.js` needed, configured in CSS. |
-| Zustand | 4.x | Lightweight frontend state management | Settings state, recording state, profile state. Simpler than Redux for this use case. Community Tauri plugin (tauri-plugin-zustand) for backend sync if needed. |
-
-### Models
-
-| Model | File Size | VRAM (estimated) | Use Case |
-|-------|-----------|-------------------|----------|
-| ggml-large-v3-turbo.bin | 1.5 GiB | ~3-4 GB | Primary: GPU machines (P2000 has 5 GB VRAM — fits comfortably) |
-| ggml-large-v3-turbo-q5_0.bin | 547 MiB | ~1.5-2 GB | Quantized alternative: same model, 45% smaller, ~19% faster, same WER |
-| ggml-small.bin | 466 MiB | N/A (CPU) | CPU fallback for non-NVIDIA machines |
-| ggml-small-q5_1.bin | 182 MiB | N/A (CPU) | Quantized CPU fallback — smaller download, same quality |
-
-**Recommendation:** Ship large-v3-turbo-q5_0 as the GPU default (547 MiB vs 1.5 GiB, fits in 5 GB VRAM, nearly identical accuracy). Use ggml-small-q5_1 as CPU fallback.
-
-### Development Tools
-
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| Rust toolchain (stable) | Build Tauri backend | Required. Install via `rustup`. Minimum 1.77.2 for Tauri plugins. |
-| CUDA Toolkit 11.7 | Build whisper.cpp with GPU support | Already installed on dev machine. Required at build time. Set `CUDA_PATH` env var. |
-| MSVC (Visual Studio Build Tools) | Compile whisper.cpp on Windows | Required by whisper-rs. Must include C++ and Clang components. Set `LIBCLANG_PATH`. |
-| CMake | whisper.cpp build system | whisper-rs-sys uses CMake internally to build whisper.cpp. |
-| Node.js 18+ | Frontend toolchain, Tauri CLI | Required for Vite and npm scripts. |
-| create-tauri-app | Project scaffolding | `npm create tauri-app@latest` — select React + TypeScript template. |
+**Previous stack research (full project):** `.planning/research/STACK.md` as of 2026-02-27.
 
 ---
 
-## Installation
+## The Core Problem
 
-```bash
-# 1. Create project (select React + TypeScript when prompted)
-npm create tauri-app@latest voicetype
+`RegisterHotKey` (used by tauri-plugin-global-shortcut under the hood) cannot register modifier-only combinations. It requires a non-modifier virtual key as the trigger. `WH_KEYBOARD_LL` (low-level keyboard hook via `SetWindowsHookExW`) intercepts every key event before the system processes it, enabling modifier-only detection with a custom state machine.
 
-# 2. Rust dependencies — add to src-tauri/Cargo.toml
-# [dependencies]
-# whisper-rs = { version = "0.15", features = ["cuda"] }
-# cpal = "0.16"
-# silero-vad-rust = "0.1"
-# enigo = "0.5"
-# tauri-plugin-global-shortcut = "2"
-# tauri-plugin-store = "2"
+---
 
-# 3. Add Tauri plugins
-pnpm tauri add global-shortcut
-pnpm tauri add store
+## Recommended Stack Changes
 
-# 4. Frontend dependencies
-npm install zustand
-npm install tailwindcss @tailwindcss/vite
+### 1. windows crate: Add 3 feature flags (no version bump)
 
-# 5. Verify CUDA build environment
-# Set LIBCLANG_PATH to Visual Studio Llvm bin dir
-# Set CUDA_PATH to CUDA Toolkit 11.7 install dir
-# Then build with:
-cargo build --features cuda
-```
-
-**CUDA build flags** — set in `.cargo/config.toml` or environment:
+The existing dependency:
 ```toml
-[env]
-GGML_CUDA = "1"
-CMAKE_CUDA_ARCHITECTURES = "61"  # Pascal = sm_61
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = ["Win32_Graphics_Dxgi"] }
 ```
+
+Must become:
+```toml
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Graphics_Dxgi",
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+] }
+```
+
+| Added Feature | Provides |
+|---------------|----------|
+| `Win32_UI_WindowsAndMessaging` | `SetWindowsHookExW`, `CallNextHookEx`, `UnhookWindowsHookEx`, `GetMessageW`, `TranslateMessage`, `DispatchMessageW`, `WH_KEYBOARD_LL`, `KBDLLHOOKSTRUCT`, `WM_KEYDOWN`, `WM_KEYUP`, `MSG` |
+| `Win32_UI_Input_KeyboardAndMouse` | `keybd_event`, `KEYEVENTF_KEYUP`, `VK_LWIN`, `VK_RWIN`, `VK_LCONTROL`, `VK_RCONTROL` virtual key constants |
+| `Win32_Foundation` | `LRESULT`, `WPARAM`, `LPARAM`, `HHOOK`, `HINSTANCE`, `BOOL` — needed alongside UI features |
+
+**No version bump to 0.59/0.60 required.** win-hotkeys 0.5.1 uses windows 0.60 with these exact same three features — confirming the feature names are stable across 0.58–0.60. The project must NOT bump the windows version without auditing existing `Win32_Graphics_Dxgi` usage for API compatibility breaks.
+
+### 2. Tauri Builder: Add device_event_filter
+
+A confirmed Tauri 2.0 defect (issue #13919, closed July 2025): when the Tauri window is focused, WH_KEYBOARD_LL hooks fail to capture system keys (Win key, Alt+Tab, Ctrl+Shift+Esc). The fix is one builder call in `lib.rs`:
+
+```rust
+tauri::Builder::default()
+    .device_event_filter(tauri::DeviceEventFilter::Always)
+    // ... existing plugins and setup
+```
+
+This adjusts how tao (Tauri's windowing layer) dispatches device events. Without it, the Win key will be swallowed when the Tauri overlay is in focus.
+
+### 3. No new Cargo dependencies
+
+The two additions above (feature flags + one builder call) are the complete stack change. No new crates.
+
+---
+
+## Why Not win-hotkeys
+
+`win-hotkeys` v0.5.1 was the first candidate evaluated. It is disqualified:
+
+1. **Version conflict:** win-hotkeys 0.5.1 depends on `windows = "0.60"`. The project pins `windows = "0.58"`. Cargo cannot resolve two conflicting minor versions of the same crate; one must win, and bumping to 0.60 requires auditing all existing Win32 API calls.
+
+2. **No modifier-only support:** The API signature is `register_hotkey(trigger_key: VKey, modifiers: &[VKey], callback: Fn())`. There is no way to register Ctrl+Win without a third trigger key. This is not a gap that can be worked around — it is a fundamental API constraint.
+
+3. **Unnecessary abstraction:** The custom hook module is ~80–100 lines of Rust using APIs the project already has access to via the `windows` crate. win-hotkeys adds a dependency for functionality that would be a subset of what's needed.
+
+## Why Not rdev
+
+`rdev` has a documented unfixed defect in Tauri 2.0 (tauri-apps/tauri discussion #7752, issue #14770): rdev stops receiving keyboard events when the Tauri application window receives focus. Mouse events continue but keyboard events are dropped. The defect is attributed to the UIPI/focus model interaction and has no confirmed fix as of March 2026.
+
+## Why Not windows-hotkeys (dnlmlr)
+
+`windows-hotkeys` uses `RegisterHotKey` internally (same as tauri-plugin-global-shortcut), not WH_KEYBOARD_LL. It has the identical modifier-only limitation.
+
+---
+
+## Implementation Notes for the Hook Module
+
+### Thread Requirement (Critical)
+
+From the Microsoft LowLevelKeyboardProc spec: "This hook is called in the context of the thread that installed it. The call is made by sending a message to the thread that installed the hook. Therefore, **the thread that installed the hook must have a message loop**."
+
+The hook must be installed on a dedicated `std::thread` that runs `GetMessageW` in a loop. Do NOT install it on the Tauri main thread — Tauri/tao already owns the main thread's message pump, and installing a second `GetMessageW` loop there interferes with the existing pump.
+
+```rust
+// Skeleton — actual implementation lives in src-tauri/src/keyboard_hook.rs
+std::thread::spawn(move || {
+    let hook = unsafe {
+        SetWindowsHookExW(WH_KEYBOARD_LL, Some(hook_proc), None, 0)
+            .expect("SetWindowsHookExW failed")
+    };
+
+    let mut msg = MSG::default();
+    unsafe {
+        while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+        UnhookWindowsHookEx(hook).ok();
+    }
+});
+```
+
+### Modifier-Only State Machine
+
+The hook receives individual KEYDOWN/KEYUP events. For Ctrl+Win, press order is not guaranteed. The state machine must be order-independent:
+
+```
+KEYDOWN VK_LCONTROL or VK_RCONTROL → ctrl_down = true
+KEYDOWN VK_LWIN or VK_RWIN         → win_down = true
+KEYDOWN any other key (while both held) → dirty = true (abort combo)
+
+KEYUP of either modifier → check if both were held and !dirty
+  → if yes AND elapsed since first modifier down <= 50ms debounce window: fire trigger
+  → clear state
+
+KEYUP releases both → clear all state
+```
+
+State is stored in atomics or a `Mutex<HookState>` accessible from the static callback via a thread-local or global `Arc`.
+
+### Win Key Start Menu Suppression
+
+Returning `1` from the hook callback for VK_LWIN/VK_RWIN KEYDOWN suppresses the keydown event. However, Windows activates the Start menu on Win key UP, not DOWN, using an internal state machine that does not depend solely on the hook chain.
+
+The proven suppression technique (used by AutoHotkey's `#MenuMaskKey` mechanism): inject a dummy keystroke via `keybd_event` before returning from the KEYDOWN callback. The injection "breaks" the Win-key-alone sequence that triggers the Start menu.
+
+Safe virtual key to inject: `0xE8` (documented by Microsoft as "unassigned"). Do NOT use `0x07` — on Windows 10 1909+, VK_07 opens the Windows Game Bar.
+
+```rust
+// Suppress Start menu: inject a harmless unassigned keystroke on Win KEYDOWN
+unsafe {
+    keybd_event(0xE8, 0, KEYEVENTF_KEYUP.0 as u32, 0);
+}
+return LRESULT(1); // consume the Win keydown
+```
+
+The Win KEYUP must also be consumed (return 1) to prevent any residual Start menu trigger.
+
+### Callback Timeout Budget
+
+Windows enforces a maximum callback execution time (1 second on Windows 10+). If the hook exceeds this, it is silently removed. The hook callback must:
+- Do minimal work inline (only state updates and `keybd_event` injection)
+- Communicate to the main app via an `Arc<AtomicBool>` or `std::sync::mpsc::Sender` and return immediately
+- Never call async functions or block
+
+### Interaction with tauri-plugin-global-shortcut
+
+The LL hook and `RegisterHotKey` (used by tauri-plugin-global-shortcut) coexist independently on the same machine. However, during frontend hotkey-capture mode, the existing `unregister_hotkey` command (already implemented) should also pause the LL hook to prevent spurious trigger detection while the user is pressing key combinations to configure a new hotkey.
+
+---
+
+## Supporting Libraries Summary
+
+| Library | Change | Reason |
+|---------|--------|--------|
+| `windows` v0.58 | Add `Win32_Foundation`, `Win32_UI_WindowsAndMessaging`, `Win32_UI_Input_KeyboardAndMouse` features | Win32 APIs for hook installation and key injection |
+| `tauri` v2 | Add `.device_event_filter(tauri::DeviceEventFilter::Always)` | Fix system key capture when Tauri window focused (issue #13919) |
+| `tauri-plugin-global-shortcut` v2 | No change | Kept as fallback for non-modifier hotkeys; coexists with LL hook |
+| All others | No change | Audio, transcription, VAD, clipboard, tray unchanged |
 
 ---
 
 ## Alternatives Considered
 
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| whisper-rs (whisper.cpp) | faster-whisper (CTranslate2) | Only if you upgrade to CUDA 12. faster-whisper is ~30% faster and uses less VRAM, but requires CUDA 12 + cuDNN 9. Not an option on the current P2000 setup. |
-| Tauri 2.0 | Electron | Never for this use case. Electron is 800 MB RAM, ~200 MB installer. Tauri is 20-40 MB RAM, 2.5 MB installer. BridgeVoice already validated Tauri works. |
-| Tauri 2.0 | Python + PySide6 | Only for rapid prototyping, not distribution. Python bundles are 500 MB-2.2 GB. CUDA 12 still required for GPU in Python path. |
-| Tauri 2.0 | .NET/WPF | If Windows-only is a permanent constraint AND you want rock-solid native overlay behavior. Whisper.net (NuGet) does support CUDA 11.x. No cross-platform potential and no reference apps. |
-| silero-vad-rust | ort + manual Silero ONNX | silero-vad-rust bundles the model — less setup. Use raw ort only if you need custom VAD model variants. |
-| Clipboard paste (enigo) | SendInput char-by-char | Clipboard paste is default (fast, universal). Use SendInput only as fallback for password fields and terminals where Ctrl+V is disabled. |
-| large-v3-turbo-q5_0 | large-v3-turbo (f16) | Use q5_0 by default — 45% smaller, 19% faster, same accuracy. Only use f16 if you observe quality degradation. |
-| Tailwind CSS v4 | Tailwind CSS v3 | Tailwind v4 has breaking config changes (no tailwind.config.js, CSS-based config). Use v3 only if you need a component library that hasn't updated to v4 yet. |
+| Recommended | Alternative | Why Not |
+|-------------|-------------|---------|
+| Direct `windows` crate + custom hook module | `win-hotkeys` v0.5.1 | Requires windows 0.60 (conflicts with 0.58 pin), no modifier-only API (requires a trigger key), ~80 LOC custom implementation is simpler |
+| Direct `windows` crate + custom hook module | `rdev` crate | Keyboard events dropped when Tauri window is focused (tauri-apps/tauri #14770, unresolved March 2026) |
+| Direct `windows` crate + custom hook module | `windows-hotkeys` (dnlmlr) | Uses RegisterHotKey internally, cannot register modifier-only combos |
+| `VK_E8` for Start menu mask injection | `VK_07` | VK_07 opens Windows Game Bar on Windows 10 1909+ |
+| State machine with `std::time::Instant` | `tokio::sleep` debounce | Hook callback is synchronous; async cannot be awaited from it; callback has 1-second max budget |
+| Dedicated hook thread | Hook on Tauri main thread | Tauri/tao owns the main thread message pump; second GetMessageW loop interferes |
 
 ---
 
@@ -119,33 +191,12 @@ CMAKE_CUDA_ARCHITECTURES = "61"  # Pascal = sm_61
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| faster-whisper / CTranslate2 | Requires CUDA 12 + cuDNN 9. The P2000 with CUDA 11.7 is incompatible. The error is a hard runtime failure, not a degraded experience. | whisper-rs (whisper.cpp) with CUDA 11.7 feature |
-| Electron | 800 MB RAM baseline, 200+ MB installer. Kills the lightweight desktop tool goal. OpenWhispr uses Electron and it shows. | Tauri 2.0 |
-| tauri-plugin-mic-recorder | High-level wrapper that produces WAV files. Too abstracted for real-time streaming with VAD. Adds unnecessary latency. | cpal directly for ring buffer control |
-| UI Automation / ValuePattern text injection | Only works on controls that implement ValuePattern. Fails in browsers, Electron apps, custom controls — i.e., most of the target apps. | Clipboard paste via enigo |
-| Bundling models in the installer | NSIS/WiX fail for bundles over 2 GB. The large-v3-turbo binary alone is 1.5 GiB. Model bundling is incompatible with the 2.5 MB installer goal. | Download models on first run; store in app data dir |
-| Streaming transcription (Moonshine) | Significantly more complex state machine. Moonshine's Rust integration is immature. v1 latency target (sub-500ms chunk-based) is achievable without streaming. | Chunk-based transcription via whisper-rs |
-
----
-
-## Stack Patterns by Variant
-
-**If GPU is available (NVIDIA, CUDA 11.7+):**
-- Load `ggml-large-v3-turbo-q5_0.bin`
-- Build whisper-rs with `features = ["cuda"]`
-- CMake: `-DGGML_CUDA=1 -DCMAKE_CUDA_ARCHITECTURES=61`
-- Expected latency: 300-500ms for a 5-second utterance
-
-**If CPU-only (no NVIDIA GPU):**
-- Load `ggml-small-q5_1.bin`
-- Build whisper-rs without cuda feature
-- Expected latency: 2-4 seconds (acceptable for toggle mode)
-- Do NOT attempt large-v3-turbo on CPU — ~30-60 seconds latency
-
-**If Pascal GPU specifically (sm_61, CUDA 11.7):**
-- Use `float32` compute type, not `float16` — Pascal has poor FP16 throughput
-- whisper.cpp uses float32 by default in GGML format, so this is handled automatically
-- Set `CMAKE_CUDA_ARCHITECTURES=61` explicitly, otherwise the build defaults to a newer target
+| `RegisterHotKey` for Ctrl+Win | Cannot register modifier-only combos | `WH_KEYBOARD_LL` with state machine |
+| `win-hotkeys` crate | Version conflict + no modifier-only API | Direct `windows` crate |
+| `rdev` crate | Drops keyboard events when Tauri window is focused | Direct `windows` crate |
+| `GetAsyncKeyState` inside hook callback | Explicitly documented to be unreliable in LowLevelKeyboardProc (async state not yet updated when callback fires) | Track state manually with AtomicBool flags |
+| `VK_07` injection for Start menu mask | Opens Game Bar on Windows 10 1909+ | `VK_E8` (unassigned) |
+| Any blocking or async work in hook callback | Windows enforces 1-second max; exceeding it silently removes the hook | Dispatch to channel, return immediately |
 
 ---
 
@@ -153,31 +204,26 @@ CMAKE_CUDA_ARCHITECTURES = "61"  # Pascal = sm_61
 
 | Package | Compatible With | Notes |
 |---------|-----------------|-------|
-| whisper-rs 0.15.1 | whisper-rs-sys 0.14.1 | whisper-rs-sys is the C FFI layer; automatically pulled as dependency |
-| whisper-rs 0.15.x | CUDA Toolkit 11.7 | Confirmed via feature = "cuda". No CUDA 12 requirement in whisper.cpp. |
-| tauri 2.10.2 | tauri-plugin-global-shortcut 2.3.1 | Both on the 2.x line. Plugins track core major version. |
-| tauri 2.10.2 | tauri-plugin-store 2.4.2 | Same as above — 2.x line compatibility. |
-| Tailwind CSS 4.2.1 | Vite 5.x via @tailwindcss/vite | First-party Vite plugin replaces postcss setup. No tailwind.config.js. |
-| ort 2.0.0-rc.11 | ONNX Runtime 1.23 | ort is still RC but production-deployed. silero-vad-rust handles this internally so you may not need to pin ort directly. |
-| cpal 0.16.0 | WASAPI (Windows 10+) | Default audio backend on Windows. Resample captured audio to 16kHz before sending to whisper.cpp (Whisper's native sample rate). |
+| `windows` 0.58 + new features | Tauri 2.x, tauri-plugin-global-shortcut 2.x | Feature flags are additive; no API breaking changes |
+| `Win32_UI_WindowsAndMessaging` feature | `Win32_Foundation`, `Win32_UI_Input_KeyboardAndMouse` | These three are always co-used for keyboard hook patterns; stable across windows crate 0.48–0.62 |
+| `tauri::DeviceEventFilter::Always` | Tauri 2.0+ | Available in Tauri 2.0; resolves system key capture when window focused |
 
 ---
 
 ## Sources
 
-- **whisper-rs 0.15.1** — [crates.io](https://crates.io/crates/whisper-rs), [docs.rs features](https://docs.rs/crate/whisper-rs/latest/features), [BUILDING.md](https://github.com/tazz4843/whisper-rs/blob/master/BUILDING.md) — HIGH confidence
-- **Tauri 2.10.2** — [v2.tauri.app/release/](https://v2.tauri.app/release/), [create-project docs](https://v2.tauri.app/start/create-project/) — HIGH confidence
-- **tauri-plugin-store 2.4.2** — [docs.rs](https://docs.rs/crate/tauri-plugin-store/latest) — HIGH confidence
-- **tauri-plugin-global-shortcut 2.3.1** — [docs.rs](https://docs.rs/crate/tauri-plugin-global-shortcut/latest) — HIGH confidence
-- **Tailwind CSS 4.2.1** — [tailwindcss.com/blog/tailwindcss-v4](https://tailwindcss.com/blog/tailwindcss-v4), GitHub releases — HIGH confidence
-- **enigo 0.5.0** — [docs.rs](https://docs.rs/enigo/latest/enigo/), [GitHub](https://github.com/enigo-rs/enigo) — HIGH confidence
-- **cpal 0.16.0** — [GitHub RustAudio/cpal](https://github.com/RustAudio/cpal) — HIGH confidence
-- **ort 2.0.0-rc.11** — [docs.rs](https://docs.rs/crate/ort/latest) — MEDIUM confidence (still RC)
-- **silero-vad-rust** — [crates.io](https://crates.io/crates/silero-vad-rust) — MEDIUM confidence (version not pinned, confirm on crates.io)
-- **whisper.cpp CUDA 11.7/Pascal** — [HuggingFace whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo), [whisper.cpp models README](https://github.com/ggml-org/whisper.cpp/blob/master/models/README.md), CUDA Pascal compatibility confirmed from prior research — MEDIUM confidence (no explicit CUDA 11.7 docs, based on "CUDA 11.x OK" from reference research and community reports)
-- **BridgeVoice stack validation** — existing research artifact `artifacts/research/2026-02-27-voice-to-text-desktop-tool-technical.md` — HIGH confidence (production app using same stack)
+- [LowLevelKeyboardProc — Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelkeyboardproc) — Thread message loop requirement, callback timeout (1s on Win10+), return 1 for suppression — HIGH confidence
+- [Disabling Shortcut Keys in Games — Microsoft Win32 Docs](https://learn.microsoft.com/en-us/windows/win32/dxtecharts/disabling-shortcut-keys-in-games) — Canonical pattern for SetWindowsHookExW with VK_LWIN/VK_RWIN suppression — HIGH confidence
+- [SetWindowsHookExW — Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowshookexw) — API signature and threading semantics — HIGH confidence
+- [win-hotkeys Cargo.toml (iholston/win-hotkeys)](https://github.com/iholston/win-hotkeys) — Confirms windows 0.60 with Win32_Foundation + Win32_UI_Input_KeyboardAndMouse + Win32_UI_WindowsAndMessaging; v0.5.1 released May 2025 — HIGH confidence (verified from source)
+- [win-hotkeys docs.rs](https://docs.rs/win-hotkeys/latest/win_hotkeys/) — API requires trigger key + modifier array; no modifier-only support — HIGH confidence
+- [Tauri issue #13919](https://github.com/tauri-apps/tauri/issues/13919) — WH_KEYBOARD_LL fails to capture system keys when Tauri window focused; fix: `device_event_filter(Always)`; confirmed resolved July 2025 — HIGH confidence
+- [How do I access the Windows Low Level Hooks using the Windows rust crate? — Microsoft Q&A](https://learn.microsoft.com/en-us/answers/questions/1530452/how-do-i-access-the-windows-low-level-hooks-using) — Feature flag set for keyboard hooks in windows crate — MEDIUM confidence (community Q&A, consistent with win-hotkeys Cargo.toml)
+- [AutoHotkey #MenuMaskKey docs](https://www.autohotkey.com/docs/v1/lib/_MenuMaskKey.htm) — VK_E8 as unassigned mask key for Start menu suppression; VK_07 now reserved for Game Bar — MEDIUM confidence (AHK docs, consistent with Windows VK allocation table)
+- [Wispr Flow supported hotkeys](https://docs.wisprflow.ai/articles/2612050838-supported-unsupported-keyboard-hotkey-shortcuts) — Confirms Ctrl+Win is viable on Windows; recommended by Wispr Flow as a primary option — MEDIUM confidence (competitor app documentation)
+- [Tauri rdev issue #14770](https://github.com/tauri-apps/tauri/issues/14770) — rdev drops keyboard events when Tauri window focused — HIGH confidence (confirmed open issue)
 
 ---
 
-*Stack research for: VoiceType — local voice-to-text desktop tool*
-*Researched: 2026-02-27*
+*Stack research for: v1.2 Ctrl+Win modifier-only hotkey via WH_KEYBOARD_LL (Tauri 2.0 Rust app, Windows)*
+*Researched: 2026-03-02*

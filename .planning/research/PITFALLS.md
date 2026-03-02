@@ -1,134 +1,325 @@
 # Pitfalls Research
 
-**Domain:** Local voice-to-text desktop tool (Tauri 2.0 + whisper.cpp + Windows)
-**Researched:** 2026-02-27
-**Confidence:** HIGH (multiple verified sources; most pitfalls confirmed by official Tauri GitHub issues and whisper.cpp issue tracker)
+**Domain:** WH_KEYBOARD_LL modifier-only hotkey integration into existing Tauri 2.0 desktop app (v1.2 Keyboard Hook milestone)
+**Researched:** 2026-03-02
+**Confidence:** HIGH (critical pitfalls verified against official Microsoft Win32 docs and confirmed Tauri GitHub issues; moderate pitfalls from AutoHotkey community validated patterns and Rust FFI docs)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Overlay Window Steals Focus from Target Application
+### Pitfall 1: Hook Callbacks Never Fire When Tauri Window Is Focused
 
 **What goes wrong:**
-The floating pill overlay window grabs focus from the user's active application (VS Code, Chrome, Word, etc.) when it appears or is interacted with. After transcription, the clipboard paste fires into the pill overlay itself instead of the original text field — the text disappears or goes nowhere.
+The WH_KEYBOARD_LL hook installs successfully (SetWindowsHookExW returns a valid HHOOK), but when the VoiceType window has focus, the hook callback receives no keyboard events — not even Win key or Ctrl presses. The hook appears dead. The problem disappears when any other window has focus.
 
 **Why it happens:**
-Tauri 2.0 on Windows defaults all new windows to `focus: true`. Even when `focus: false` is set in `tauri.conf.json`, this config is unreliable — the window still steals focus on startup (confirmed bug: tauri-apps/tauri #11566). WebView2 has its own focus behavior that can override the `focusable: false` setting on Windows (issue #14102 is macOS but same root cause exists on Windows). Any click on the pill overlay area triggers a focus transfer away from the user's text field.
+Tauri 2.0 uses the `tao` windowing library, which on Windows sets a `DeviceEventFilter` that defaults to `Unfocused` — meaning the app's input processing pipeline filters out device events when its window is not the receiver. This was confirmed in tauri-apps/tauri#13919 and tauri-apps/tauri#14770. Importantly, WH_KEYBOARD_LL does not inject into another process — it is called in the context of the thread that installed it via an inter-thread message. If that thread's message pump is blocked or its event filter is consuming events, callbacks are silently swallowed.
+
+This is particularly acute for VoiceType because:
+- The hook thread is installed inside the same Tauri process
+- The Tauri main window is the primary UI (settings panel) — users may have it focused when configuring the app
+- Even if settings panel is not normally in focus, the first run and onboarding phases will have it focused
 
 **How to avoid:**
-- Set `focus: false` AND `focusable: false` in `tauri.conf.json` for the overlay window (belt-and-suspenders).
-- Never show the overlay in response to a window click — use only keyboard hotkey to trigger.
-- Set `skip_taskbar: true` and `always_on_top: true` but test that the overlay does not receive keyboard/mouse focus.
-- Use Win32 `WS_EX_NOACTIVATE` extended window style via Tauri's `set_window_builder_attributes` in Rust to prevent the window from activating. This is the authoritative fix — CSS and config alone are insufficient on Windows.
-- Record the `HWND` of the foreground window immediately before the hotkey fires, verify it hasn't changed before injecting text (abort if it has).
+Set `device_event_filter` in the Tauri AppBuilder to allow device events even when focused:
+
+```rust
+// In setup() or via AppBuilder before build()
+.device_event_filter(tauri::DeviceEventFilter::Always)
+```
+
+This must be applied before installing the WH_KEYBOARD_LL hook. Install the hook on a dedicated thread that runs its own `GetMessage` / `DispatchMessage` loop — do not install on the Tauri main thread. The hook thread must be separate from the Tauri async runtime threads.
 
 **Warning signs:**
-- Text appears in the overlay/settings window rather than the target app after transcription.
-- The target app's cursor blinks disappears when the overlay animates in.
-- Manual testing: open Notepad, click into it, press hotkey — does cursor remain in Notepad?
+- Hook callback fires correctly for 30 seconds (while settings window is not focused), then suddenly stops responding when user opens the settings panel
+- App logs show hook installed successfully but no `WM_KEYDOWN` events appear when VoiceType window is foreground
+- Hotkey works globally but fails to trigger when VoiceType is the active window
 
-**Phase to address:** Phase covering Overlay Window UI (whichever phase builds the floating pill). Must be the first thing verified before any text injection work.
+**Phase to address:** Hook installation phase (Phase 1 of v1.2). Verify before implementing any other hook logic — this is the foundation all other features rest on.
 
 ---
 
-### Pitfall 2: whisper.cpp CUDA Build Silently Falls Back to CPU
+### Pitfall 2: Start Menu Opens on Win Key Release Despite Hook Blocking the Event
 
 **What goes wrong:**
-The app builds successfully and runs, but `system_info` shows `CUBLAS = 0`. All inference runs on CPU at 2-4 seconds per utterance instead of 300-500ms on GPU. The developer doesn't notice because the app "works" — it's just slow.
+The hook correctly detects the Ctrl+Win combination and returns a non-zero value to suppress the events. The VoiceType hotkey fires. But after releasing the keys, the Start menu opens anyway — the WM_KEYUP for VK_LWIN was not blocked or was blocked too late.
 
 **Why it happens:**
-Three independent ways CUDA can fail silently:
-1. CMake CUDA architecture not specified for Pascal (sm_61). Newer examples show `sm_86` (Ampere) and the build system doesn't error — it just compiles CPU-only.
-2. CUDA Toolkit not in PATH or Visual Studio integration not detected — the MSVC+CUDA integration requires manually copying MSBuildExtensions from the CUDA toolkit to VS BuildCustomizations folder if auto-detection fails.
-3. `whisper-rs` build.rs doesn't find CUDA Toolkit headers. No error is thrown; it disables CUBLAS.
-4. Missing `LIBCLANG_PATH` env var on Windows causes `whisper-rs` bindgen to fall back to CPU-only compilation.
+Windows handles the Start menu activation on the WM_KEYUP event for VK_LWIN/VK_RWIN, not WM_KEYDOWN. The sequence the OS uses: if Win key is pressed and released with no other keys in between, the Start menu activation is queued. Simply blocking the WM_KEYDOWN is not sufficient. There are two sub-problems:
+
+1. **Direct suppression is insufficient alone**: Returning non-zero from the hook for WM_KEYUP of VK_WIN suppresses the event to the target window, but the Windows shell has already registered interest in the Win key at a level that observes the hook output.
+
+2. **The masking technique is required**: AutoHotkey and other hook tools suppress Start menu activation by injecting a synthetic key event (VK 0xE8, which is "unassigned" per Microsoft's virtual key table) on Win key press. This "masks" the Win key as a combo-key in the OS's internal tracking state. Without the mask key, the OS concludes the Win key was pressed alone and opens the Start menu.
+
+On Windows 11, this is more sensitive than Windows 10: the AutoHotkey community confirmed that Windows 11 changed Win key handling and the masking technique requires sending the unassigned key on both down and up transitions in some configurations.
 
 **How to avoid:**
-- Build with explicit Pascal architecture: `cmake -B build -DGGML_CUDA=1 -DCMAKE_CUDA_ARCHITECTURES="61"` (P2000 is sm_61).
-- After every build that includes CUDA, verify CUDA is active: run a transcription and check that `ggml_cuda_init` log line appears, OR check GPU utilization in Task Manager — it must show nonzero NVIDIA GPU usage during inference.
-- Add a Rust integration test that loads the model and asserts `WhisperContext::full_params()` has CUDA enabled, running at model-expected latency.
-- Document the exact build command with verified flags in a `BUILDING.md`.
+In the hook callback, when Ctrl+Win is recognized as the active combo:
+1. Return non-zero to suppress the Win key KEYDOWN event.
+2. Simultaneously send a synthetic key event for VK 0xE8 (KEYDOWN + KEYUP) via `SendInput` with `LLKHF_INJECTED` — but check the `LLKHF_INJECTED` flag in your own callback to skip re-processing your own synthetic events (see Pitfall 6).
+3. Also return non-zero for VK_LWIN KEYUP.
+
+Critical: Do not use VK 0x07 as the mask key — on Windows 10+ it opens the Xbox Game Bar.
+
+```rust
+// In hook callback, detect own synthetic events to avoid recursion:
+let flags = kbdll.flags;
+if flags & LLKHF_INJECTED != 0 {
+    return CallNextHookEx(ptr::null_mut(), code, wparam, lparam);
+}
+```
 
 **Warning signs:**
-- `system_info` output shows `CUBLAS = 0`.
-- Task Manager GPU panel shows 0% NVIDIA GPU during transcription.
-- Transcription of a 5-second utterance takes more than 1 second.
-- CI builds on a machine without CUDA produce a binary that is then used on a CUDA machine and users wonder why it's slow.
+- Start menu opens briefly then closes (partial suppression — KEYDOWN blocked but not KEYUP)
+- Start menu reliably opens after every successful Ctrl+Win hotkey trigger
+- Behavior differs on Windows 10 vs Windows 11 test machines
 
-**Phase to address:** Phase covering whisper-rs integration. Verify GPU usage as the acceptance criterion for the transcription phase — latency benchmark must be the gate.
+**Phase to address:** Phase 1 (hook implementation) — the mask-key strategy must be designed in from the start, not bolted on after testing reveals Start menu leakage.
 
 ---
 
-### Pitfall 3: Clipboard Paste Race Condition Corrupts or Loses User's Clipboard Contents
+### Pitfall 3: Hook Is Silently Removed by Windows After Timeout — App Doesn't Know
 
 **What goes wrong:**
-Two failure modes:
-1. The app sets the clipboard to the transcribed text, then simulates Ctrl+V before the target application has read the clipboard. The paste fires but the clipboard hasn't propagated — the target app pastes the previous clipboard contents, not the transcription.
-2. The app restores the original clipboard contents too quickly, before the target app finishes reading the transcription text from the clipboard. The user's pasted text is the original clipboard content, not the transcription.
+The hook works normally for hours, then stops responding with no error. The app continues running normally (no crash, no log error), but the Ctrl+Win hotkey no longer fires. The user must restart VoiceType to restore the hotkey. This happens intermittently — more often on machines with antivirus, heavy CPU load, or slow machines.
 
 **Why it happens:**
-Windows clipboard is a shared asynchronous resource. `SetClipboardData` returns before the data is available to other processes. `OpenClipboard`/`GetOpenClipboardWindow` will show another application has the clipboard locked. No built-in synchronization exists. A naive implementation of `set → send Ctrl+V → restore` runs in <5ms which is too fast for most applications to process.
+From the official `LowLevelKeyboardProc` documentation (verified): "The hook procedure should process a message in less time than the data entry specified in the `LowLevelHooksTimeout` value in `HKEY_CURRENT_USER\Control Panel\Desktop`." If the callback exceeds this timeout — default 300ms, capped at 1000ms on Windows 10 version 1709+ — the system passes the event to the next hook. If it times out 11 times cumulatively, **the hook is silently removed with no notification to the app**. There is no callback, no event, no return value — the HHOOK handle becomes invalid and all subsequent keystrokes bypass the callback.
+
+In this app, the hook callback runs on the hook thread. Any blocking operation (acquiring a Mutex, sending across a channel that is full, calling into the Tauri command system) directly inside the callback can cause timeout. Given the existing Arc<Mutex<...>> patterns in lib.rs, accidentally holding a lock in the callback path is a realistic mistake.
 
 **How to avoid:**
-- Use `GetOpenClipboardWindow` to check that no other app holds the clipboard before writing. Retry with backoff if locked.
-- Insert a 50-100ms delay between `SetClipboardData` and the `SendInput(Ctrl+V)` call. BridgeVoice and reference projects have validated this timing.
-- Insert a separate 100-150ms delay between the Ctrl+V send and clipboard restore.
-- Do NOT use `CF_TEXT` — use `CF_UNICODETEXT` to avoid encoding conversion race conditions.
-- Make the delay configurable (some slow machines need 200ms).
+- The hook callback must do ONLY: read the KBDLLHOOKSTRUCT, set an AtomicBool or send to an unbounded channel (non-blocking), and return immediately. Do NOT lock mutexes, do NOT call into Tauri commands, do NOT allocate on the heap inside the callback.
+- Worker logic (debounce timer, state machine evaluation) runs on a separate thread that reads from the channel.
+- Implement a health-check mechanism: a periodic timer (e.g., every 5 seconds) attempts a synthetic key event and verifies the hook callback fires. If the hook is dead, reinstall it.
+
+```rust
+// The entire callback should be near this simple:
+unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    if code >= 0 {
+        let kb = *(lparam as *const KBDLLHOOKSTRUCT);
+        let _ = HOOK_SENDER.send(HookEvent { vk: kb.vkCode, flags: kb.flags, wp: wparam });
+    }
+    CallNextHookEx(ptr::null_mut(), code, wparam, lparam)
+}
+```
 
 **Warning signs:**
-- Users report occasionally getting their old clipboard content pasted instead of the transcription.
-- The issue is intermittent and harder to reproduce on developer machines (which are faster) than on user machines.
-- Does not reproduce in isolated test but appears under load (e.g., when browser tabs are loading).
+- Hotkey stops working without any restart or settings change
+- Issue reproduces more reliably when antivirus is scanning (CPU spikes) or system is under heavy load
+- Adding a `log::debug!()` call inside the hook callback causes the hook to die faster (disk I/O in callback)
 
-**Phase to address:** Phase covering text injection. The delay must be built in from day one, not retrofitted after user reports.
+**Phase to address:** Phase 1 (hook architecture). The channel-based non-blocking callback design must be the initial design — it cannot be refactored in after discovering timeouts.
 
 ---
 
-### Pitfall 4: Windows Defender Flags the Binary as Malware (Keyboard Injection)
+### Pitfall 4: Rust Panic Inside `extern "system"` Hook Callback Causes Undefined Behavior
 
 **What goes wrong:**
-The app is flagged by Windows Defender as a HackTool or suspicious binary because it uses `SendInput` for keyboard simulation. Unsigned binaries that perform low-level keyboard/clipboard operations are a common malware pattern. Users can't install or run the app, or Defender quarantines it silently.
+A Rust panic occurs inside the hook callback (e.g., a slice index out of bounds, an unwrap() on a None, or an assertion). The process exhibits undefined behavior — in the best case it aborts immediately; in the worst case it silently corrupts memory and the app continues running in a broken state. The specific undefined behavior is platform-dependent.
 
 **Why it happens:**
-`SendInput` and `SetClipboardData` followed by simulated keystrokes are identical at the API level to keylogger/inject behavior. Windows Defender's ML classifier uses heuristics — unsigned binaries that use these APIs are high-risk candidates. The `enigo` crate wraps exactly these APIs. Similar tools (Winaero Tweaker, LibreHardwareMonitor, Keyran) have all been incorrectly flagged as HackTool in 2024-2025 due to Microsoft content definition updates.
+From the Rust Nomicon and RFC 2945: a Rust panic that unwinds through an `extern "C"` (or `extern "system"`) FFI boundary is undefined behavior per the Rust specification. The Windows `LowLevelKeyboardProc` callback is called by the OS from C code — it is precisely an FFI boundary. Even if `panic = "abort"` is set in Cargo.toml (which would catch this for the common case), it is not set for the existing project (which uses default `panic = "unwind"`). An unwinding panic crossing this boundary may corrupt the hook chain for the entire system, not just this app.
 
 **How to avoid:**
-- **Code signing is required for distribution.** An OV (Organization Validation) or EV (Extended Validation) code signing certificate from DigiCert, Sectigo, or similar CA will eliminate most false positives. EV certificates provide SmartScreen reputation immediately.
-- Without a certificate, submit the binary to Microsoft's Malware Protection Center (MPC) for exclusion — but this only helps for a specific binary hash, not future builds.
-- For personal/friend distribution without a cert: document that users must add a Defender exclusion for the app folder, and provide clear install instructions.
-- Do NOT use `enigo`'s character-by-character keystroke injection as the primary method — it generates more API calls and is more likely to trigger heuristics. Prefer clipboard paste (fewer SendInput calls).
+Wrap the entire callback body in `std::panic::catch_unwind`:
+
+```rust
+unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    let result = std::panic::catch_unwind(|| {
+        if code >= 0 {
+            let kb = *(lparam as *const KBDLLHOOKSTRUCT);
+            let _ = HOOK_SENDER.try_send(HookEvent { vk: kb.vkCode, flags: kb.flags, wp: wparam });
+        }
+        CallNextHookEx(ptr::null_mut(), code, wparam, lparam)
+    });
+    match result {
+        Ok(r) => r,
+        Err(_) => CallNextHookEx(ptr::null_mut(), code, wparam, lparam), // safe fallback
+    }
+}
+```
+
+Alternatively, keep the callback so minimal (just one AtomicStore and one return) that no panic is possible.
+
+Never use `.unwrap()`, `.expect()`, index operations, or any fallible operation inside the hook callback body.
 
 **Warning signs:**
-- Windows SmartScreen blocks the installer on first run ("Unknown publisher" warning).
-- Defender quarantines the binary in `%AppData%\Microsoft\Windows Defender\Quarantine`.
-- Users report "Windows protected your PC" dialog blocking launch.
+- App crashes with no Rust backtrace during hotkey use (OS-level crash rather than Rust panic)
+- The crash happens intermittently and is hard to reproduce under debugger
+- Crash only occurs when the keyboard is used rapidly or in specific key sequences
 
-**Phase to address:** Installer/distribution phase. Budget for a code signing certificate from the start. Do not assume personal use bypasses this — friends' machines have Defender enabled and cannot add exclusions as easily.
+**Phase to address:** Phase 1 (hook implementation). Code review gate: the hook callback must be reviewed for any panic-capable operations before merging.
 
 ---
 
-### Pitfall 5: Whisper Hallucinations on Silence or Background Noise
+### Pitfall 5: Coexistence of tauri-plugin-global-shortcut (RegisterHotKey) and WH_KEYBOARD_LL Causes Double-Firing or Deadlock
 
 **What goes wrong:**
-When the user presses the hotkey, pauses before speaking (or accidentally triggers hold-to-talk without speaking), whisper.cpp receives near-silence or ambient noise and generates hallucinated text — fabricated sentences, repeated phrases, or garbage Unicode characters — which get injected into the user's document.
+The existing app uses `tauri-plugin-global-shortcut` (which wraps the `global-hotkey` crate, which uses Win32 `RegisterHotKey`). The new v1.2 milestone adds a WH_KEYBOARD_LL hook in the same process. These two systems both observe keyboard events at the global level. Depending on implementation, two failure modes appear:
+
+1. **Double-firing**: A standard hotkey (e.g., Ctrl+F9) registered via RegisterHotKey also passes through the WH_KEYBOARD_LL hook. If the hook logic is not explicitly scoped to only handle Ctrl+Win combinations, it may also trigger on Ctrl+F9, causing double-execution of the hotkey handler.
+
+2. **Cross-thread message loop interference**: Both systems install into the same process's message loop. If the hook thread and the RegisterHotKey thread share state (Arc<Mutex<...>>) and both try to acquire the same lock in response to the same keypress event, a deadlock can occur.
 
 **Why it happens:**
-Whisper was trained on speech data. When fed non-speech audio, it tries to "find" speech and generates text anyway. This is a fundamental model behavior, not a bug. The `initial_prompt` parameter makes it worse — a structural engineering prompt biases the decoder toward engineering terms, so hallucinations tend to produce plausible-sounding but wrong engineering content ("the W-section 14x90 should be placed...").
+`RegisterHotKey` works through the WM_HOTKEY message, which is delivered to the thread that registered it. `WH_KEYBOARD_LL` operates at a lower level and fires before WM_HOTKEY is generated. They are independent mechanisms that both observe the same keystrokes. The existing `tauri-plugin-global-shortcut` state machine in lib.rs (handle_shortcut, rebind_hotkey, etc.) was not designed to coexist with a parallel low-level hook. During the transition phase, both systems will be active simultaneously (fallback path if hook fails to install).
 
 **How to avoid:**
-- Use Silero VAD as the gate — only pass audio to whisper.cpp if VAD confirms speech was detected. Do not pass audio buffers where VAD returned zero speech frames.
-- Implement a minimum speech duration threshold: if VAD detected less than 300ms of speech total, discard the buffer without calling whisper.cpp.
-- After transcription, check for hallucination indicators: output is longer than 200% of the audio duration in word-count terms; output contains repetitive patterns (repeated phrases); output is in a different language than expected. If any indicator triggers, discard rather than inject.
-- Log discarded hallucinations for debugging.
+- In the WH_KEYBOARD_LL callback, immediately check if the key combination involves VK_LWIN or VK_RWIN. Only process combinations that include a Win modifier — pass everything else through via `CallNextHookEx` with no state changes. This scopes the hook to only the Ctrl+Win use case.
+- Define a clear state ownership boundary: the WH_KEYBOARD_LL handler owns the `is_recording` AtomicBool when the hook is active; the RegisterHotKey handler owns it when hook is not installed. Never let both read-modify-write the same AtomicBool concurrently.
+- During the transition (hook active), unregister the overlapping standard hotkey from RegisterHotKey to avoid double-registration.
+- Lock acquisition order must be consistent across both callback paths to prevent deadlock.
 
 **Warning signs:**
-- Pressing and releasing the hotkey without speaking injects text.
-- Users report occasional random sentences appearing in their documents.
-- In toggle mode, a brief press (< 0.5 second) produces injected text.
+- Transcription starts twice in rapid succession after a single hotkey press
+- App deadlocks under specific timing conditions when both a standard key and Ctrl+Win are pressed close together
+- Toggling the hotkey in settings while the hook is active causes a hang
 
-**Phase to address:** Phase covering VAD integration and the transcription pipeline. The VAD gate must be implemented before any end-to-end testing.
+**Phase to address:** Phase 1 (hook installation) and Phase 2 (fallback/coexistence logic). The boundary between the two systems must be documented as an invariant.
+
+---
+
+## Moderate Pitfalls
+
+### Pitfall 6: Synthetic Key Injection (SendInput for Start Menu Suppression) Recursively Re-Enters the Hook
+
+**What goes wrong:**
+The hook callback calls `SendInput` to inject the VK 0xE8 mask key. The hook itself is called again for this injected event (because WH_KEYBOARD_LL is called for all keyboard input including synthetic). This causes infinite recursion — the hook callback calls SendInput, which triggers the hook, which calls SendInput again — until the stack overflows or the timeout fires.
+
+**Why it happens:**
+WH_KEYBOARD_LL receives both physical and synthetic keyboard events. Any call to `SendInput`, `keybd_event`, or `PostMessage` with key input from within the hook callback will re-enter the callback. The official docs confirm the hook fires for `keybd_event`-originated input.
+
+**How to avoid:**
+Check the `LLKHF_INJECTED` flag (bit 4 of `KBDLLHOOKSTRUCT.flags`) at the start of every callback invocation. If set, the event is synthetic — pass it through without any processing or re-injection:
+
+```rust
+if kb.flags & 0x10 != 0 { // LLKHF_INJECTED
+    return CallNextHookEx(ptr::null_mut(), code, wparam, lparam);
+}
+```
+
+This is the standard guard used by AutoHotkey and all hook-based tools.
+
+**Warning signs:**
+- Stack overflow crash shortly after first hotkey press
+- Exponential CPU spike when hotkey is pressed (hook firing thousands of times per second)
+- App freeze immediately after first successful Ctrl+Win detection
+
+**Phase to address:** Phase 1 (hook implementation). Must be the first check in the callback, before any other logic.
+
+---
+
+### Pitfall 7: Left vs. Right Modifier Ambiguity — VK_CONTROL Fires Instead of VK_LCONTROL
+
+**What goes wrong:**
+The hook receives `vkCode == VK_CONTROL (0x11)` instead of `VK_LCONTROL (0xA2)` or `VK_RCONTROL (0xA3)`. The state machine that tracks "is Ctrl currently pressed?" either never detects the press (if it only watches VK_LCONTROL) or incorrectly identifies which Ctrl key was pressed (affects user UX for left-vs-right hotkey preferences).
+
+Similarly, VK_LWIN (0x5B) and VK_RWIN (0x5C) are distinct — the user may want only left-Win to trigger (to not interfere with right-Win+L for lock screen).
+
+**Why it happens:**
+Windows keyboards send different virtual key codes depending on the physical key, but older hardware, software keyboard emulators, remote desktop sessions, and the on-screen keyboard may send the generic `VK_CONTROL` rather than the side-specific codes. The KBDLLHOOKSTRUCT provides `scanCode` and the `LLKHF_EXTENDED` flag in `flags` (bit 0), which can be used with `MapVirtualKeyW(scanCode, MAPVK_VSC_TO_VK_EX)` to disambiguate.
+
+**How to avoid:**
+Track all three VK codes for each modifier: VK_CONTROL, VK_LCONTROL, and VK_RCONTROL. Treat all three as "Ctrl pressed." For the Win key, track VK_LWIN and VK_RWIN separately. Use the `LLKHF_EXTENDED` flag to distinguish extended (right-side) keys when vkCode is the generic form.
+
+Design the state machine so it does not assume left-only modifiers. If the product decision is "only left Ctrl + left Win", enforce it by also checking the scanCode / extended flag, not just vkCode.
+
+**Warning signs:**
+- Ctrl+Win combination detected on desktop PC but not on remote desktop session
+- Right-Ctrl + Win triggers the hotkey when it should not (or vice versa)
+- On-screen keyboard or accessibility tools cause unintended hotkey firing
+
+**Phase to address:** Phase 1 (hook state machine). The VK code enumeration must cover all three variants from the start.
+
+---
+
+### Pitfall 8: Modifier Key State Desync When App Is Backgrounded Mid-Press
+
+**What goes wrong:**
+The user holds Ctrl, switches to another window via Alt+Tab, then releases Ctrl. The hook receives the Ctrl KEYDOWN but misses the KEYUP (or vice versa depending on timing). The internal `ctrl_down: bool` state is now permanently stuck as `true`. Subsequently, pressing any key is misidentified as "Ctrl held" — the hotkey fires unexpectedly or never fires because the combo is perceived as already active.
+
+**Why it happens:**
+WH_KEYBOARD_LL is a global hook and does receive events when the app is not focused. However, if the hook thread's message pump is blocked at the moment the KEYUP event arrives (e.g., during a transcription pipeline operation), the event is delivered after the timeout and may be dropped (see Pitfall 3). The `GetAsyncKeyState` function cannot be called from inside the hook callback (the official docs explicitly warn: "the callback function is called before the asynchronous state of the key is updated"). There is also no OS-provided "you missed some key events" notification.
+
+**How to avoid:**
+- On WM_HOTKEY or application focus-change events (WM_ACTIVATEAPP with wParam=FALSE), reset all modifier state flags to their actual hardware state using `GetKeyState` called from the main thread (not inside the hook callback).
+- Implement a periodic modifier-state reconciliation (every 100ms) that calls `GetKeyState(VK_CONTROL)` and `GetKeyState(VK_LWIN)` on the hook thread and corrects the internal AtomicBool state if it diverges.
+- Design the state machine to recover from stuck-modifier state: if `ctrl_down` has been `true` for more than 2 seconds without a corresponding Win key press, reset it.
+
+**Warning signs:**
+- After Alt+Tabbing away and back, the hotkey fires on the very next keypress with no modifier held
+- Holding Ctrl and quickly Alt+Tabbing causes a "phantom" hotkey trigger
+- User reports the app "randomly starts recording" without pressing the hotkey
+
+**Phase to address:** Phase 1 (state machine design) and Phase 2 (focus change integration testing).
+
+---
+
+### Pitfall 9: Hook Thread Has No Message Pump — Hook Callbacks Never Fire
+
+**What goes wrong:**
+The hook is installed on a standard Rust `std::thread::spawn` thread. The HHOOK is valid, but keyboard callbacks never fire. No events reach the hook callback at all.
+
+**Why it happens:**
+The official `LowLevelKeyboardProc` documentation states explicitly: "the thread that installed the hook must have a message loop." The Windows hook subsystem delivers callbacks to the installing thread by posting a special message to its message queue. If the thread has no Win32 message loop (no `GetMessage` / `PeekMessage` / `DispatchMessage` pump), those messages are never processed and the callback is never invoked. A standard Rust thread (`std::thread::spawn`) has no Win32 message loop. The Tauri main thread has a message loop (WebView2 runs one), but it is not safe to install the hook on it.
+
+**How to avoid:**
+The hook thread must run an explicit Win32 message loop using `windows-rs` or `winapi`:
+
+```rust
+std::thread::spawn(move || {
+    let hhook = unsafe {
+        SetWindowsHookExW(WH_KEYBOARD_LL, Some(hook_proc), None, 0)
+    }.expect("hook install failed");
+
+    // Required: Win32 message loop on this thread
+    let mut msg = MSG::default();
+    loop {
+        match unsafe { GetMessageW(&mut msg, None, 0, 0) } {
+            BOOL(0) | BOOL(-1) => break, // WM_QUIT or error
+            _ => unsafe {
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+        }
+    }
+    unsafe { UnhookWindowsHookEx(hhook) };
+});
+```
+
+**Warning signs:**
+- `SetWindowsHookExW` returns success but the callback function is never called
+- Inserting a `println!` at the top of the callback confirms it is never reached
+- Hook works when installed on the Tauri main thread (which has a loop) but not on a spawned thread
+
+**Phase to address:** Phase 1. This is a prerequisite that must be verified with a minimal proof-of-concept before building the full state machine.
+
+---
+
+### Pitfall 10: Windows Defender Escalates False Positive Due to WH_KEYBOARD_LL
+
+**What goes wrong:**
+The WH_KEYBOARD_LL addition causes Windows Defender to reclassify the VoiceType binary from "low suspicion" (due to existing `SendInput` for clipboard paste) to "high suspicion" (keyboard snooping + input injection). The binary is quarantined or users receive a SmartScreen warning that was not present in v1.0/v1.1.
+
+**Why it happens:**
+The existing app already uses `SendInput` for Ctrl+V injection (clipboard paste), which is a known malware signal. `SetWindowsHookExW` with `WH_KEYBOARD_LL` and `dwThreadId = 0` (global hook) is a primary keylogger API pattern. The combination of global keyboard hook + key injection + running at startup = the exact signature of credential-stealing malware. Microsoft's 2024-2025 expanded keylogger protection in Defender (announced on Windows IT Pro Blog, September 2024) increased the ML classifier sensitivity for these API combinations.
+
+The fact that the hook code is in Rust rather than C/C++ provides no protection — Defender classifies on binary behavior, not source language.
+
+**How to avoid:**
+- Code signing with an OV or EV certificate (already recommended in the v1.0 PITFALLS.md) is the primary mitigation. Signed binaries receive substantially higher trust and are far less likely to trigger heuristic ML classifiers.
+- Submit the signed v1.2 binary to Microsoft Security Intelligence (MSCI) for review before public distribution.
+- Document the behavior in the app's About or README: "VoiceType installs a global keyboard hook to detect Ctrl+Win. This is required for modifier-only hotkey support. The hook does not log or transmit keystrokes."
+- For the personal use / friend distribution scenario (no OV cert): document the Defender exclusion path and be aware that the exclusion applies per binary hash — each new build requires the same process.
+
+**Warning signs:**
+- V1.0/v1.1 passed Defender silently, but v1.2 triggers a SmartScreen warning on first run
+- Windows Event Log shows Defender event 1116 (malware detection) or 1117 (remediation) after install
+- VirusTotal scan shows 1-3 engine detections on the new binary (was 0 on v1.1)
+
+**Phase to address:** Distribution testing phase. Run the v1.2 binary through VirusTotal before any distribution — treat any new detection vs. v1.1 as a blocking issue.
 
 ---
 
@@ -136,12 +327,12 @@ Whisper was trained on speech data. When fed non-speech audio, it tries to "find
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Skip clipboard save/restore | 50ms faster injection | User's clipboard contents are destroyed on every dictation | Never — restore is non-negotiable |
-| Hardcode hotkey instead of making configurable | Faster MVP | Users can't change it; conflicts with existing shortcuts are unconfigurable | Only in proof-of-concept phase, not first release |
-| Bundle model in installer | Simpler first-run UX | NSIS installer fails at 2GB (confirmed bug #7372); installer size is 1.5-3GB | Never for NSIS — use model download on first run |
-| Use `enigo` char-by-char injection only | Simpler code | Slow for long text; Windows Terminal has Unicode bugs; more Defender heuristic triggers | Only as explicit fallback, never as default |
-| Skip CUDA architecture flag in build | Build "works" | CPU-only inference, 4-8x slower transcription silently | Never — always specify `sm_61` for P2000 |
-| Use `threshold: 0.5` default for VAD | Works for most speech | Too sensitive in noisy environments; too conservative for soft-spoken users | Start here, but expose as user-configurable |
+| Install hook on Tauri main thread instead of dedicated hook thread | Avoids writing a Win32 message loop | Main thread blocked by hook; Tauri UI freezes during any hook processing delay; WM_QUIT handling breaks | Never — dedicated thread is mandatory |
+| Skip `LLKHF_INJECTED` guard in callback | Simpler callback code | Infinite recursion when sending mask-key synthetic events; immediate stack overflow | Never |
+| Use `GetAsyncKeyState` inside hook callback to verify modifier state | Simpler "confirm key state" logic | Undefined per official docs — async state not updated yet when callback fires; returns stale data | Never |
+| Skip hook health-check (let dead hook stay dead) | Less code to write | Hotkey silently stops working; user must restart app | Only acceptable for MVP with a visible "hook is inactive" status indicator |
+| Skip debounce, detect exact Ctrl-then-Win ordering | Faster initial implementation | Fails for users who press Win slightly before Ctrl (fast typists, human timing variance); brittle | Only for initial proof-of-concept — must add debounce before beta |
+| Keep RegisterHotKey active alongside WH_KEYBOARD_LL permanently | Simpler fallback logic | Double-firing risk on overlapping hotkeys; complex state ownership | Only acceptable if non-overlapping hotkeys are guaranteed (Ctrl+Win through hook, all other combos via RegisterHotKey) |
 
 ---
 
@@ -149,12 +340,12 @@ Whisper was trained on speech data. When fed non-speech audio, it tries to "find
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| whisper-rs + CUDA on Windows | Assume `cargo build` auto-detects CUDA | Set `CUDA_PATH` env var, specify `CMAKE_CUDA_ARCHITECTURES="61"` for P2000, verify with GPU usage check |
-| cpal + WASAPI 16kHz | Request 16kHz directly from device | Most Windows audio devices default to 44.1kHz or 48kHz. Request device's native rate, then resample to 16kHz using `rubato` or `dasp` crate. Using `AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM` can introduce quality issues |
-| Silero VAD via `ort` | Load ONNX model synchronously on main thread | Load model async on startup, keep loaded in memory for session lifetime — re-loading per utterance adds 50-200ms |
-| tauri-plugin-store | Store settings as flat key-value | Structure settings as nested JSON from day one — retrofitting structure after shipping requires migration logic |
-| whisper.cpp initial_prompt | Set a long prompt with all vocabulary | Long prompts consume tokens from the model's context window, leaving less room for transcription. Keep initial_prompt to 50-100 words max |
-| Windows clipboard API | Use Win32 directly from multiple threads | Clipboard must be opened/closed on a single thread. Never call clipboard APIs from the audio thread or tokio task — dispatch to a dedicated clipboard thread |
+| Tauri + WH_KEYBOARD_LL | Install hook without setting DeviceEventFilter | Set `DeviceEventFilter::Always` before building the app; install hook on separate thread |
+| tauri-plugin-global-shortcut + WH_KEYBOARD_LL | Assume they are independent; let both observe the same keys | Scope WH_KEYBOARD_LL strictly to Win-key combos; unregister the overlapping RegisterHotKey when hook is active |
+| `SendInput` from hook callback (mask key) | Call SendInput synchronously inside the callback | Call from the worker thread that receives the hook event channel; never from inside the callback itself |
+| Rust `std::thread::spawn` + WH_KEYBOARD_LL | Spawn a thread without a Win32 message loop | The hook thread must run `GetMessage` / `DispatchMessage` loop; this is non-negotiable per Win32 docs |
+| `Arc<Mutex<...>>` state shared with hook thread | Lock the mutex inside the hook callback | Use `AtomicBool` for all state communicated from within the callback; move all mutex-guarded operations to the worker thread |
+| `UnhookWindowsHookEx` at app shutdown | Call from a different thread than where the hook was installed | Call `UnhookWindowsHookEx` from the hook thread itself, then send WM_QUIT to exit the message loop |
 
 ---
 
@@ -162,11 +353,10 @@ Whisper was trained on speech data. When fed non-speech audio, it tries to "find
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Loading whisper model on each transcription | 2-5 second model load delay before every utterance | Load model once at startup, keep in memory for the app lifetime | From the very first use |
-| Allocating a new audio buffer per utterance | Memory fragmentation after hours of use | Pre-allocate a fixed-size ring buffer at startup | After 1-4 hours of continuous use |
-| Running VAD on the main Tauri thread | UI freezes during speech detection | Move audio capture and VAD to a dedicated Rust thread; use channels to communicate with main thread | Immediately on any speech activity |
-| Re-reading corrections JSON from disk on every transcription | 5-50ms disk I/O per utterance adds to latency | Load corrections dictionary into memory at startup, watch for file changes with `notify` crate | From first use on HDD systems |
-| Large correction dictionary with O(n) scan | Latency grows as user adds corrections | Use `HashMap<String, String>` not `Vec<(String, String)>` for O(1) lookups | At ~100+ correction entries |
+| Blocking channel send in hook callback | Hook timeout fires; hook silently removed after 11 timeouts | Use `try_send` on an unbounded channel; never block in callback | Immediately if transcription pipeline is active and channel is full |
+| Debounce timer using `thread::sleep` inside hook thread | Sleep blocks message pump; hook stops receiving events during sleep | Run debounce timer on the worker thread, not the hook thread; hook thread must only pump messages | Every debounce window while sleep is active |
+| Re-evaluating modifier combo state on every key event including non-modifiers | Unnecessary work; risk of timeout on slow machines | State machine only evaluates when vkCode is in {VK_CONTROL, VK_LCONTROL, VK_RCONTROL, VK_LWIN, VK_RWIN}; all other keys bypass the logic | From first non-modifier keypress |
+| Heap allocation in hook callback (Box, Vec, String formatting) | Memory allocator contention; jitter causing timeout | Pre-allocate all structures on the worker thread; callback sends only primitive values (u32 vkCode, u32 flags, usize wparam) via `AtomicPtr` or fixed-size channel | Under memory pressure or with jemalloc contention |
 
 ---
 
@@ -174,10 +364,9 @@ Whisper was trained on speech data. When fed non-speech audio, it tries to "find
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Writing transcription history to disk without user consent | Privacy violation; raw voice transcripts contain sensitive information | Default to no history persistence. If added, make it opt-in, store in `%APPDATA%\VoiceType\` not in documents/desktop |
-| Downloading model files over HTTP | Man-in-the-middle can replace model with malicious binary | Always use HTTPS for model downloads. Verify SHA256 checksum of downloaded model before loading |
-| Storing settings in plain text in a world-readable location | Not sensitive for this app, but good hygiene | Use `tauri-plugin-store` which writes to `%APPDATA%\VoiceType\` — correct location by default |
-| Logging transcribed text to a debug log file | Raw voice transcriptions are sensitive | Never log transcription content. Log only metadata (duration, word count, latency) |
+| Logging `dwExtraInfo` from KBDLLHOOKSTRUCT to a log file | Other hook-using apps can embed arbitrary data in `dwExtraInfo`; if logged verbosely, creates a potential data exfiltration channel in log files | Never log raw KBDLLHOOKSTRUCT fields other than vkCode and flags; ignore dwExtraInfo entirely |
+| Using a static mutable HHOOK without synchronization | Data race if hook is reinstalled concurrently | Store HHOOK in a Mutex or use a thread-local; the hook thread owns its own HHOOK exclusively |
+| Not validating `nCode` parameter before processing | Undefined behavior if nCode < 0 and callback processes the event | First line of callback: `if code < 0 { return CallNextHookEx(...) }` — non-negotiable per Win32 spec |
 
 ---
 
@@ -185,26 +374,24 @@ Whisper was trained on speech data. When fed non-speech audio, it tries to "find
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| No visual feedback during model loading | Users think app is broken when first launched | Show a loading state in the tray icon or a one-time onboarding window during model download/initialization |
-| Pill overlay blocks text cursor position | User can't see where text will be injected | Position pill at corner of screen (bottom-right) by default, never near the center where cursor likely is |
-| No indication that recording has started | Users speak before recording is active; miss the beginning of utterance | Pill must animate/change color immediately (<50ms) when hotkey is pressed — do not wait for first VAD frame |
-| Injecting text with trailing newline | Moves cursor to next line after every dictation | Strip trailing whitespace and newlines from whisper.cpp output before injection |
-| Toggle mode with no maximum recording time | User accidentally leaves recording running for hours | Implement a maximum recording duration (e.g., 60 seconds) with an audio cue and auto-stop |
-| Settings window requires app restart to apply changes | Frustrating developer experience | Apply hotkey and VAD threshold changes at runtime without restart; only model switches require reload |
-| Hold-to-talk requires holding during full transcription | User must keep key held while waiting for whisper | Release key ends recording; transcription runs asynchronously; key is available immediately for next use |
+| No indication that hook is installed and healthy | Users don't know if the Ctrl+Win hotkey is active; press it and nothing happens | Show a hook status indicator in the system tray tooltip ("Hook: Active" vs "Hook: Inactive — using standard hotkey") |
+| Ctrl+Win fires while user is typing Ctrl+Z (undo) | Users who type fast hit Ctrl+Win accidentally when reaching for Ctrl+Z; app starts recording unexpectedly | Require both Ctrl and Win to be held for ≥50ms before triggering; do not trigger on sub-50ms press sequences |
+| Start menu flashes open for 1-2 frames before suppression | Jarring visual glitch; users think app is broken | The mask-key SendInput must be dispatched before the Win key KEYUP event reaches the shell; timing matters — see Pitfall 2 |
+| Frontend hotkey-capture UI still uses old tauri-plugin-global-shortcut capture mode | Settings panel cannot capture "Ctrl+Win" as a hotkey choice — modifier-only combos are not representable in the standard hotkey string format | Build a separate capture mode that explicitly shows modifier-only combos as valid options; store as a distinct format ("Ctrl+Win") separate from standard hotkey strings |
+| No fallback notification when hook install fails | App launches silently without a working Ctrl+Win hotkey; user confused | On hook install failure, revert to standard hotkey mode and show a tray notification: "Modifier-only hotkey unavailable. Using standard hotkey [X] instead." |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Clipboard paste:** Verify that user's original clipboard contents are fully restored after paste, not just the transcription text. Test with clipboard content that is an image (not just text).
-- [ ] **Focus preservation:** Test overlay window appearance in each target app: VS Code, Chrome address bar, Windows Terminal, Outlook compose window, AutoCAD command line. Verify cursor remains in target app throughout.
-- [ ] **GPU utilization:** Confirm Task Manager shows NVIDIA GPU activity during transcription, not just CPU. `CUBLAS = 0` means CPU-only.
-- [ ] **Hold-to-talk release:** Test that releasing the hotkey while audio is processing does not block the next hotkey press. The hotkey must be available immediately for the next utterance.
-- [ ] **First-run model download:** Verify that the download UI shows progress, handles interruption gracefully (resume or retry), and validates the SHA256 checksum before loading the model.
-- [ ] **CPU fallback:** Test the installer on a machine without NVIDIA GPU. Verify that the app detects no CUDA, loads the `small` model, and functions end-to-end at slower speed without crashing.
-- [ ] **Corrections dictionary:** Verify that corrections are case-insensitive where expected (e.g., "i beam" and "I Beam" both map to "I-beam"). Test the correction editor UI with 50+ entries.
-- [ ] **VAD in toggle mode:** Verify that silence detection actually stops recording and fires transcription. Test in a quiet room (works?) and with ambient noise (does threshold need adjustment?).
+- [ ] **Hook with Tauri window focused:** Open VoiceType settings panel, put it in focus, press Ctrl+Win. Verify the hotkey fires. If it doesn't, `DeviceEventFilter` is not set correctly.
+- [ ] **Start menu suppression on Windows 11:** On a Windows 11 machine (different from dev machine if dev is Win10), press Ctrl+Win — verify Start menu does NOT open. Test Win key alone after — verify Start menu DOES open (hotkey not over-suppressing).
+- [ ] **Hook recovery after timeout:** Simulate a slow hook by adding a 500ms sleep in the callback (debug build only). Verify the hook-health monitor detects the drop and reinstalls. Remove the sleep before shipping.
+- [ ] **Left vs. right modifier coverage:** Test Ctrl+Win with right Ctrl. Test with right Win. Verify behavior is as designed (either both work or only left works, per product decision — not "one works and the other is undefined").
+- [ ] **App shutdown with hook active:** Close VoiceType while Ctrl+Win hook is installed. Verify no lingering hook ghost process in Process Monitor (hook should be unregistered in Drop impl).
+- [ ] **Coexistence during transition phase:** If the fallback is "use standard hotkey," verify that switching between hook mode and RegisterHotKey mode does not double-register or leave both active simultaneously.
+- [ ] **Antivirus scan of v1.2 binary:** Run through VirusTotal before any distribution. Compare detection count against v1.1 baseline. Any new detections are a blocking issue.
+- [ ] **Debounce correctness:** Press Win before Ctrl (reversed order, fast) — verify the hotkey still fires. Press Ctrl, hold 1 second, then press Win — verify the hotkey still fires (slow press is valid). Press Ctrl+Win and immediately release Ctrl before Win — verify hotkey fires but does not stay in "active" state.
 
 ---
 
@@ -212,11 +399,12 @@ Whisper was trained on speech data. When fed non-speech audio, it tries to "find
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Overlay steals focus (shipped without fix) | HIGH | Requires adding Win32 `WS_EX_NOACTIVATE` to Rust window builder — involves rebuilding Rust backend and full regression test |
-| CPU-only binary shipped to users | MEDIUM | Push new build with correct CUDA architecture flags; auto-update if available; manual reinstall otherwise |
-| Clipboard race condition complaints | LOW | Increase delay constants in `injector.rs` from 50ms to 100-200ms; ship patch build |
-| Defender flagging | HIGH | Purchase OV code signing certificate (~$300-500/year), sign binary, re-release. Short-term: document manual Defender exclusion for users |
-| Hallucination injection complaints | MEDIUM | Implement VAD minimum duration gate (if not already present) and hallucination detection heuristics; ship patch |
+| DeviceEventFilter not set (hook dead when Tauri focused) | LOW | Add one line to AppBuilder; rebuild and test |
+| Start menu suppression missing on Windows 11 | MEDIUM | Implement mask-key SendInput on the hook worker thread; requires testing on both Win10 and Win11 |
+| Hook silently removed (no health check) | MEDIUM | Add a background health-check timer; requires hook reinstall logic and state reset |
+| Panic crossing FFI boundary (callback crash) | HIGH | Add `catch_unwind` wrapper around entire callback; requires full regression testing of the hook path |
+| Double-firing from coexisting RegisterHotKey + WH_KEYBOARD_LL | MEDIUM | Audit which keys are registered where; unregister the overlapping key from one system |
+| Defender flags v1.2 binary | HIGH | Same recovery as v1.0 pitfall: purchase OV cert, sign binary, re-release; short-term: per-machine exclusion |
 
 ---
 
@@ -224,33 +412,37 @@ Whisper was trained on speech data. When fed non-speech audio, it tries to "find
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Overlay steals focus | Overlay window phase | Manual test: focus Notepad, trigger hotkey, verify cursor remains in Notepad |
-| CUDA silent fallback | whisper-rs integration phase | Acceptance criterion: Task Manager GPU > 0% during transcription; latency < 500ms |
-| Clipboard race condition | Text injection phase | Acceptance criterion: 20 consecutive pastes with clipboard restore verified correct |
-| Windows Defender flagging | Distribution/installer phase | Test installer on a fresh Windows 10 VM with default Defender settings |
-| Whisper hallucinations | VAD + transcription pipeline phase | Acceptance criterion: pressing hotkey without speaking injects nothing |
-| cpal sample rate mismatch | Audio capture phase | Log actual device sample rate; verify resampling produces clean 16kHz audio (playback test WAV) |
-| Model load delay per utterance | whisper-rs integration phase | Verify model is loaded once at startup by measuring time-to-first-inference vs. subsequent inferences |
-| Focus not configurable by user | Settings panel phase | Test that changing hotkey in settings takes effect without app restart |
+| Hook dead when Tauri window focused (#1) | Phase 1: Hook installation | Test: open settings window, put in focus, press Ctrl+Win — must fire |
+| Start menu opens despite suppression (#2) | Phase 1: Hook implementation | Test on Windows 10 AND Windows 11; Win key alone must still work after fix |
+| Hook silently removed after timeout (#3) | Phase 1: Callback architecture | Verify callback returns in <5ms; add logging that shows callback return time |
+| Panic across FFI boundary (#4) | Phase 1: Code review gate | PR review checklist item: zero fallible operations in callback body |
+| RegisterHotKey + WH_KEYBOARD_LL coexistence (#5) | Phase 1 + Phase 2 (fallback) | Test: trigger Ctrl+Win rapidly 20 times; verify exactly 20 recording sessions, not 40 |
+| SendInput recursive re-entry (#6) | Phase 1: LLKHF_INJECTED guard | Verify CPU usage does not spike on first Ctrl+Win press |
+| Left vs. right modifier ambiguity (#7) | Phase 1: State machine | Test right-Ctrl + Win, left-Ctrl + right-Win, and right-Ctrl + right-Win |
+| Modifier state desync on focus loss (#8) | Phase 2: Integration testing | Alt-Tab away mid-Ctrl-hold; verify no phantom trigger on return |
+| Missing Win32 message loop (#9) | Phase 1: Thread setup | Verify callback fires in smoke test before any other feature work |
+| Defender false positive escalation (#10) | Distribution testing | VirusTotal check of signed v1.2 binary before release |
 
 ---
 
 ## Sources
 
-- [Tauri transparent window issue #8308](https://github.com/tauri-apps/tauri/issues/8308) — MEDIUM confidence (GitHub issue, multiple confirmations)
-- [Tauri transparent window ghost titlebar #14764](https://github.com/tauri-apps/tauri/issues/14764) — MEDIUM confidence (confirmed bug, open as of early 2026)
-- [Tauri focus: false config broken #11566](https://github.com/tauri-apps/tauri/issues/11566) — MEDIUM confidence (confirmed regression)
-- [Tauri click-through transparent windows #13070](https://github.com/tauri-apps/tauri/issues/13070) — MEDIUM confidence (feature request + confirmed limitation)
-- [Tauri global hotkey system keys not captured #13919](https://github.com/tauri-apps/tauri/issues/13919) — MEDIUM confidence (confirmed Windows-specific behavior)
-- [NSIS >2GB installer bug tauri-apps/tauri #7372](https://github.com/tauri-apps/tauri/issues/7372) — HIGH confidence (confirmed hard limit)
-- [whisper.cpp CUDA not detected issue #2857](https://github.com/ggml-org/whisper.cpp/issues/2857) — MEDIUM confidence (confirmed CUDA detection issue on Windows)
-- [cpal sample rate mismatch issue #593](https://github.com/RustAudio/cpal/issues/593) — HIGH confidence (confirmed WASAPI limitation)
-- [cpal resampling noise issue #135](https://github.com/RustAudio/dasp/issues/135) — MEDIUM confidence (confirmed quality issue with naive downsampling)
-- [Silero VAD comparison and threshold analysis — Picovoice](https://picovoice.ai/blog/best-voice-activity-detection-vad-2025/) — MEDIUM confidence (vendor benchmark, directionally accurate)
-- [Whisper hallucination on empty audio — OpenAI community](https://community.openai.com/t/whisper-api-hallucinating-on-empty-sections/93646) — HIGH confidence (widely reported, reproducible)
-- [Windows Defender HackTool false positives — multiple forum reports, 2024-2025](https://forum.juce.com/t/what-to-do-about-windows-defender-false-positives/66438) — MEDIUM confidence (pattern well-documented, enigo specifically LOW confidence)
-- [Technical research artifact: 2026-02-27-voice-to-text-desktop-tool-technical.md](artifacts/research/2026-02-27-voice-to-text-desktop-tool-technical.md) — HIGH confidence (pre-validated findings from prior research session)
+- [LowLevelKeyboardProc — Microsoft Docs (verified 2025-07-14)](https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelkeyboardproc) — HIGH confidence
+- [KBDLLHOOKSTRUCT — Microsoft Docs](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-kbdllhookstruct) — HIGH confidence
+- [SetWindowsHookExA — Microsoft Docs](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowshookexa) — HIGH confidence
+- [Tauri issue #13919: WH_KEYBOARD_LL not capturing system keys when Tauri window focused](https://github.com/tauri-apps/tauri/issues/13919) — HIGH confidence (confirmed resolved via DeviceEventFilter)
+- [Tauri issue #14770: rdev keyboard events break when Tauri window focused](https://github.com/tauri-apps/tauri/issues/14770) — HIGH confidence (same root cause; DeviceEventFilter::Always fix confirmed)
+- [AutoHotkey: Prevent Win from opening Start menu — Any Version](https://www.autohotkey.com/boards/viewtopic.php?t=101812) — MEDIUM confidence (community-validated; vkE8 mask key technique)
+- [AutoHotkey: Disable left Windows key on Windows 11 with AHK 2](https://www.autohotkey.com/boards/viewtopic.php?t=96593) — MEDIUM confidence (Windows 11 behavioral differences confirmed by community)
+- [AutoHotkey MenuMaskKey docs — vkE8 as unassigned mask key](https://autohotkey.com/docs/commands/_MenuMaskKey.htm) — MEDIUM confidence
+- [Rust Nomicon: FFI and panics](https://doc.rust-lang.org/nomicon/ffi.html) — HIGH confidence
+- [RFC 2945: C-unwind ABI](https://rust-lang.github.io/rfcs/2945-c-unwind-abi.html) — HIGH confidence
+- [catch_unwind — Rust std docs](https://doc.rust-lang.org/std/panic/fn.catch_unwind.html) — HIGH confidence
+- [Raymond Chen (The Old New Thing): GetKeyState vs GetAsyncKeyState](https://devblogs.microsoft.com/oldnewthing/20041130-00/?p=37173) — HIGH confidence
+- [Microsoft: Keylogging malware protection built into Windows (Sep 2024)](https://techcommunity.microsoft.com/blog/windows-itpro-blog/keylogging-malware-protection-built-into-windows/4256289) — HIGH confidence (confirms expanded Defender ML sensitivity)
+- [Virtual-Key Codes — Microsoft Docs](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes) — HIGH confidence (VK_LCONTROL=0xA2, VK_RCONTROL=0xA3, VK_LWIN=0x5B, VK_RWIN=0x5C)
+- [SetWindowsHookExW in windows-rs — Microsoft GitHub](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/UI/WindowsAndMessaging/fn.SetWindowsHookExW.html) — HIGH confidence
 
 ---
-*Pitfalls research for: local voice-to-text desktop tool (Tauri 2.0 + whisper.cpp + Windows)*
-*Researched: 2026-02-27*
+*Pitfalls research for: WH_KEYBOARD_LL modifier-only hotkey integration into Tauri 2.0 (VoiceType v1.2 Keyboard Hook milestone)*
+*Researched: 2026-03-02*
