@@ -43,7 +43,7 @@ must_haves:
       pattern: "download_parakeet_fp32_model"
     - from: "src/components/sections/ModelSection.tsx"
       to: "lib.rs set_engine"
-      via: "handleModelSelect saves parakeet_model setting then calls set_engine"
+      via: "handleModelSelect always calls set_engine with parakeetModel for parakeet variants, even if engine == currentEngine"
       pattern: "parakeet_model"
     - from: "lib.rs set_engine"
       to: "download::parakeet_fp32_model_dir"
@@ -221,38 +221,80 @@ models.push(ModelInfo {
 ```
 Also update the existing int8 entry name from "Parakeet TDT" to "Parakeet TDT (int8)" so both are distinguishable.
 
-8. Update `set_engine()` — when switching to Parakeet:
-   - Read `parakeet_model` from settings to determine which variant
-   - Use `resolve_parakeet_dir()` instead of `download::parakeet_model_dir()`
-   - IMPORTANT: If the ParakeetStateMutex already has a loaded model but the variant changed, we must RELOAD. Add logic: save the `parakeet_model` setting key to settings.json alongside `active_engine`. When the variant differs from what's loaded, force a reload by setting state to None first, then loading from the new dir.
+8. Update `set_engine()` — change the function signature and replace the is_none block:
 
-   Concrete approach for set_engine: Accept an optional `parakeet_model` parameter or just always read it from settings. Since the frontend will save `parakeet_model` to settings.json via the store BEFORE calling set_engine, reading from settings is reliable. Replace the hardcoded `download::parakeet_model_dir()` call with `resolve_parakeet_dir(&read_saved_parakeet_model(&app))`.
-
-   HOWEVER — `set_engine` currently only reloads if `is_none` (model not loaded). For variant switching, we always need to reload when switching TO parakeet. Change the logic: when switching to parakeet, ALWAYS drop the existing model and reload from the resolved dir. This handles both initial load and variant switch:
+   **Step 8a — Change the function signature** to accept an optional parakeet_model parameter:
    ```rust
-   if new_engine == TranscriptionEngine::Parakeet {
-       let parakeet_model_id = read_saved_parakeet_model(&app);
-       let model_dir = resolve_parakeet_dir(&parakeet_model_id);
+   #[tauri::command]
+   fn set_engine(app: tauri::AppHandle, engine: String, parakeet_model: Option<String>) -> Result<(), String> {
+   ```
+   Tauri IPC deserializes missing fields as None for Option types, so existing callers that omit `parakeet_model` will receive None and the backend falls back to reading from settings.json.
+
+   **Step 8b — Persist parakeet_model to settings.json** when provided. In the settings write block (currently near line 288, after the Parakeet load block), persist the variant before writing `active_engine`:
+   ```rust
+   // Persist to settings.json
+   let mut json = read_settings(&app)?;
+   if let Some(ref variant) = parakeet_model {
+       json["parakeet_model"] = serde_json::Value::String(variant.clone());
+   }
+   json["active_engine"] = serde_json::Value::String(engine);
+   write_settings(&app, &json)?;
+   ```
+
+   **Step 8c — Replace the is_none block** (currently lines 250–285) with an unconditional reload that reads the resolved variant. Delete the entire existing block:
+   ```rust
+   // DELETE THIS BLOCK (lines 250–285):
+   let is_none = {
+       let guard = parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
+       guard.is_none()
+   };
+   if is_none {
+       let model_dir = download::parakeet_model_dir();
        if model_dir.exists() {
-           let dir_str = model_dir.to_string_lossy().to_string();
-           match transcribe_parakeet::load_parakeet(&dir_str, true) {
-               Ok(p) => {
-                   let mut guard = parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
-                   *guard = Some(std::sync::Arc::new(std::sync::Mutex::new(p)));
-                   log::info!("Parakeet model loaded on engine switch (variant: {})", parakeet_model_id);
-               }
-               Err(e) => {
-                   // Revert to Whisper
-                   ...
-               }
-           }
+           ...
        } else {
-           // Revert — model not downloaded
            ...
        }
    }
    ```
-   Remove the `is_none` check — always reload.
+
+   Replace it with this unconditional block:
+   ```rust
+   // REPLACE WITH (always reload on any parakeet switch, including variant changes):
+   let parakeet_model_id = parakeet_model
+       .clone()
+       .unwrap_or_else(|| read_saved_parakeet_model(&app));
+   let model_dir = resolve_parakeet_dir(&parakeet_model_id);
+   if model_dir.exists() {
+       let dir_str = model_dir.to_string_lossy().to_string();
+       match transcribe_parakeet::load_parakeet(&dir_str, true) {
+           Ok(p) => {
+               let mut guard = parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
+               *guard = Some(std::sync::Arc::new(std::sync::Mutex::new(p)));
+               log::info!("Parakeet model loaded on engine switch (variant: {})", parakeet_model_id);
+           }
+           Err(e) => {
+               log::error!("Failed to load Parakeet on engine switch: {}", e);
+               // Revert to Whisper since Parakeet failed
+               let state = app.state::<ActiveEngine>();
+               let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+               *guard = TranscriptionEngine::Whisper;
+               return Err(format!(
+                   "Parakeet model failed to load: {}. Reverting to Whisper.",
+                   e
+               ));
+           }
+       }
+   } else {
+       // Revert — model not downloaded
+       let state = app.state::<ActiveEngine>();
+       let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+       *guard = TranscriptionEngine::Whisper;
+       return Err(
+           "Parakeet model not downloaded. Download it first from Settings.".to_string(),
+       );
+   }
+   ```
 
 9. Update `check_first_run()` — also check fp32 existence:
 ```rust
@@ -288,7 +330,9 @@ if saved_engine == TranscriptionEngine::Parakeet {
     - parakeet_fp32_model_exists() checks encoder-model.onnx in fp32 dir
     - download_parakeet_fp32_model Tauri command registered and compiles
     - list_models returns "parakeet-tdt-v2-fp32" entry with downloaded status
-    - set_engine resolves model dir from parakeet_model setting (always reloads on parakeet switch)
+    - set_engine signature is fn set_engine(app: tauri::AppHandle, engine: String, parakeet_model: Option<String>) -> Result<(), String>
+    - set_engine persists parakeet_model to settings.json when Some is provided
+    - set_engine always reloads Parakeet model on parakeet switch (no is_none check)
     - Startup loading uses variant-aware dir resolution
     - check_first_run considers fp32 existence
     - cargo check passes with both features
@@ -346,55 +390,26 @@ async function handleFp32Download() {
 }
 ```
 
-3. Update `handleModelSelect` — both parakeet variants set engine to "parakeet". Save `parakeet_model` to the store so the backend knows which variant to load:
+3. Update `handleModelSelect` — both parakeet variants always call `set_engine`, even when already on the parakeet engine. This is required because switching from int8 to fp32 (or vice versa) while the engine is already "parakeet" must trigger a model reload via set_engine:
+
 ```typescript
 async function handleModelSelect(modelId: string) {
     const isParakeetVariant = modelId === 'parakeet-tdt-v2' || modelId === 'parakeet-tdt-v2-fp32';
     const engine = isParakeetVariant ? 'parakeet' : 'whisper';
 
-    // For Parakeet variants, save which variant to settings BEFORE set_engine
     if (isParakeetVariant) {
-      const store = await getStore();
-      await store.set('parakeet_model', modelId);
-      // Also write to settings.json via a temporary approach:
-      // The backend reads parakeet_model from settings.json, but the store writes to a
-      // different file. We need the backend to read it. Solution: have set_engine
-      // read from the Tauri store OR pass parakeet_model as parameter.
+        // Always call set_engine for Parakeet variants regardless of currentEngine.
+        // This is necessary because variant switches (int8 -> fp32 or fp32 -> int8)
+        // require a model reload even when the engine is already "parakeet".
+        await invoke('set_engine', { engine: 'parakeet', parakeetModel: modelId });
+    } else {
+        if (engine !== currentEngine) {
+            await invoke('set_engine', { engine, parakeetModel: null });
+        }
+        await invoke('set_model', { modelId });
     }
-    ...
 }
 ```
-
-IMPORTANT APPROACH DECISION: The frontend store (tauri-plugin-store) and the backend settings.json are SEPARATE files. The backend `read_settings()` reads from `app_data_dir/settings.json`, but the store may write elsewhere. To avoid this mismatch:
-
-Instead of saving `parakeet_model` via the frontend store, have the `handleModelSelect` function write `parakeet_model` to settings.json via a new or existing Tauri command. The simplest approach: just add a `set_parakeet_model` Tauri command that writes to settings.json. OR: pass the model variant directly. The SIMPLEST approach with minimal code change is to persist `parakeet_model` in settings.json from the frontend by invoking an existing save mechanism.
-
-REVISED APPROACH: In `handleModelSelect`, call a small helper or invoke that saves `parakeet_model` to settings.json. The cleanest solution with no new commands: include parakeet_model info in the existing flow. When `set_engine` is called for "parakeet", add a second parameter for the variant. BUT `set_engine` currently takes just `engine: String`.
-
-FINAL APPROACH (least code, most reliable): Add `set_parakeet_variant` Tauri command to lib.rs that writes `parakeet_model` to settings.json and triggers model reload. Frontend calls `set_parakeet_variant` which internally handles both the setting persistence AND the model reload. This replaces the need to call both store.set and set_engine separately.
-
-Actually, even simpler: just modify `handleModelSelect` to:
-- For parakeet variants: call `invoke('set_engine', { engine: 'parakeet' })` AND pass the variant info. We need the backend to know which variant. Cleanest: add a `variant` parameter to `set_engine`:
-
-In lib.rs, change `set_engine` signature to:
-```rust
-fn set_engine(app: tauri::AppHandle, engine: String, parakeet_model: Option<String>) -> Result<(), String>
-```
-When `engine` is "parakeet" and `parakeet_model` is Some, save it to settings.json before resolving the directory. This keeps everything in one atomic operation.
-
-In the frontend `handleModelSelect`:
-```typescript
-if (isParakeetVariant) {
-    await invoke('set_engine', { engine: 'parakeet', parakeetModel: modelId });
-} else {
-    if (engine !== currentEngine) {
-        await invoke('set_engine', { engine, parakeetModel: null });
-    }
-    await invoke('set_model', { modelId });
-}
-```
-
-UPDATE Task 1 accordingly: `set_engine` takes optional `parakeet_model: Option<String>`. If provided, persist to settings.json before resolving dir.
 
 4. Pass fp32 props to ModelSelector:
 ```typescript
@@ -486,7 +501,7 @@ if (modelId === 'parakeet-tdt-v2') {
 }
 ```
 
-13. Update the post-download `handleComplete` effect — both parakeet variants should activate parakeet engine. Also save the parakeet_model variant:
+13. Update the post-download `handleComplete` effect — both parakeet variants should activate parakeet engine. Pass the variant as `parakeetModel`:
 ```typescript
 if (downloadingId === 'parakeet-tdt-v2' || downloadingId === 'parakeet-tdt-v2-fp32') {
     try {
@@ -518,7 +533,7 @@ const gridClass = gpuDetected
     - FirstRun shows fp32 card with 2.56 GB size when GPU detected
     - ModelSelector renders fp32 card with download button, progress bar, and error handling
     - ModelSection manages fp32 download state independently from int8
-    - Selecting either parakeet variant calls set_engine with parakeetModel parameter
+    - Selecting either parakeet variant always calls set_engine with parakeetModel parameter (regardless of currentEngine)
     - TypeScript compiles without errors
     - Rust compiles without errors
   </done>
@@ -537,9 +552,9 @@ fn set_engine(app: tauri::AppHandle, engine: String, parakeet_model: Option<Stri
 ```
 Tauri IPC deserializes missing fields as None for Option types, so existing frontend callers that don't pass `parakeet_model` will work (it defaults to None, and the backend falls back to reading from settings.json).
 
-2. Verify that when `parakeet_model` is `Some(variant)`, it is persisted to settings.json:
+2. Verify that when `parakeet_model` is `Some(variant)`, it is persisted to settings.json (implemented in Task 1 step 8b):
 ```rust
-// Inside set_engine, when engine is "parakeet":
+// Inside set_engine, in the settings write block:
 if let Some(ref variant) = parakeet_model {
     json["parakeet_model"] = serde_json::Value::String(variant.clone());
 }
@@ -548,10 +563,11 @@ write_settings(&app, &json)?;
 ```
 
 3. Verify that variant switching works: if the user has int8 loaded and selects fp32, `set_engine` should:
-   - Read the (just-persisted) parakeet_model from settings → "parakeet-tdt-v2-fp32"
+   - Receive `parakeet_model = Some("parakeet-tdt-v2-fp32")`
+   - Persist "parakeet-tdt-v2-fp32" to settings.json
    - Resolve dir → models/parakeet-tdt-v2-fp32
-   - Drop existing model and load from fp32 dir
-   - This is guaranteed by the "always reload" approach from Task 1 (no is_none check)
+   - Unconditionally reload (no is_none check — implemented in Task 1 step 8c)
+   - Load from fp32 dir
 
 4. Run a full cargo build to verify everything links:
 ```bash
