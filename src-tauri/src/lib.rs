@@ -310,20 +310,18 @@ fn set_engine(app: tauri::AppHandle, engine: String, parakeet_model: Option<Stri
             let provider = "cpu".to_string();
             match transcribe_parakeet::load_parakeet(&dir_str, &provider) {
                 Ok(p) => {
-                    let mut guard = parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
-                    *guard = Some(std::sync::Arc::new(std::sync::Mutex::new(p)));
+                    let inner_arc = std::sync::Arc::new(std::sync::Mutex::new(p));
+                    let warmup_arc = inner_arc.clone();
+                    {
+                        let mut guard = parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                        *guard = Some(inner_arc);
+                    }
                     log::info!("Parakeet model loaded on engine switch (variant: {})", parakeet_model_id);
                     // Warm up after engine switch
-                    let warmup_arc = {
-                        let guard = parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
-                        guard.clone()
-                    };
-                    if let Some(arc) = warmup_arc {
-                        std::thread::spawn(move || {
-                            let mut guard = arc.lock().unwrap_or_else(|e| e.into_inner());
-                            transcribe_parakeet::warm_up_parakeet(&mut guard);
-                        });
-                    }
+                    std::thread::spawn(move || {
+                        let mut guard = warmup_arc.lock().unwrap_or_else(|e| e.into_inner());
+                        transcribe_parakeet::warm_up_parakeet(&mut guard);
+                    });
                 }
                 Err(e) => {
                     log::error!("Failed to load Parakeet on engine switch: {}", e);
@@ -1402,24 +1400,22 @@ pub fn run() {
                         match transcribe_parakeet::load_parakeet(&dir_str, &provider) {
                             Ok(p) => {
                                 let parakeet_state = app.state::<ParakeetStateMutex>();
-                                let mut guard =
-                                    parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
-                                *guard = Some(std::sync::Arc::new(std::sync::Mutex::new(p)));
+                                let inner_arc = std::sync::Arc::new(std::sync::Mutex::new(p));
+                                let warmup_arc = inner_arc.clone();
+                                {
+                                    let mut guard =
+                                        parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                                    *guard = Some(inner_arc);
+                                }
                                 log::info!(
                                     "Parakeet model loaded at startup (variant: {})",
                                     parakeet_model_id
                                 );
                                 // Warm up in background to avoid blocking UI
-                                let warmup_arc = {
-                                    let guard = parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
-                                    guard.clone()
-                                };
-                                if let Some(arc) = warmup_arc {
-                                    std::thread::spawn(move || {
-                                        let mut guard = arc.lock().unwrap_or_else(|e| e.into_inner());
-                                        transcribe_parakeet::warm_up_parakeet(&mut guard);
-                                    });
-                                }
+                                std::thread::spawn(move || {
+                                    let mut guard = warmup_arc.lock().unwrap_or_else(|e| e.into_inner());
+                                    transcribe_parakeet::warm_up_parakeet(&mut guard);
+                                });
                             }
                             Err(e) => {
                                 log::warn!(
