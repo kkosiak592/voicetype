@@ -26,7 +26,7 @@ See: .planning/PROJECT.md
 **Current plan:** 08-01 complete
 **Status:** Executing
 
-Last activity: 2026-03-02 - Completed quick task 10: Enable CUDA GPU acceleration for Parakeet ONNX model
+Last activity: 2026-03-01 - Completed quick task 11: Switch Parakeet transcription to TimestampMode::Sentences
 
 ## Session Log
 
@@ -49,6 +49,7 @@ Last activity: 2026-03-02 - Completed quick task 10: Enable CUDA GPU acceleratio
 - 2026-03-01: 08-02 (engine dispatch + VAD bypass + managed state) — TranscriptionEngine enum, ActiveEngine/ParakeetStateMutex managed states, get_engine/set_engine commands with persistence, pipeline engine dispatch, hold-to-talk VAD bypass (commits bbe3a58, d8307d2)
 - 2026-03-01: 08-03 (Parakeet frontend integration) — Task 1: 3-card GPU model selection in FirstRun, Fastest badge, Parakeet download routing, set_engine on complete; engine selector + Parakeet download section in ModelSection settings (commit 9b430b8); awaiting human verification
 - 2026-03-01: Quick task 10 (enable CUDA GPU acceleration for Parakeet TDT) — cuda feature on parakeet-rs, CUDA ExecutionProvider wired in load_parakeet, both call sites updated to use_cuda=true (commit 1f2a9c5)
+- 2026-03-01: Quick task 11 (switch Parakeet transcription to TimestampMode::Sentences) — TimestampMode imported, None -> Some(TimestampMode::Sentences) at transcribe_samples call site, activates group_by_sentences -> deduplicate_words pipeline (commit 2a30c48)
 
 ## Decisions
 
@@ -92,6 +93,7 @@ Last activity: 2026-03-02 - Completed quick task 10: Enable CUDA GPU acceleratio
 - [08-03-frontend]: set_engine('parakeet') called automatically after Parakeet FirstRun download — implicit engine activation on model choice
 - [quick-10-cuda]: parakeet_rs::{ExecutionConfig, ExecutionProvider} used (top-level re-exports) not parakeet_rs::execution::* (private module)
 - [quick-10-cuda]: both load_parakeet call sites pass use_cuda=true — CUDA EP always requested; ort falls back to CPU if CUDA unavailable at runtime
+- [quick-11-sentences]: TimestampMode::Sentences used for TDT — TDT predicts punctuation enabling sentence boundaries; activates deduplicate_words to strip repeated-token model artifacts
 
 ### Roadmap Evolution
 
@@ -109,6 +111,7 @@ Last activity: 2026-03-02 - Completed quick task 10: Enable CUDA GPU acceleratio
 | 7 | Remove rainbow rotating border from pill recording state — dark glass + waveform bars only | 2026-03-01 | 8d36805 | [7-remove-rainbow-startup-animation-from-pi](./quick/7-remove-rainbow-startup-animation-from-pi/) |
 | 8 | Fix pill position to bottom-center above taskbar, remove dragging, add multi-monitor support | 2026-03-01 | 000463d | [8-fix-pill-position-to-bottom-center-above](./quick/8-fix-pill-position-to-bottom-center-above/) |
 | 10 | Enable CUDA GPU acceleration for Parakeet TDT — cuda feature on parakeet-rs, CUDA ExecutionProvider with CPU fallback | 2026-03-01 | 1f2a9c5 | [10-enable-cuda-gpu-acceleration-for-parakee](./quick/10-enable-cuda-gpu-acceleration-for-parakee/) |
+| 11 | Switch Parakeet transcription to TimestampMode::Sentences — activates group_by_sentences -> deduplicate_words pipeline | 2026-03-01 | 2a30c48 | [11-switch-parakeet-transcription-from-times](./quick/11-switch-parakeet-transcription-from-times/) |
 
 ## Accumulated Context
 
