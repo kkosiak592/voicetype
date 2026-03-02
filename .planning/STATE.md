@@ -48,6 +48,7 @@ Last activity: 2026-03-01 - 08-03 (Parakeet frontend: 3-card FirstRun, engine se
 - 2026-03-01: 08-01 (Parakeet TDT inference wrapper + download infrastructure) — transcribe_parakeet.rs with load_parakeet/transcribe_with_parakeet; parakeet-rs 0.1.9 optional dep; download_parakeet_model 5-file command with cumulative progress (commits d47e8b6, f585fa1)
 - 2026-03-01: 08-02 (engine dispatch + VAD bypass + managed state) — TranscriptionEngine enum, ActiveEngine/ParakeetStateMutex managed states, get_engine/set_engine commands with persistence, pipeline engine dispatch, hold-to-talk VAD bypass (commits bbe3a58, d8307d2)
 - 2026-03-01: 08-03 (Parakeet frontend integration) — Task 1: 3-card GPU model selection in FirstRun, Fastest badge, Parakeet download routing, set_engine on complete; engine selector + Parakeet download section in ModelSection settings (commit 9b430b8); awaiting human verification
+- 2026-03-01: Quick task 10 (enable CUDA GPU acceleration for Parakeet TDT) — cuda feature on parakeet-rs, CUDA ExecutionProvider wired in load_parakeet, both call sites updated to use_cuda=true (commit 1f2a9c5)
 
 ## Decisions
 
@@ -89,6 +90,8 @@ Last activity: 2026-03-01 - 08-03 (Parakeet frontend: 3-card FirstRun, engine se
 - [08-03-frontend]: GPU presence in ModelSection detected by checking list_models for large-v3-turbo or parakeet-tdt-v2 — avoids new Tauri command
 - [08-03-frontend]: whisperModels filtered before passing to ModelSelector — Parakeet entry excluded from Whisper model list
 - [08-03-frontend]: set_engine('parakeet') called automatically after Parakeet FirstRun download — implicit engine activation on model choice
+- [quick-10-cuda]: parakeet_rs::{ExecutionConfig, ExecutionProvider} used (top-level re-exports) not parakeet_rs::execution::* (private module)
+- [quick-10-cuda]: both load_parakeet call sites pass use_cuda=true — CUDA EP always requested; ort falls back to CPU if CUDA unavailable at runtime
 
 ### Roadmap Evolution
 
@@ -105,6 +108,7 @@ Last activity: 2026-03-01 - 08-03 (Parakeet frontend: 3-card FirstRun, engine se
 | 6 | Remove checkmark from pill after successful processing — immediate exit identical to error path | 2026-03-01 | 8bb5ed5 | [6-remove-checkmark-from-pill-after-process](./quick/6-remove-checkmark-from-pill-after-process/) |
 | 7 | Remove rainbow rotating border from pill recording state — dark glass + waveform bars only | 2026-03-01 | 8d36805 | [7-remove-rainbow-startup-animation-from-pi](./quick/7-remove-rainbow-startup-animation-from-pi/) |
 | 8 | Fix pill position to bottom-center above taskbar, remove dragging, add multi-monitor support | 2026-03-01 | 000463d | [8-fix-pill-position-to-bottom-center-above](./quick/8-fix-pill-position-to-bottom-center-above/) |
+| 10 | Enable CUDA GPU acceleration for Parakeet TDT — cuda feature on parakeet-rs, CUDA ExecutionProvider with CPU fallback | 2026-03-01 | 1f2a9c5 | [10-enable-cuda-gpu-acceleration-for-parakee](./quick/10-enable-cuda-gpu-acceleration-for-parakee/) |
 
 ## Accumulated Context
 
