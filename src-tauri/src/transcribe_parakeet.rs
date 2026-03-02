@@ -57,6 +57,27 @@ pub fn load_parakeet(model_dir: &str, provider: &str) -> Result<ParakeetTDT, Str
     Ok(parakeet)
 }
 
+/// Runs a dummy inference with ~0.5s of silent audio (8000 zero samples at 16kHz)
+/// to trigger CUDA context initialization, cudaMalloc, and cuDNN algorithm selection.
+/// The transcription result is discarded. Logs warm-up duration.
+/// This should be called once after model loading, ideally in a background thread.
+pub fn warm_up_parakeet(parakeet: &mut ParakeetTDT) {
+    let start = Instant::now();
+    // 0.5 seconds of silence at 16kHz = 8000 samples
+    let silent_audio: Vec<f32> = vec![0.0f32; 8000];
+    match parakeet.transcribe_samples(silent_audio, 16000, 1, Some(TimestampMode::Sentences)) {
+        Ok(_) => {
+            log::info!(
+                "Parakeet warm-up completed in {}ms (CUDA context + cuDNN initialized)",
+                start.elapsed().as_millis()
+            );
+        }
+        Err(e) => {
+            log::warn!("Parakeet warm-up inference failed (non-fatal): {}", e);
+        }
+    }
+}
+
 /// Transcribes a slice of 16 kHz mono f32 audio samples using Parakeet TDT.
 ///
 /// Audio is cloned into a Vec<f32> because parakeet-rs takes ownership.
