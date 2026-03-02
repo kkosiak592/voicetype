@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Auto-Updates & CI/CD
-status: completed
-last_updated: "2026-03-02T20:27:27.491Z"
+milestone: v1.2
+milestone_name: Keyboard Hook
+status: active
+last_updated: "2026-03-02"
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 5
-  completed_plans: 5
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Session State
@@ -18,17 +18,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** Phase 11 — Signing & Repo Setup
+**Current focus:** Defining requirements
 
 ## Position
 
-**Milestone:** v1.1 Auto-Updates & CI/CD
-**Phase:** 14 of 14 (Release Workflow)
-**Plan:** 01 (complete)
-**Status:** Milestone complete
-Last activity: 2026-03-02 - Completed Phase 14 Plan 01: Release Workflow — RELEASING.md runbook and CHANGELOG.md with Keep a Changelog format
-
-Progress: [██████████] 100% (5/5 plans)
+**Milestone:** v1.2 Keyboard Hook
+**Phase:** Not started (defining requirements)
+**Plan:** —
+**Status:** Defining requirements
+Last activity: 2026-03-02 — Milestone v1.2 started
 
 ## Accumulated Context
 
@@ -36,20 +34,8 @@ Progress: [██████████] 100% (5/5 plans)
 
 - v1.1: tauri-plugin-updater + GitHub Releases chosen (Option A) — zero cost, official Tauri approach, best UX for <20 users
 - v1.1: Public GitHub repo required — updater needs unauthenticated access to release assets
-- v1.1: Ed25519 signing — private key stored only in GitHub secrets + local backup; loss means existing installs cannot receive future updates
-- 11-01: bundle.createUpdaterArtifacts set to "v1Compatible" for Tauri 2 backward-compatible signature format
-- 11-01: tauri-plugin-updater NOT added to Cargo.toml in Phase 11 — Phase 12 scope; pubkey/endpoint config only here
-- 11-01: Ed25519 private key lives in ~/.voicetype-signing.key — outside repo, no .gitignore entry needed
-- 12-01: tauri-plugin-updater registered in setup() not on Builder — requires app handle to read updater config from tauri.conf.json
-- 12-01: Rust check_for_update command is check-only; download/install handled by JS plugin API (check().downloadAndInstall())
-- 12-02: JS plugin API handles download (not Rust IPC) — enables progress callbacks; Update ref lost on unmount so mid-download close resets banner to 'available'
-- 12-02: Updater config belongs under top-level plugins key in tauri.conf.json (Tauri v2 format), not under app section
-- 12-02: Tray menus in Tauri 2 must be rebuilt from scratch; set_tray_update_indicator creates new Menu and calls set_menu()
-- 13-01: Jimver/cuda-toolkit minimal sub-packages (nvcc, cudart, cublas, cublas_dev, thrust, visual_studio_integration) avoids 4 GB full toolkit download in CI
-- 13-01: CMAKE_CUDA_ARCHITECTURES=61;75;86;89 targets Pascal/Turing/Ampere/Ada in one binary; tagName uses github.ref_name directly (tag is release source of truth)
-- [Phase 14-release-workflow]: Annotated git tags over lightweight tags — store tagger info and work better with git describe
-- [Phase 14-release-workflow]: git push --follow-tags used in release runbook — single command pushes commit and annotated tag together
-- [Phase 14-release-workflow]: Keep a Changelog format chosen — industry standard that maps directly to GitHub Release descriptions
+- v1.1: Ed25519 signing — private key stored only in GitHub secrets + local backup
+- v1.1: bundle.createUpdaterArtifacts set to "v1Compatible" for Tauri 2 backward-compatible signature format
 
 ### Pending Todos
 
@@ -59,16 +45,10 @@ Progress: [██████████] 100% (5/5 plans)
 
 ### Blockers/Concerns
 
-None active. (Ed25519 private key backup completed by user at Task 2 checkpoint — resolved)
-
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 25 | Auto-select recommended model on first startup with DXGI GPU detection | 2026-03-02 | 59551ae | [25-auto-select-recommended-model-on-first-s](./quick/25-auto-select-recommended-model-on-first-s/) |
+None active.
 
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 14-01-PLAN.md (Phase 14 Plan 01: Release Workflow — RELEASING.md runbook and CHANGELOG.md)
+Stopped at: Starting milestone v1.2 Keyboard Hook
 Resume file: None

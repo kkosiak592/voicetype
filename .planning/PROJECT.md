@@ -30,18 +30,24 @@ Voice dictation must feel instant — sub-1500ms from end-of-speech to text appe
 - ✓ GPU inference with CUDA 11.7 + automatic CPU fallback — v1.0
 - ✓ First-run model download with GPU auto-detection and progress indicator — v1.0
 - ✓ Single Windows NSIS installer (~9 MB, models downloaded separately) — v1.0
+- ✓ tauri-plugin-updater with Ed25519 signing and GitHub Releases backend — v1.1
+- ✓ GitHub Actions CI/CD for automated builds, signing, and release publishing — v1.1
+- ✓ In-app update check on launch with download/install/relaunch UX — v1.1
+- ✓ Release workflow with documented runbook and changelog format — v1.1
 
 ### Active
 
-## Current Milestone: v1.1 Auto-Updates & CI/CD
+## Current Milestone: v1.2 Keyboard Hook
 
-**Goal:** Enable seamless auto-updates via tauri-plugin-updater backed by GitHub Releases, with GitHub Actions CI/CD for automated builds and signing.
+**Goal:** Replace tauri-plugin-global-shortcut with a custom WH_KEYBOARD_LL low-level keyboard hook, enabling Ctrl+Win modifier-only hotkey activation with debounce for reliable key ordering.
 
 **Target features:**
-- tauri-plugin-updater integration with Ed25519 signing
-- GitHub Actions workflow (tauri-action) for automated builds, signing, and release publishing
-- In-app update check on launch with download/install/relaunch UX
-- Public GitHub repo as release distribution backend
+- WH_KEYBOARD_LL keyboard hook module replacing RegisterHotKey API
+- Ctrl+Win modifier-only hotkey as a configurable option
+- Debounce window (~50ms) for press-order independence
+- Start menu suppression when Ctrl+Win combo is active
+- Fallback to standard hotkey if hook installation fails
+- Frontend support for modifier-only combo capture and display
 
 ### Out of Scope
 
@@ -95,8 +101,8 @@ Voice dictation must feel instant — sub-1500ms from end-of-speech to text appe
 | VAD gate bypass for hold-to-talk | Saves 20-30ms by skipping Silero scan when user explicitly controls recording | ✓ Good — noticeable latency reduction |
 
 ---
-| tauri-plugin-updater + GitHub Releases | Zero cost, excellent UX, official Tauri approach, simplest for <20 users | — Pending |
-| Public GitHub repo | Updater needs unauthenticated access to release assets, source visibility acceptable | — Pending |
+| tauri-plugin-updater + GitHub Releases | Zero cost, excellent UX, official Tauri approach, simplest for <20 users | ✓ Good |
+| Public GitHub repo | Updater needs unauthenticated access to release assets, source visibility acceptable | ✓ Good |
 
 ---
-*Last updated: 2026-03-02 after v1.1 milestone start*
+*Last updated: 2026-03-02 after v1.2 milestone start*
