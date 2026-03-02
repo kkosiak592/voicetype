@@ -21,6 +21,9 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
   const [parakeetDownloading, setParakeetDownloading] = useState(false);
   const [parakeetPercent, setParakeetPercent] = useState(0);
   const [parakeetError, setParakeetError] = useState<string | null>(null);
+  const [fp32Downloading, setFp32Downloading] = useState(false);
+  const [fp32Percent, setFp32Percent] = useState(0);
+  const [fp32Error, setFp32Error] = useState<string | null>(null);
 
   useEffect(() => {
     loadModels().catch(err => {
@@ -49,17 +52,20 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
 
   async function handleModelSelect(modelId: string) {
     try {
-      // Determine the correct engine based on the selected model
-      const engine = modelId === 'parakeet-tdt-v2' ? 'parakeet' : 'whisper';
+      const isParakeetVariant = modelId === 'parakeet-tdt-v2' || modelId === 'parakeet-tdt-v2-fp32';
+      const engine = isParakeetVariant ? 'parakeet' : 'whisper';
 
-      // Switch engine if needed
-      if (engine !== currentEngine) {
-        await invoke('set_engine', { engine });
-        setCurrentEngine(engine);
-      }
-
-      // For Whisper models, also call set_model
-      if (engine === 'whisper') {
+      if (isParakeetVariant) {
+        // Always call set_engine for Parakeet variants regardless of currentEngine.
+        // This is necessary because variant switches (int8 -> fp32 or fp32 -> int8)
+        // require a model reload even when the engine is already "parakeet".
+        await invoke('set_engine', { engine: 'parakeet', parakeetModel: modelId });
+        setCurrentEngine('parakeet');
+      } else {
+        if (engine !== currentEngine) {
+          await invoke('set_engine', { engine, parakeetModel: null });
+          setCurrentEngine(engine);
+        }
         await invoke('set_model', { modelId });
       }
 
@@ -117,6 +123,44 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
     }
   }
 
+  async function handleFp32Download() {
+    setFp32Downloading(true);
+    setFp32Percent(0);
+    setFp32Error(null);
+
+    const onEvent = new Channel<DownloadEvent>();
+    onEvent.onmessage = async (msg) => {
+      switch (msg.event) {
+        case 'started':
+          break;
+        case 'progress': {
+          const pct =
+            msg.data.totalBytes > 0
+              ? Math.round((msg.data.downloadedBytes / msg.data.totalBytes) * 100)
+              : 0;
+          setFp32Percent(pct);
+          break;
+        }
+        case 'finished':
+          setFp32Downloading(false);
+          await loadModels();
+          await handleModelSelect('parakeet-tdt-v2-fp32');
+          break;
+        case 'error':
+          setFp32Error(msg.data.message);
+          setFp32Downloading(false);
+          break;
+      }
+    };
+
+    try {
+      await invoke('download_parakeet_fp32_model', { onEvent });
+    } catch (e) {
+      setFp32Error(String(e));
+      setFp32Downloading(false);
+    }
+  }
+
   return (
     <div>
       <h1 className="mb-1 text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
@@ -136,6 +180,10 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
         parakeetDownloading={parakeetDownloading}
         parakeetPercent={parakeetPercent}
         parakeetError={parakeetError}
+        onFp32Download={handleFp32Download}
+        fp32Downloading={fp32Downloading}
+        fp32Percent={fp32Percent}
+        fp32Error={fp32Error}
       />
 
       {currentEngine === 'parakeet' && (

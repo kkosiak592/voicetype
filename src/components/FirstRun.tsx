@@ -26,9 +26,17 @@ const MODELS = [
   },
   {
     id: 'parakeet-tdt-v2',
-    name: 'Parakeet TDT',
+    name: 'Parakeet TDT (int8)',
     size: '661 MB',
     quality: 'Fastest (GPU)',
+    requirement: 'Requires NVIDIA GPU',
+    gpuOnly: true,
+  },
+  {
+    id: 'parakeet-tdt-v2-fp32',
+    name: 'Parakeet TDT (fp32)',
+    size: '2.56 GB',
+    quality: 'Full precision (GPU)',
     requirement: 'Requires NVIDIA GPU',
     gpuOnly: true,
   },
@@ -69,10 +77,10 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
         // Non-blocking — user can toggle autostart later in settings
       }
 
-      // If the user chose Parakeet, activate that engine immediately
-      if (downloadingId === 'parakeet-tdt-v2') {
+      // If the user chose a Parakeet variant, activate that engine immediately
+      if (downloadingId === 'parakeet-tdt-v2' || downloadingId === 'parakeet-tdt-v2-fp32') {
         try {
-          await invoke('set_engine', { engine: 'parakeet' });
+          await invoke('set_engine', { engine: 'parakeet', parakeetModel: downloadingId });
         } catch (e) {
           console.warn('Failed to set Parakeet engine:', e);
         }
@@ -127,6 +135,8 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
     try {
       if (modelId === 'parakeet-tdt-v2') {
         await invoke('download_parakeet_model', { onEvent });
+      } else if (modelId === 'parakeet-tdt-v2-fp32') {
+        await invoke('download_parakeet_fp32_model', { onEvent });
       } else {
         await invoke('download_model', { modelId, onEvent });
       }
@@ -161,7 +171,7 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
 
   const gridClass =
     gpuDetected
-      ? 'grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6'
+      ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6'
       : 'grid grid-cols-1 gap-4 mb-6';
 
   return (
@@ -196,7 +206,7 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
         <div className={gridClass}>
           {visibleModels.map((model) => {
             const isRecommended = model.id === recommendedModel;
-            const isFastest = model.id === 'parakeet-tdt-v2' && gpuDetected;
+            const isFastest = model.id === 'parakeet-tdt-v2' && gpuDetected; // int8 only — fastest due to quantization
             const isDownloading = downloadingId === model.id && downloadState === 'downloading';
             const isValidating = downloadingId === model.id && downloadState === 'validating';
             const isComplete = downloadingId === model.id && downloadState === 'complete';

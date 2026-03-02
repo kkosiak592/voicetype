@@ -25,6 +25,10 @@ interface ModelSelectorProps {
   parakeetDownloading?: boolean;
   parakeetPercent?: number;
   parakeetError?: string | null;
+  onFp32Download?: () => void;
+  fp32Downloading?: boolean;
+  fp32Percent?: number;
+  fp32Error?: string | null;
 }
 
 function formatMB(bytes: number): string {
@@ -41,6 +45,10 @@ export function ModelSelector({
   parakeetDownloading = false,
   parakeetPercent = 0,
   parakeetError = null,
+  onFp32Download,
+  fp32Downloading = false,
+  fp32Percent = 0,
+  fp32Error = null,
 }: ModelSelectorProps) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -108,20 +116,29 @@ export function ModelSelector({
       {models.map((model) => {
         const isSelected = selectedId === model.id;
         const isLoading = loadingId === model.id;
-        const isParakeet = model.id === 'parakeet-tdt-v2';
-        const isParakeetDownloading = isParakeet && parakeetDownloading;
+        const isParakeetInt8 = model.id === 'parakeet-tdt-v2';
+        const isParakeetFp32 = model.id === 'parakeet-tdt-v2-fp32';
+        const isParakeet = isParakeetInt8 || isParakeetFp32;
+
+        // Resolve per-variant download state
+        const thisDownloading = isParakeetInt8 ? parakeetDownloading : isParakeetFp32 ? fp32Downloading : false;
+        const thisPercent = isParakeetInt8 ? parakeetPercent : isParakeetFp32 ? fp32Percent : 0;
+        const thisError = isParakeetInt8 ? parakeetError : isParakeetFp32 ? fp32Error : null;
+        const thisOnDownload = isParakeetInt8 ? onParakeetDownload : isParakeetFp32 ? onFp32Download : undefined;
+
+        const isParakeetDownloading = isParakeet && thisDownloading;
         const isDownloading = isParakeet ? isParakeetDownloading : downloadingId === model.id;
         const hasWhisperError =
           !isParakeet &&
           downloadingId === null &&
           downloadError !== null &&
           !model.downloaded;
-        const hasParakeetError = isParakeet && !model.downloaded && parakeetError !== null;
-        const disabled = !model.downloaded || loadingId !== null || downloadingId !== null || parakeetDownloading;
+        const hasParakeetError = isParakeet && !model.downloaded && thisError !== null;
+        const disabled = !model.downloaded || loadingId !== null || downloadingId !== null || parakeetDownloading || fp32Downloading;
 
         // Determine border style for undownloaded cards
         const undownloadedBorder =
-          isParakeet && onParakeetDownload
+          isParakeet && thisOnDownload
             ? 'border-dashed border-gray-300 dark:border-gray-600'
             : 'border-gray-200 dark:border-gray-700';
 
@@ -162,11 +179,11 @@ export function ModelSelector({
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {/* Parakeet download button */}
-                  {isParakeet && !model.downloaded && onParakeetDownload && !isParakeetDownloading && (
+                  {/* Parakeet download button (int8 or fp32) */}
+                  {isParakeet && !model.downloaded && thisOnDownload && !isParakeetDownloading && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); onParakeetDownload(); }}
-                      disabled={parakeetDownloading || downloadingId !== null}
+                      onClick={(e) => { e.stopPropagation(); thisOnDownload(); }}
+                      disabled={parakeetDownloading || fp32Downloading || downloadingId !== null}
                       className="rounded-md bg-indigo-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       Download
@@ -176,7 +193,7 @@ export function ModelSelector({
                   {!isParakeet && !model.downloaded && !isDownloading && (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDownload(model.id); }}
-                      disabled={downloadingId !== null || parakeetDownloading}
+                      disabled={downloadingId !== null || parakeetDownloading || fp32Downloading}
                       className="rounded-md bg-indigo-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       Download
@@ -190,28 +207,28 @@ export function ModelSelector({
               <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{model.description}</p>
             </div>
 
-            {/* Progress bar for Parakeet download */}
+            {/* Progress bar for Parakeet download (int8 or fp32) */}
             {isParakeet && isParakeetDownloading && (
               <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-gray-700 dark:bg-gray-800/50">
                 <div className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
                   <div
                     className="h-full rounded-full bg-indigo-500 transition-all duration-200"
-                    style={{ width: `${parakeetPercent}%` }}
+                    style={{ width: `${thisPercent}%` }}
                   />
                 </div>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {parakeetPercent}%
+                  {thisPercent}%
                 </p>
               </div>
             )}
 
-            {/* Error message for Parakeet */}
-            {hasParakeetError && parakeetError && (
+            {/* Error message for Parakeet (int8 or fp32) */}
+            {hasParakeetError && thisError && (
               <div className="mt-1 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-2 dark:border-red-800 dark:bg-red-900/20">
-                <p className="text-xs text-red-600 dark:text-red-400 truncate">{parakeetError}</p>
-                {onParakeetDownload && (
+                <p className="text-xs text-red-600 dark:text-red-400 truncate">{thisError}</p>
+                {thisOnDownload && (
                   <button
-                    onClick={onParakeetDownload}
+                    onClick={thisOnDownload}
                     className="ml-3 shrink-0 text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                   >
                     Retry
