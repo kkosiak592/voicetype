@@ -18,6 +18,17 @@ pub fn models_dir() -> PathBuf {
     PathBuf::from(appdata).join("VoiceType").join("models")
 }
 
+/// Extended GPU detection result for provider selection and UI display.
+#[derive(Debug, Clone)]
+pub struct GpuDetection {
+    /// Human-readable GPU name (e.g., "NVIDIA Quadro P2000", "DirectML (auto-detected)")
+    pub gpu_name: String,
+    /// Which execution provider to use for Parakeet: "cuda", "directml", or "cpu"
+    pub parakeet_provider: String,
+    /// Whether this is an NVIDIA GPU (for Whisper CUDA and ModelMode::Gpu)
+    pub is_nvidia: bool,
+}
+
 /// Detects whether an NVIDIA GPU is available at runtime using NVML.
 ///
 /// Returns ModelMode::Gpu if an NVIDIA GPU is found, ModelMode::Cpu otherwise.
@@ -44,6 +55,43 @@ pub fn detect_gpu() -> ModelMode {
         Err(e) => {
             log::info!("NVML init failed (no NVIDIA GPU or drivers not installed): {} — using CPU mode", e);
             ModelMode::Cpu
+        }
+    }
+}
+
+/// Full GPU detection returning a `GpuDetection` with GPU name, Parakeet provider recommendation,
+/// and NVIDIA flag. On NVIDIA: provider="cuda". On non-NVIDIA: provider="directml". No GPU: provider="cpu".
+///
+/// Used at startup to populate `CachedGpuDetection` for provider selection and UI display.
+pub fn detect_gpu_full() -> GpuDetection {
+    use nvml_wrapper::Nvml;
+    match Nvml::init() {
+        Ok(nvml) => match nvml.device_by_index(0) {
+            Ok(device) => {
+                let name = device.name().unwrap_or_else(|_| "Unknown NVIDIA GPU".to_string());
+                log::info!("GPU detection (full): NVIDIA GPU found: {}", name);
+                GpuDetection {
+                    gpu_name: name,
+                    parakeet_provider: "cuda".to_string(),
+                    is_nvidia: true,
+                }
+            }
+            Err(e) => {
+                log::info!("GPU detection (full): NVML init OK but no device: {} — using DirectML", e);
+                GpuDetection {
+                    gpu_name: "DirectML (auto-detected)".to_string(),
+                    parakeet_provider: "directml".to_string(),
+                    is_nvidia: false,
+                }
+            }
+        },
+        Err(e) => {
+            log::info!("GPU detection (full): NVML failed: {} — using DirectML", e);
+            GpuDetection {
+                gpu_name: "DirectML (auto-detected)".to_string(),
+                parakeet_provider: "directml".to_string(),
+                is_nvidia: false,
+            }
         }
     }
 }

@@ -68,7 +68,7 @@ futures-util = "0.3"
 # NOTE: "cuda" feature enabled — ort downloads pre-compiled CUDA binaries via download-binaries
 # feature (same mechanism as whisper-rs). CUDA toolkit is already present (used by whisper).
 # At runtime, ort uses CUDA EP with automatic CPU fallback if CUDA is unavailable.
-parakeet-rs = { version = "0.1.9", features = ["cuda"], optional = true }
+parakeet-rs = { version = "0.1.9", features = ["cuda", "directml"], optional = true }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-global-shortcut = "2"

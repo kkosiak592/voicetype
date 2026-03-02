@@ -111,6 +111,12 @@ pub struct WhisperStateMutex(pub std::sync::Mutex<Option<Arc<WhisperContext>>>);
 #[cfg(feature = "whisper")]
 pub struct CachedGpuMode(pub transcribe::ModelMode);
 
+/// Cached full GPU detection result. Populated once at startup alongside CachedGpuMode.
+/// Provides GPU name, Parakeet provider recommendation, and NVIDIA flag.
+/// Registered before Builder::run() for the same reason as CachedGpuMode.
+#[cfg(feature = "whisper")]
+pub struct CachedGpuDetection(pub transcribe::GpuDetection);
+
 /// Read settings.json from the app data directory. Returns empty object on missing/corrupt file.
 fn read_settings(app_handle: &tauri::AppHandle) -> Result<serde_json::Value, String> {
     let data_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -295,7 +301,14 @@ fn set_engine(app: tauri::AppHandle, engine: String, parakeet_model: Option<Stri
         let model_dir = resolve_parakeet_dir(&parakeet_model_id);
         if model_dir.exists() {
             let dir_str = model_dir.to_string_lossy().to_string();
-            match transcribe_parakeet::load_parakeet(&dir_str, true) {
+            #[cfg(feature = "whisper")]
+            let provider = {
+                let gpu_detection = app.state::<CachedGpuDetection>();
+                gpu_detection.0.parakeet_provider.clone()
+            };
+            #[cfg(not(feature = "whisper"))]
+            let provider = "cpu".to_string();
+            match transcribe_parakeet::load_parakeet(&dir_str, &provider) {
                 Ok(p) => {
                     let mut guard = parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
                     *guard = Some(std::sync::Arc::new(std::sync::Mutex::new(p)));
@@ -905,6 +918,63 @@ fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
     Ok(models)
 }
 
+/// GPU/inference status info returned to the frontend for display in ModelSection.
+#[cfg(feature = "whisper")]
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GpuInfo {
+    gpu_name: String,
+    execution_provider: String,
+    active_model: String,
+    active_engine: String,
+}
+
+/// Return current GPU info, execution provider, active engine, and active model.
+///
+/// Used by ModelSection to display the "Inference Status" indicator.
+/// Refreshed whenever the user changes the model or engine selection.
+#[cfg(feature = "whisper")]
+#[tauri::command]
+fn get_gpu_info(app: tauri::AppHandle) -> GpuInfo {
+    let detection = app.state::<CachedGpuDetection>();
+    let engine_state = app.state::<ActiveEngine>();
+    let engine = engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let engine_str = match *engine {
+        TranscriptionEngine::Whisper => "whisper",
+        TranscriptionEngine::Parakeet => "parakeet",
+    };
+    let settings = read_settings(&app).unwrap_or_else(|_| serde_json::json!({}));
+    let active_model = if *engine == TranscriptionEngine::Parakeet {
+        settings
+            .get("parakeet_model")
+            .and_then(|v| v.as_str())
+            .unwrap_or("parakeet-tdt-v2-fp32")
+            .to_string()
+    } else {
+        settings
+            .get("whisper_model_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string()
+    };
+    let ep = match engine_str {
+        "parakeet" => detection.0.parakeet_provider.to_uppercase(),
+        _ => {
+            if detection.0.is_nvidia {
+                "CUDA".to_string()
+            } else {
+                "CPU".to_string()
+            }
+        }
+    };
+    GpuInfo {
+        gpu_name: detection.0.gpu_name.clone(),
+        execution_provider: ep,
+        active_model,
+        active_engine: engine_str.to_string(),
+    }
+}
+
 /// Response type for check_first_run — tells the frontend whether setup is needed
 /// and which model to recommend based on GPU detection.
 #[cfg(feature = "whisper")]
@@ -913,6 +983,8 @@ fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
 struct FirstRunStatus {
     needs_setup: bool,
     gpu_detected: bool,
+    gpu_name: String,
+    directml_available: bool,
     recommended_model: String,
 }
 
@@ -920,20 +992,27 @@ struct FirstRunStatus {
 ///
 /// Returns needs_setup=true when no model file exists (neither Whisper nor Parakeet).
 /// Also surfaces GPU detection so the frontend can pre-select the appropriate model.
+/// gpu_name: human-readable GPU name for display in the badge.
+/// directml_available: true for non-NVIDIA systems (DirectML enables Parakeet GPU inference).
 #[cfg(feature = "whisper")]
 #[tauri::command]
 fn check_first_run(app: tauri::AppHandle) -> FirstRunStatus {
     use crate::transcribe::{models_dir, ModelMode};
     let cached = app.state::<CachedGpuMode>();
     let gpu_mode = matches!(cached.0, ModelMode::Gpu);
+    let detection = app.state::<CachedGpuDetection>();
     let dir = models_dir();
     let large_exists = dir.join("ggml-large-v3-turbo-q5_0.bin").exists();
     let small_exists = dir.join("ggml-small.en-q5_1.bin").exists();
     // Parakeet fp32 is also a valid installed model — skip first-run if it is present
     let parakeet_fp32_exists = crate::download::parakeet_fp32_model_exists();
+    // directml_available: non-NVIDIA systems get DirectML for Parakeet GPU acceleration
+    let directml_available = !gpu_mode;
     FirstRunStatus {
         needs_setup: !large_exists && !small_exists && !parakeet_fp32_exists,
         gpu_detected: gpu_mode,
+        gpu_name: detection.0.gpu_name.clone(),
+        directml_available,
         recommended_model: if gpu_mode {
             "parakeet-tdt-v2-fp32".to_string()
         } else {
@@ -1179,6 +1258,15 @@ pub fn run() {
         mode
     };
 
+    // Full GPU detection for provider selection and UI display.
+    // Runs alongside detect_gpu() at the same startup point.
+    #[cfg(feature = "whisper")]
+    let cached_gpu_detection = {
+        let detection = transcribe::detect_gpu_full();
+        log::info!("GPU detection full: {:?}", detection);
+        detection
+    };
+
     let mut builder = tauri::Builder::default()
         // single-instance MUST be registered first (before setup)
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -1196,6 +1284,7 @@ pub fn run() {
     #[cfg(feature = "whisper")]
     {
         builder = builder.manage(CachedGpuMode(cached_gpu));
+        builder = builder.manage(CachedGpuDetection(cached_gpu_detection));
     }
 
     // ActiveEngine MUST be registered on Builder (same reason as CachedGpuMode).
@@ -1230,6 +1319,8 @@ pub fn run() {
             enable_autostart,
             #[cfg(feature = "whisper")]
             check_first_run,
+            #[cfg(feature = "whisper")]
+            get_gpu_info,
             #[cfg(feature = "whisper")]
             list_models,
             #[cfg(feature = "whisper")]
@@ -1297,7 +1388,11 @@ pub fn run() {
                     let model_dir = resolve_parakeet_dir(&parakeet_model_id);
                     if model_dir.exists() {
                         let dir_str = model_dir.to_string_lossy().to_string();
-                        match transcribe_parakeet::load_parakeet(&dir_str, true) {
+                        let provider = {
+                            let gpu_detection = app.state::<CachedGpuDetection>();
+                            gpu_detection.0.parakeet_provider.clone()
+                        };
+                        match transcribe_parakeet::load_parakeet(&dir_str, &provider) {
                             Ok(p) => {
                                 let parakeet_state = app.state::<ParakeetStateMutex>();
                                 let mut guard =

@@ -13,35 +13,45 @@ use std::time::Instant;
 /// `model_dir` must contain the encoder, decoder_joint, vocab, and config files
 /// from the `istupakov/parakeet-tdt-0.6b-v2-onnx` HuggingFace repo (fp32 variant).
 ///
-/// Uses CUDA execution provider when use_cuda=true, CPU otherwise.
-/// ort automatically falls back to CPU if CUDA is unavailable at runtime.
+/// `provider` controls the ONNX execution provider:
+/// - "cuda"    → CUDA EP (NVIDIA GPU); ort falls back to CPU if CUDA unavailable at runtime
+/// - "directml"→ DirectML EP (any DirectX 12 GPU: Intel/AMD/NVIDIA on Windows)
+/// - anything else → CPU EP (default, no GPU acceleration)
 ///
 /// Logs model load duration at INFO level.
-pub fn load_parakeet(model_dir: &str, use_cuda: bool) -> Result<ParakeetTDT, String> {
+pub fn load_parakeet(model_dir: &str, provider: &str) -> Result<ParakeetTDT, String> {
     let start = Instant::now();
 
-    log::info!("Loading Parakeet TDT model from: {}", model_dir);
+    log::info!("Loading Parakeet TDT model from: {} (provider={})", model_dir, provider);
 
-    let config = if use_cuda {
-        log::info!("Requesting CUDA ExecutionProvider for Parakeet TDT");
-        Some(ExecutionConfig::new().with_execution_provider(ExecutionProvider::Cuda))
-    } else {
-        None // CPU ExecutionProvider (default)
+    let config = match provider {
+        "cuda" => {
+            log::info!("Requesting CUDA ExecutionProvider for Parakeet TDT");
+            Some(ExecutionConfig::new().with_execution_provider(ExecutionProvider::Cuda))
+        }
+        "directml" => {
+            log::info!("Requesting DirectML ExecutionProvider for Parakeet TDT");
+            Some(ExecutionConfig::new().with_execution_provider(ExecutionProvider::DirectML))
+        }
+        _ => {
+            log::info!("Requesting CPU ExecutionProvider for Parakeet TDT");
+            None // CPU ExecutionProvider (default)
+        }
     };
 
     let parakeet = ParakeetTDT::from_pretrained(model_dir, config)
         .map_err(|e| format!("Failed to load Parakeet TDT model from '{}': {}", model_dir, e))?;
 
     let load_ms = start.elapsed().as_millis();
-    log::info!("Parakeet TDT model loaded in {}ms", load_ms);
+    log::info!("Parakeet TDT model loaded in {}ms (provider={})", load_ms, provider);
 
-    if use_cuda {
-        log::info!(
+    match provider {
+        "cuda" => log::info!(
             "Parakeet TDT EP: CUDA requested — if load took >3s, CUDA likely initialized; \
              confirm with first inference (<200ms = GPU, >800ms = CPU fallback)"
-        );
-    } else {
-        log::info!("Parakeet TDT EP: CPU");
+        ),
+        "directml" => log::info!("Parakeet TDT EP: DirectML"),
+        _ => log::info!("Parakeet TDT EP: CPU"),
     }
 
     Ok(parakeet)
