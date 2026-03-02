@@ -59,8 +59,26 @@ function App() {
       if (savedRecordingMode) setRecordingMode(savedRecordingMode);
       if (savedActiveProfile) setActiveProfile(savedActiveProfile);
       if (savedSelectedMic) setSelectedMic(savedSelectedMic);
-      if (savedSelectedModel !== null && savedSelectedModel !== undefined) {
-        setSelectedModel(savedSelectedModel);
+      // Reconcile selectedModel with the backend's actual engine state.
+      // The Tauri store and Rust settings.json can desync (separate I/O paths),
+      // so the backend engine is the source of truth.
+      try {
+        const backendEngine = await invoke<string>('get_engine');
+        if (backendEngine === 'parakeet') {
+          setSelectedModel('parakeet-tdt-v2');
+        } else if (savedSelectedModel && savedSelectedModel !== 'parakeet-tdt-v2') {
+          setSelectedModel(savedSelectedModel);
+        } else {
+          // Backend is whisper but store says parakeet — pick the active whisper model
+          const models = await invoke<{ id: string; available: boolean }[]>('list_models');
+          const available = models.find(m => m.available && m.id !== 'parakeet-tdt-v2');
+          setSelectedModel(available?.id ?? '');
+        }
+      } catch {
+        // get_engine not available — fall back to stored value
+        if (savedSelectedModel !== null && savedSelectedModel !== undefined) {
+          setSelectedModel(savedSelectedModel);
+        }
       }
 
       setLoaded(true);

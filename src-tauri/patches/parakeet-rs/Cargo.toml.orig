@@ -1,0 +1,50 @@
+[package]
+name = "parakeet-rs"
+version = "0.1.9"
+edition = "2021"
+authors = ["altunenes"]
+description = "Fast English ASR with NVIDIA Parakeet via ONNX"
+repository = "https://github.com/altunenes/parakeet-rs"
+license = "MIT OR Apache-2.0"
+keywords = ["speech-recognition", "asr", "parakeet", "onnx", "nvidia"]
+categories = ["multimedia::audio", "science"]
+
+[lib]
+name = "parakeet_rs"
+path = "src/lib.rs"
+
+[[example]]
+name = "transcribe"
+path = "examples/transcribe.rs"
+
+[[example]]
+name = "pyannote"
+path = "examples/pyannote.rs"
+
+[[example]]
+name = "raw"
+path = "examples/raw.rs"
+
+[dependencies]
+ort = { version = "2.0.0-rc.10", features = ["download-binaries"] }
+hound = "3.5"
+eyre = "0.6"
+ndarray = "0.16"
+tokenizers = "0.20"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rustfft = "6.4"
+
+[dev-dependencies]
+pyannote-rs = "0.3.4"
+
+[features]
+default = ["cpu"]
+cpu = []
+cuda = ["ort/cuda"]
+tensorrt = ["ort/tensorrt"]
+coreml = ["ort/coreml"]
+directml = ["ort/directml"]
+rocm = ["ort/rocm"]
+openvino = ["ort/openvino"]
+webgpu = ["ort/webgpu"]

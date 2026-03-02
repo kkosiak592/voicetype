@@ -7,17 +7,15 @@ use tokio::io::AsyncWriteExt;
 
 /// Parakeet TDT int8 ONNX files from HuggingFace repo istupakov/parakeet-tdt-0.6b-v2-onnx.
 ///
-/// Each entry is (filename, expected_size_bytes). Sizes are approximate content-length values
-/// from HuggingFace; we validate by checking content-length matches, not SHA256.
-///
-/// TODO: Compute SHA256 checksums from verified downloads and add them here for stronger
-/// integrity guarantees. HuggingFace does not expose pre-computed SHA256 for LFS files.
-const PARAKEET_FILES: &[(&str, u64)] = &[
-    ("encoder-model.int8.onnx", 652_000_000),
-    ("decoder_joint-model.int8.onnx", 9_000_000),
-    ("nemo128.onnx", 140_000),
-    ("vocab.txt", 9_600),
-    ("config.json", 97),
+/// Each entry is (remote_filename, local_filename, expected_size_bytes).
+/// Remote names are the HuggingFace filenames; local names match what parakeet-rs expects
+/// (it looks for "encoder-model.onnx" and "decoder_joint-model.onnx", not the int8 variants).
+const PARAKEET_FILES: &[(&str, &str, u64)] = &[
+    ("encoder-model.int8.onnx", "encoder-model.onnx", 652_184_014),
+    ("decoder_joint-model.int8.onnx", "decoder_joint-model.onnx", 8_998_286),
+    ("nemo128.onnx", "nemo128.onnx", 139_764),
+    ("vocab.txt", "vocab.txt", 9_384),
+    ("config.json", "config.json", 97),
 ];
 
 /// Events streamed to the frontend during a model download.
@@ -227,14 +225,14 @@ pub fn parakeet_model_dir() -> PathBuf {
 /// successfully atomic-renamed file in a complete download sequence.
 pub fn parakeet_model_exists() -> bool {
     parakeet_model_dir()
-        .join("encoder-model.int8.onnx")
+        .join("encoder-model.onnx")
         .exists()
 }
 
 /// Constructs the HuggingFace resolve URL for a Parakeet int8 ONNX file.
 fn parakeet_download_url(filename: &str) -> String {
     format!(
-        "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/main/int8/{}",
+        "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/main/{}",
         filename
     )
 }
@@ -257,7 +255,7 @@ pub async fn download_parakeet_model(on_event: Channel<DownloadEvent>) -> Result
         .map_err(|e| format!("Failed to create parakeet model directory: {}", e))?;
 
     // Total expected bytes across all files (used for progress denominator)
-    let total_bytes: u64 = PARAKEET_FILES.iter().map(|(_, size)| size).sum();
+    let total_bytes: u64 = PARAKEET_FILES.iter().map(|(_, _, size)| size).sum();
 
     let _ = on_event.send(DownloadEvent::Started {
         url: "parakeet-tdt-v2 (5 files)".to_string(),
@@ -267,15 +265,15 @@ pub async fn download_parakeet_model(on_event: Channel<DownloadEvent>) -> Result
     let client = reqwest::Client::new();
     let mut cumulative_downloaded: u64 = 0;
 
-    for (filename, expected_size) in PARAKEET_FILES {
-        let url = parakeet_download_url(filename);
-        let dest = dest_dir.join(filename);
+    for (remote_name, local_name, expected_size) in PARAKEET_FILES {
+        let url = parakeet_download_url(remote_name);
+        let dest = dest_dir.join(local_name);
         let tmp_path = dest.with_extension("tmp");
 
-        log::info!("Downloading Parakeet file: {} ({})", filename, url);
+        log::info!("Downloading Parakeet file: {} -> {} ({})", remote_name, local_name, url);
 
         let response = client.get(&url).send().await.map_err(|e| {
-            let msg = format!("HTTP request failed for {}: {}", filename, e);
+            let msg = format!("HTTP request failed for {}: {}", remote_name, e);
             let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
             // Best-effort cleanup of entire model directory on error
             let dir = dest_dir.clone();
@@ -290,7 +288,7 @@ pub async fn download_parakeet_model(on_event: Channel<DownloadEvent>) -> Result
         let _ = file_total; // used implicitly via cumulative progress
 
         let mut file = tokio::fs::File::create(&tmp_path).await.map_err(|e| {
-            let msg = format!("Failed to create temp file for {}: {}", filename, e);
+            let msg = format!("Failed to create temp file for {}: {}", local_name, e);
             let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
             let dir = dest_dir.clone();
             tokio::spawn(async move {
@@ -303,7 +301,7 @@ pub async fn download_parakeet_model(on_event: Channel<DownloadEvent>) -> Result
 
         while let Some(chunk_result) = stream.next().await {
             let chunk = chunk_result.map_err(|e| {
-                let msg = format!("Download stream error for {}: {}", filename, e);
+                let msg = format!("Download stream error for {}: {}", remote_name, e);
                 let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
                 let tmp = tmp_path.clone();
                 let dir = dest_dir.clone();
@@ -315,7 +313,7 @@ pub async fn download_parakeet_model(on_event: Channel<DownloadEvent>) -> Result
             })?;
 
             file.write_all(&chunk).await.map_err(|e| {
-                let msg = format!("Failed to write chunk for {}: {}", filename, e);
+                let msg = format!("Failed to write chunk for {}: {}", local_name, e);
                 let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
                 let tmp = tmp_path.clone();
                 let dir = dest_dir.clone();
@@ -336,7 +334,7 @@ pub async fn download_parakeet_model(on_event: Channel<DownloadEvent>) -> Result
 
         // Flush and close before rename
         file.flush().await.map_err(|e| {
-            let msg = format!("Failed to flush temp file for {}: {}", filename, e);
+            let msg = format!("Failed to flush temp file for {}: {}", local_name, e);
             let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
             msg
         })?;
@@ -344,14 +342,14 @@ pub async fn download_parakeet_model(on_event: Channel<DownloadEvent>) -> Result
 
         // Atomically move temp file to final destination
         tokio::fs::rename(&tmp_path, &dest).await.map_err(|e| {
-            let msg = format!("Failed to rename temp file for {}: {}", filename, e);
+            let msg = format!("Failed to rename temp file for {}: {}", local_name, e);
             let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
             msg
         })?;
 
         log::info!(
             "Parakeet file downloaded: {} ({} bytes cumulative)",
-            filename,
+            local_name,
             cumulative_downloaded
         );
     }

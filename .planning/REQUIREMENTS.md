@@ -57,9 +57,9 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Parakeet TDT Engine + Latency Optimization
 
 - [x] **PKT-01**: GPU users can select Parakeet TDT as a transcription engine alongside Whisper
-- [ ] **PKT-02**: Parakeet TDT int8 ONNX model can be downloaded from HuggingFace with progress indicator
+- [x] **PKT-02**: Parakeet TDT int8 ONNX model can be downloaded from HuggingFace with progress indicator
 - [x] **PKT-03**: User can switch between Whisper and Parakeet engines without app restart (hot-swap)
-- [ ] **PKT-04**: Parakeet appears as a selectable model in the first-run setup flow (GPU users only)
+- [x] **PKT-04**: Parakeet appears as a selectable model in the first-run setup flow (GPU users only)
 - [x] **PKT-05**: Corrections engine and ALL CAPS mode apply to Parakeet output (engine-independent post-processing)
 - [x] **PKT-06**: Hold-to-talk mode bypasses Silero VAD post-hoc gate with sample-count check for reduced latency
 
@@ -138,9 +138,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DIST-02 | Phase 7 | Complete |
 | DIST-03 | Phase 7 | Complete |
 | PKT-01 | Phase 8 | Complete |
-| PKT-02 | Phase 8 | Pending |
+| PKT-02 | Phase 8 | Complete |
 | PKT-03 | Phase 8 | Complete |
-| PKT-04 | Phase 8 | Pending |
+| PKT-04 | Phase 8 | Complete |
 | PKT-05 | Phase 8 | Complete |
 | PKT-06 | Phase 8 | Complete |
 
