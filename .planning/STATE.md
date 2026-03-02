@@ -5,7 +5,7 @@ milestone_name: milestone
 current_phase: 08-add-parakeet-tdt-model-and-optimize-transcription-latency
 current_plan: 08-01 complete
 status: executing
-last_updated: "2026-03-02T13:48:16.864Z"
+last_updated: "2026-03-02T15:32:40Z"
 progress:
   total_phases: 10
   completed_phases: 10
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md
 **Current plan:** 08-01 complete
 **Status:** Executing
 
-Last activity: 2026-03-01 - Completed quick task 13: Add fp32 Parakeet model variant — separate download, variant-aware engine dispatch
+Last activity: 2026-03-02 - Completed quick task 17: Remove Fastest badge, move Recommended to Parakeet TDT fp32 for GPU users
 
 ## Session Log
 
@@ -51,6 +51,7 @@ Last activity: 2026-03-01 - Completed quick task 13: Add fp32 Parakeet model var
 - 2026-03-01: Quick task 10 (enable CUDA GPU acceleration for Parakeet TDT) — cuda feature on parakeet-rs, CUDA ExecutionProvider wired in load_parakeet, both call sites updated to use_cuda=true (commit 1f2a9c5)
 - 2026-03-01: Quick task 11 (switch Parakeet transcription to TimestampMode::Sentences) — TimestampMode imported, None -> Some(TimestampMode::Sentences) at transcribe_samples call site, activates group_by_sentences -> deduplicate_words pipeline (commit 2a30c48)
 - 2026-03-02: Quick task 12 (VAD silence trimming) — vad_trim_silence() added to vad.rs (fresh VAD, 1-chunk padding, fail-open); integrated into pipeline.rs after speech gate before engine dispatch (commits 70c66c4, 05266f5)
+- 2026-03-02: Quick task 17 (remove Fastest badge, move Recommended to fp32) — list_models fp32 recommended=gpu_mode, large-v3-turbo recommended=false, check_first_run recommended_model="parakeet-tdt-v2-fp32" for GPU; FirstRun isFastest removed, Fastest badge JSX removed, int8 quality label updated to "Fast (GPU)" (commits 0b90832, ccd1e5d)
 
 ## Decisions
 
@@ -101,7 +102,9 @@ Last activity: 2026-03-01 - Completed quick task 13: Add fp32 Parakeet model var
 - [quick-12-vad-trim]: Single trim point in pipeline.rs before engine dispatch — applies to both Whisper and Parakeet without per-engine changes
 - [quick-13-fp32]: set_engine always reloads Parakeet model (no is_none guard) — required for int8<->fp32 variant switching to take effect without app restart
 - [quick-13-fp32]: fp32 dir is models/parakeet-tdt-v2-fp32 (separate from int8 dir models/parakeet-tdt-v2)
-- [quick-13-fp32]: isFastest badge kept on int8 only — quantization makes it faster than fp32
+- [quick-13-fp32]: isFastest badge kept on int8 only — quantization makes it faster than fp32 (NOTE: Fastest badge removed entirely in quick-17)
+- [quick-17]: parakeet-tdt-v2-fp32 is recommended for GPU users — recommended=gpu_mode in list_models, recommended_model="parakeet-tdt-v2-fp32" in check_first_run
+- [quick-17]: Fastest badge removed from FirstRun entirely; int8 quality label changed to "Fast (GPU)"
 - [Phase quick-16]: LSTM state updates only on non-blank token emission — matches onnx-asr prev_state = state inside if token != blank_idx block
 - [Phase quick-16]: Frame advancement check unconditional on duration_step > 0 — no emitted_tokens guard, applies at utterance start and after blank sequences
 
@@ -125,6 +128,7 @@ Last activity: 2026-03-01 - Completed quick task 13: Add fp32 Parakeet model var
 | 12 | VAD silence trimming: strip leading/trailing silence before engine dispatch, 1-chunk padding, fail-open | 2026-03-02 | 05266f5 | [12-implement-vad-silence-trimming-for-parak](./quick/12-implement-vad-silence-trimming-for-parak/) |
 | 15 | Skip redundant Whisper model reload when already loaded — early-return guard in set_model() using settings.json as source of truth | 2026-03-01 | c5e7126 | [15-skip-redundant-whisper-model-reload-when](./quick/15-skip-redundant-whisper-model-reload-when/) |
 | 13 | Add fp32 Parakeet model variant as selectable option — separate download dir, variant-aware engine dispatch, independent per-variant download state | 2026-03-01 | c4e3cf0 | [13-add-fp32-parakeet-model-variant-as-selec](./quick/13-add-fp32-parakeet-model-variant-as-selec/) |
+| 17 | Remove Fastest badge from FirstRun, move Recommended badge to Parakeet TDT fp32 for GPU users | 2026-03-02 | ccd1e5d | [17-remove-fastest-badge-and-move-recommende](./quick/17-remove-fastest-badge-and-move-recommende/) |
 
 ## Accumulated Context
 
