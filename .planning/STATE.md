@@ -7,8 +7,8 @@ last_updated: "2026-03-02"
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 1
+  completed_plans: 1
 ---
 
 # Session State
@@ -18,18 +18,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** Phase 15 — Hook Module (not started)
+**Current focus:** Phase 15 — Hook Module (Plan 01 complete)
 
 ## Position
 
 **Milestone:** v1.2 Keyboard Hook
 **Phase:** 15 — Hook Module
-**Plan:** —
-**Status:** Roadmap defined, ready to plan Phase 15
+**Plan:** 01 complete, ready for Plan 02
+**Status:** Phase 15 in progress — hook infrastructure built
 
 [##########------------------------------------------] 0% (0/4 phases)
 
-Last activity: 2026-03-02 — v1.1 milestone completed, v1.2 roadmap ready
+Last activity: 2026-03-02 — Phase 15 Plan 01 complete (keyboard_hook.rs infrastructure)
 
 ## Performance Metrics
 
@@ -37,7 +37,7 @@ Last activity: 2026-03-02 — v1.1 milestone completed, v1.2 roadmap ready
 |--------|-------|
 | Phases defined | 4 |
 | Requirements mapped | 15/15 |
-| Plans complete | 0 |
+| Plans complete | 1 |
 | Blockers | 0 |
 
 ## Accumulated Context
@@ -50,6 +50,9 @@ Last activity: 2026-03-02 — v1.1 milestone completed, v1.2 roadmap ready
 - v1.2: VK_E8 mask-key injection for Start menu suppression — VK_07 reserved by Xbox Game Bar on Win10 1909+
 - v1.2: tauri-plugin-global-shortcut kept as fallback — hook path for modifier-only combos, plugin for standard combos
 - v1.2: No new Cargo dependencies — windows v0.58 + 3 feature flags only
+- 15-01: std::thread::spawn for hook thread (not tokio) — WH_KEYBOARD_LL requires stable OS thread with Win32 message pump
+- 15-01: hmod=None in SetWindowsHookExW (dwThreadId=0) — correct for global hooks; using GetModuleHandle causes silent removal
+- 15-01: LLKHF_INJECTED guard in hook_proc prevents recursion from Plan 02 VK_E8 injection
 
 ### Research Flags (from SUMMARY.md)
 
@@ -69,5 +72,5 @@ None active.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: v1.1 milestone archived — ready to plan Phase 15
+Stopped at: Completed 15-01-PLAN.md
 Resume file: None

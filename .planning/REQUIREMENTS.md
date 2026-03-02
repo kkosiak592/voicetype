@@ -9,10 +9,10 @@ Requirements for Ctrl+Win modifier-only hotkey activation. Each maps to roadmap 
 
 ### Hook Infrastructure
 
-- [ ] **HOOK-01**: App installs WH_KEYBOARD_LL hook on a dedicated thread with Win32 GetMessage loop
-- [ ] **HOOK-02**: Hook callback completes in under 5ms using only AtomicBool writes and non-blocking channel sends
-- [ ] **HOOK-03**: Tauri builder applies DeviceEventFilter::Always so hook fires when Tauri window is focused
-- [ ] **HOOK-04**: App cleanly uninstalls hook on shutdown via PostThreadMessageW(WM_QUIT) with no dangling hook
+- [x] **HOOK-01**: App installs WH_KEYBOARD_LL hook on a dedicated thread with Win32 GetMessage loop
+- [x] **HOOK-02**: Hook callback completes in under 5ms using only AtomicBool writes and non-blocking channel sends
+- [x] **HOOK-03**: Tauri builder applies DeviceEventFilter::Always so hook fires when Tauri window is focused
+- [x] **HOOK-04**: App cleanly uninstalls hook on shutdown via PostThreadMessageW(WM_QUIT) with no dangling hook
 
 ### Modifier Detection
 
@@ -78,10 +78,10 @@ Deferred to future release. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HOOK-01 | Phase 15 | Pending |
-| HOOK-02 | Phase 15 | Pending |
-| HOOK-03 | Phase 15 | Pending |
-| HOOK-04 | Phase 15 | Pending |
+| HOOK-01 | Phase 15 | Complete |
+| HOOK-02 | Phase 15 | Complete |
+| HOOK-03 | Phase 15 | Complete |
+| HOOK-04 | Phase 15 | Complete |
 | MOD-01 | Phase 15 | Pending |
 | MOD-02 | Phase 15 | Pending |
 | MOD-03 | Phase 15 | Pending |
