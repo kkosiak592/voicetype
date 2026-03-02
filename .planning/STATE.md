@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Auto-Updates & CI/CD
 current_phase: 11
-current_plan: null
-status: ready_to_plan
+current_plan: "01"
+status: in_progress
 last_updated: "2026-03-02"
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 0
+  completed_plans: 1
 ---
 
 # Session State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Milestone:** v1.1 Auto-Updates & CI/CD
 **Phase:** 11 of 14 (Signing & Repo Setup)
-**Plan:** — (not started)
-**Status:** Ready to plan
-Last activity: 2026-03-02 - Completed quick task 25: Auto-select recommended model on first startup with DXGI GPU detection
+**Plan:** 01 (complete)
+**Status:** In progress
+Last activity: 2026-03-02 - Completed Phase 11 Plan 01: Signing & Repo Setup — Ed25519 keypair, public GitHub repo kkosiak592/voicetype, GitHub Actions secrets set, signing round-trip verified
 
-Progress: [░░░░░░░░░░] 0% (0/5 plans)
+Progress: [██░░░░░░░░] 20% (1/5 plans)
 
 ## Accumulated Context
 
@@ -39,6 +39,9 @@ Progress: [░░░░░░░░░░] 0% (0/5 plans)
 - v1.1: tauri-plugin-updater + GitHub Releases chosen (Option A) — zero cost, official Tauri approach, best UX for <20 users
 - v1.1: Public GitHub repo required — updater needs unauthenticated access to release assets
 - v1.1: Ed25519 signing — private key stored only in GitHub secrets + local backup; loss means existing installs cannot receive future updates
+- 11-01: bundle.createUpdaterArtifacts set to "v1Compatible" for Tauri 2 backward-compatible signature format
+- 11-01: tauri-plugin-updater NOT added to Cargo.toml in Phase 11 — Phase 12 scope; pubkey/endpoint config only here
+- 11-01: Ed25519 private key lives in ~/.voicetype-signing.key — outside repo, no .gitignore entry needed
 
 ### Pending Todos
 
@@ -48,7 +51,7 @@ Progress: [░░░░░░░░░░] 0% (0/5 plans)
 
 ### Blockers/Concerns
 
-- Ed25519 private key backup is critical — must be stored in password manager before adding to GitHub secrets; key loss is irreversible
+None active. (Ed25519 private key backup completed by user at Task 2 checkpoint — resolved)
 
 ### Quick Tasks Completed
 
@@ -59,5 +62,5 @@ Progress: [░░░░░░░░░░] 0% (0/5 plans)
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: v1.1 roadmap created — ready to plan Phase 11
+Stopped at: Completed 11-01-PLAN.md (Phase 11 Plan 01: Signing & Repo Setup)
 Resume file: None

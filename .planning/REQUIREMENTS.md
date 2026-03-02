@@ -9,7 +9,7 @@ Requirements for auto-updates and CI/CD release infrastructure. Each maps to roa
 
 ### Updater Integration
 
-- [ ] **UPD-01**: App generates Ed25519 signing keypair and configures tauri-plugin-updater with public key
+- [x] **UPD-01**: App generates Ed25519 signing keypair and configures tauri-plugin-updater with public key
 - [ ] **UPD-02**: App registers tauri-plugin-updater and tauri-plugin-process plugins in Rust backend
 - [ ] **UPD-03**: App checks for updates on launch by fetching latest.json from GitHub Releases endpoint
 - [ ] **UPD-04**: User sees a non-blocking notification when an update is available showing version and release notes
@@ -24,11 +24,11 @@ Requirements for auto-updates and CI/CD release infrastructure. Each maps to roa
 - [ ] **CICD-03**: Workflow signs release artifacts with Ed25519 private key from GitHub secrets
 - [ ] **CICD-04**: Workflow generates latest.json with correct download URLs and signature
 - [ ] **CICD-05**: Workflow creates GitHub Release with installer, latest.json, and release notes
-- [ ] **CICD-06**: GitHub repo secrets configured for TAURI_SIGNING_PRIVATE_KEY and password
+- [x] **CICD-06**: GitHub repo secrets configured for TAURI_SIGNING_PRIVATE_KEY and password
 
 ### Release Infrastructure
 
-- [ ] **REL-01**: Source code pushed to public GitHub repository
+- [x] **REL-01**: Source code pushed to public GitHub repository
 - [ ] **REL-02**: tauri.conf.json updater endpoint configured to point at GitHub Releases latest.json
 - [ ] **REL-03**: Documented release workflow: version bump → commit → tag → push → automatic build
 - [ ] **REL-04**: Changelog/release notes template for consistent release communication
@@ -60,7 +60,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| UPD-01 | Phase 11 | Pending |
+| UPD-01 | Phase 11 | Complete |
 | UPD-02 | Phase 12 | Pending |
 | UPD-03 | Phase 12 | Pending |
 | UPD-04 | Phase 12 | Pending |
@@ -72,8 +72,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CICD-03 | Phase 13 | Pending |
 | CICD-04 | Phase 13 | Pending |
 | CICD-05 | Phase 13 | Pending |
-| CICD-06 | Phase 11 | Pending |
-| REL-01 | Phase 11 | Pending |
+| CICD-06 | Phase 11 | Complete |
+| REL-01 | Phase 11 | Complete |
 | REL-02 | Phase 12 | Pending |
 | REL-03 | Phase 14 | Pending |
 | REL-04 | Phase 14 | Pending |
