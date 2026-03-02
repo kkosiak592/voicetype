@@ -32,10 +32,17 @@ pub fn load_parakeet(model_dir: &str, use_cuda: bool) -> Result<ParakeetTDT, Str
     let parakeet = ParakeetTDT::from_pretrained(model_dir, config)
         .map_err(|e| format!("Failed to load Parakeet TDT model from '{}': {}", model_dir, e))?;
 
-    log::info!(
-        "Parakeet TDT model loaded in {}ms",
-        start.elapsed().as_millis(),
-    );
+    let load_ms = start.elapsed().as_millis();
+    log::info!("Parakeet TDT model loaded in {}ms", load_ms);
+
+    if use_cuda {
+        log::info!(
+            "Parakeet TDT EP: CUDA requested — if load took >3s, CUDA likely initialized; \
+             confirm with first inference (<200ms = GPU, >800ms = CPU fallback)"
+        );
+    } else {
+        log::info!("Parakeet TDT EP: CPU");
+    }
 
     Ok(parakeet)
 }
