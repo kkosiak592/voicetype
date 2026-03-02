@@ -107,21 +107,21 @@ Deferred to future release. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HOOK-01 | — | Pending |
-| HOOK-02 | — | Pending |
-| HOOK-03 | — | Pending |
-| HOOK-04 | — | Pending |
-| MOD-01 | — | Pending |
-| MOD-02 | — | Pending |
-| MOD-03 | — | Pending |
-| MOD-04 | — | Pending |
-| MOD-05 | — | Pending |
-| INT-01 | — | Pending |
-| INT-02 | — | Pending |
-| INT-03 | — | Pending |
-| UI-01 | — | Pending |
-| UI-02 | — | Pending |
-| DIST-01 | — | Pending |
+| HOOK-01 | Phase 15 | Pending |
+| HOOK-02 | Phase 15 | Pending |
+| HOOK-03 | Phase 15 | Pending |
+| HOOK-04 | Phase 15 | Pending |
+| MOD-01 | Phase 15 | Pending |
+| MOD-02 | Phase 15 | Pending |
+| MOD-03 | Phase 15 | Pending |
+| MOD-04 | Phase 15 | Pending |
+| MOD-05 | Phase 15 | Pending |
+| INT-01 | Phase 15 | Pending |
+| INT-02 | Phase 16 | Pending |
+| INT-03 | Phase 16 | Pending |
+| UI-01 | Phase 17 | Pending |
+| UI-02 | Phase 17 | Pending |
+| DIST-01 | Phase 18 | Pending |
 | UPD-01 | Phase 11 | Complete |
 | UPD-02 | Phase 12 | Complete |
 | UPD-03 | Phase 12 | Complete |
@@ -142,9 +142,9 @@ Deferred to future release. Tracked but not in current roadmap.
 
 **Coverage:**
 - v1.2 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15 ⚠️
+- Mapped to phases: 15
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-02*
-*Last updated: 2026-03-02 after v1.2 requirements definition*
+*Last updated: 2026-03-02 after v1.2 roadmap creation*

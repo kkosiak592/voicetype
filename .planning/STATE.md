@@ -5,7 +5,7 @@ milestone_name: Keyboard Hook
 status: active
 last_updated: "2026-03-02"
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -18,15 +18,27 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** Defining requirements
+**Current focus:** Phase 15 — Hook Module (not started)
 
 ## Position
 
 **Milestone:** v1.2 Keyboard Hook
-**Phase:** Not started (defining requirements)
+**Phase:** 15 — Hook Module
 **Plan:** —
-**Status:** Defining requirements
-Last activity: 2026-03-02 — Milestone v1.2 started
+**Status:** Roadmap defined, ready to plan Phase 15
+
+[##########------------------------------------------] 0% (0/4 phases)
+
+Last activity: 2026-03-02 — Roadmap created for v1.2
+
+## Performance Metrics
+
+| Metric | Value |
+|--------|-------|
+| Phases defined | 4 |
+| Requirements mapped | 15/15 |
+| Plans complete | 0 |
+| Blockers | 0 |
 
 ## Accumulated Context
 
@@ -36,6 +48,17 @@ Last activity: 2026-03-02 — Milestone v1.2 started
 - v1.1: Public GitHub repo required — updater needs unauthenticated access to release assets
 - v1.1: Ed25519 signing — private key stored only in GitHub secrets + local backup
 - v1.1: bundle.createUpdaterArtifacts set to "v1Compatible" for Tauri 2 backward-compatible signature format
+- v1.2: WH_KEYBOARD_LL on dedicated thread — no Tokio task, no main thread; Win32 GetMessage loop required
+- v1.2: AtomicBool + mpsc::try_send only in hook callback — never lock Mutex, never allocate, never async
+- v1.2: DeviceEventFilter::Always applied before build() — mandatory fix for Tauri issue #13919
+- v1.2: VK_E8 mask-key injection for Start menu suppression — VK_07 reserved by Xbox Game Bar on Win10 1909+
+- v1.2: tauri-plugin-global-shortcut kept as fallback — hook path for modifier-only combos, plugin for standard combos
+- v1.2: No new Cargo dependencies — windows v0.58 + 3 feature flags only
+
+### Research Flags (from SUMMARY.md)
+
+- Phase 15: Windows 11 Start menu suppression timing for VK_E8 injection (KEYDOWN only vs KEYDOWN+KEYUP) requires empirical validation during implementation — not resolvable from documentation alone
+- Phase 18: Defender ML sensitivity for WH_KEYBOARD_LL + SendInput on unsigned vs signed binary cannot be determined pre-build — VirusTotal scan of actual v1.2 binary is the gate
 
 ### Pending Todos
 
@@ -50,5 +73,5 @@ None active.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Starting milestone v1.2 Keyboard Hook
+Stopped at: Roadmap defined for v1.2 Keyboard Hook — ready to plan Phase 15
 Resume file: None
