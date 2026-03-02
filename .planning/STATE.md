@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 **Phase:** 11 of 14 (Signing & Repo Setup)
 **Plan:** — (not started)
 **Status:** Ready to plan
-Last activity: 2026-03-02 — Roadmap created for v1.1
+Last activity: 2026-03-02 - Completed quick task 25: Auto-select recommended model on first startup with DXGI GPU detection
 
 Progress: [░░░░░░░░░░] 0% (0/5 plans)
 
@@ -49,6 +49,12 @@ Progress: [░░░░░░░░░░] 0% (0/5 plans)
 ### Blockers/Concerns
 
 - Ed25519 private key backup is critical — must be stored in password manager before adding to GitHub secrets; key loss is irreversible
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 25 | Auto-select recommended model on first startup with DXGI GPU detection | 2026-03-02 | 59551ae | [25-auto-select-recommended-model-on-first-s](./quick/25-auto-select-recommended-model-on-first-s/) |
 
 ## Session Continuity
 
