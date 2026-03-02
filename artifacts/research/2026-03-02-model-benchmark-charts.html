@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASR Model Benchmark Comparison</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    padding: 32px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #f0f6fc;
+  }
+  .subtitle {
+    color: #8b949e;
+    font-size: 14px;
+    margin-bottom: 40px;
+  }
+  .chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 32px;
+  }
+  .chart-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .chart-card.full-width {
+    grid-column: 1 / -1;
+  }
+  .chart-card h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #f0f6fc;
+  }
+  .chart-card .desc {
+    font-size: 12px;
+    color: #8b949e;
+    margin-bottom: 16px;
+  }
+  .chart-container {
+    position: relative;
+    width: 100%;
+    height: 320px;
+  }
+  .chart-container.tall {
+    height: 400px;
+  }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .summary-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+  }
+  .summary-card .model-name {
+    font-size: 13px;
+    color: #8b949e;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .summary-card .metric {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .summary-card .metric-label {
+    font-size: 12px;
+    color: #8b949e;
+  }
+  .summary-card .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-top: 8px;
+  }
+  .badge-green { background: #0d4429; color: #3fb950; }
+  .badge-yellow { background: #3d2e00; color: #d29922; }
+  .badge-blue { background: #0c2d6b; color: #58a6ff; }
+  .color-green { color: #3fb950; }
+  .color-yellow { color: #d29922; }
+  .color-blue { color: #58a6ff; }
+  .footer {
+    text-align: center;
+    color: #484f58;
+    font-size: 12px;
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #21262d;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 2px solid #30363d;
+    color: #8b949e;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #21262d;
+  }
+  tr:last-child td { border-bottom: none; }
+  .winner { color: #3fb950; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>ASR Model Benchmark Comparison</h1>
+<p class="subtitle">Whisper Small.en (Q5_1) vs Whisper Large-v3-Turbo (Q5_0) vs Parakeet TDT v2 (FP32) &mdash; March 2026</p>
+
+<!-- Summary Cards -->
+<div class="summary-grid">
+  <div class="summary-card">
+    <div class="model-name">Whisper Small.en</div>
+    <div class="metric color-blue">190 MB</div>
+    <div class="metric-label">Download Size (Q5_1)</div>
+    <span class="badge badge-blue">Lightweight</span>
+  </div>
+  <div class="summary-card">
+    <div class="model-name">Whisper Large-v3-Turbo</div>
+    <div class="metric color-yellow">574 MB</div>
+    <div class="metric-label">Download Size (Q5_0)</div>
+    <span class="badge badge-yellow">Multilingual</span>
+  </div>
+  <div class="summary-card">
+    <div class="model-name">Parakeet TDT v2</div>
+    <div class="metric color-green">2.56 GB</div>
+    <div class="metric-label">Download Size (FP32)</div>
+    <span class="badge badge-green">Most Accurate</span>
+  </div>
+</div>
+
+<!-- Charts -->
+<div class="chart-grid">
+
+  <!-- WER LibriSpeech -->
+  <div class="chart-card">
+    <h2>Word Error Rate — LibriSpeech</h2>
+    <p class="desc">Lower is better. Gold-standard academic benchmark.</p>
+    <div class="chart-container">
+      <canvas id="werLibrispeech"></canvas>
+    </div>
+  </div>
+
+  <!-- Speed RTFx -->
+  <div class="chart-card">
+    <h2>Inference Speed (RTFx)</h2>
+    <p class="desc">Higher is faster. How many times faster than real-time.</p>
+    <div class="chart-container">
+      <canvas id="speedChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Average WER -->
+  <div class="chart-card">
+    <h2>Average WER (Mixed Benchmarks)</h2>
+    <p class="desc">Lower is better. Across diverse real-world audio datasets.</p>
+    <div class="chart-container">
+      <canvas id="avgWerChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Transcription Time -->
+  <div class="chart-card">
+    <h2>Time to Transcribe 60 min Audio</h2>
+    <p class="desc">Lower is better. Seconds needed on GPU.</p>
+    <div class="chart-container">
+      <canvas id="transcribeTime"></canvas>
+    </div>
+  </div>
+
+  <!-- Radar Chart -->
+  <div class="chart-card full-width">
+    <h2>Overall Comparison Radar</h2>
+    <p class="desc">Normalized scores (0-100). Higher is better for all axes.</p>
+    <div class="chart-container tall">
+      <canvas id="radarChart"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<!-- Detailed Table -->
+<div class="chart-card full-width" style="margin-bottom: 32px;">
+  <h2>Detailed Benchmark Data</h2>
+  <p class="desc">Complete comparison across all measured metrics.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Metric</th>
+        <th>Whisper Small.en</th>
+        <th>Whisper Large-v3-Turbo</th>
+        <th>Parakeet TDT v2</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Parameters</td>
+        <td>244M</td>
+        <td>809M</td>
+        <td>600M</td>
+      </tr>
+      <tr>
+        <td>Your File Size</td>
+        <td class="winner">190 MB</td>
+        <td>574 MB</td>
+        <td>2,560 MB</td>
+      </tr>
+      <tr>
+        <td>Format</td>
+        <td>GGML Q5_1</td>
+        <td>GGML Q5_0</td>
+        <td>ONNX FP32</td>
+      </tr>
+      <tr>
+        <td>LibriSpeech test-clean WER</td>
+        <td>3.05%</td>
+        <td>~2.5%</td>
+        <td class="winner">1.69%</td>
+      </tr>
+      <tr>
+        <td>LibriSpeech test-other WER</td>
+        <td>7.53%</td>
+        <td>~5.2%</td>
+        <td class="winner">3.19%</td>
+      </tr>
+      <tr>
+        <td>Avg WER (real-world mix)</td>
+        <td>~12-14%</td>
+        <td>~7.75%</td>
+        <td class="winner">6.05%</td>
+      </tr>
+      <tr>
+        <td>RTFx (GPU, batched)</td>
+        <td>~40x</td>
+        <td>~216x</td>
+        <td class="winner">3,386x</td>
+      </tr>
+      <tr>
+        <td>60 min audio transcription</td>
+        <td>~90s</td>
+        <td>~17s</td>
+        <td class="winner">~1s</td>
+      </tr>
+      <tr>
+        <td>VRAM Required</td>
+        <td class="winner">~2 GB</td>
+        <td>~6 GB</td>
+        <td class="winner">~2 GB</td>
+      </tr>
+      <tr>
+        <td>Language Support</td>
+        <td>English only</td>
+        <td class="winner">99 languages</td>
+        <td>English only</td>
+      </tr>
+      <tr>
+        <td>Quantization WER Penalty</td>
+        <td>~33% higher</td>
+        <td>~2x higher</td>
+        <td class="winner">None (FP32)</td>
+      </tr>
+      <tr>
+        <td>GPU Required</td>
+        <td class="winner">No (CPU ok)</td>
+        <td>Recommended</td>
+        <td>Yes (CUDA/DirectML)</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="footer">
+  Sources: NVIDIA HuggingFace Model Card, OpenAI Whisper Paper, whisper.cpp benchmarks, Northflank/Modal STT comparisons &mdash; March 2026
+</div>
+
+<script>
+const colors = {
+  small: { bg: 'rgba(88, 166, 255, 0.8)', border: '#58a6ff' },
+  turbo: { bg: 'rgba(210, 153, 34, 0.8)', border: '#d29922' },
+  parakeet: { bg: 'rgba(63, 185, 80, 0.8)', border: '#3fb950' }
+};
+
+const defaultOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      display: true,
+      labels: { color: '#8b949e', font: { size: 12 } }
+    }
+  },
+  scales: {
+    x: {
+      ticks: { color: '#8b949e' },
+      grid: { color: '#21262d' }
+    },
+    y: {
+      ticks: { color: '#8b949e' },
+      grid: { color: '#21262d' },
+      beginAtZero: true
+    }
+  }
+};
+
+// WER LibriSpeech
+new Chart(document.getElementById('werLibrispeech'), {
+  type: 'bar',
+  data: {
+    labels: ['test-clean', 'test-other'],
+    datasets: [
+      {
+        label: 'Whisper Small.en',
+        data: [3.05, 7.53],
+        backgroundColor: colors.small.bg,
+        borderColor: colors.small.border,
+        borderWidth: 1,
+        borderRadius: 4
+      },
+      {
+        label: 'Whisper Large-v3-Turbo',
+        data: [2.5, 5.2],
+        backgroundColor: colors.turbo.bg,
+        borderColor: colors.turbo.border,
+        borderWidth: 1,
+        borderRadius: 4
+      },
+      {
+        label: 'Parakeet TDT v2',
+        data: [1.69, 3.19],
+        backgroundColor: colors.parakeet.bg,
+        borderColor: colors.parakeet.border,
+        borderWidth: 1,
+        borderRadius: 4
+      }
+    ]
+  },
+  options: {
+    ...defaultOptions,
+    scales: {
+      ...defaultOptions.scales,
+      y: { ...defaultOptions.scales.y, title: { display: true, text: 'WER %', color: '#8b949e' } }
+    }
+  }
+});
+
+// Speed RTFx (log scale)
+new Chart(document.getElementById('speedChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Whisper Small.en', 'Whisper Large-v3-Turbo', 'Parakeet TDT v2'],
+    datasets: [{
+      label: 'RTFx (times faster than real-time)',
+      data: [40, 216, 3386],
+      backgroundColor: [colors.small.bg, colors.turbo.bg, colors.parakeet.bg],
+      borderColor: [colors.small.border, colors.turbo.border, colors.parakeet.border],
+      borderWidth: 1,
+      borderRadius: 4
+    }]
+  },
+  options: {
+    ...defaultOptions,
+    indexAxis: 'y',
+    plugins: {
+      ...defaultOptions.plugins,
+      legend: { display: false }
+    },
+    scales: {
+      x: {
+        type: 'logarithmic',
+        ticks: { color: '#8b949e' },
+        grid: { color: '#21262d' },
+        title: { display: true, text: 'RTFx (log scale)', color: '#8b949e' }
+      },
+      y: {
+        ticks: { color: '#8b949e' },
+        grid: { color: '#21262d' }
+      }
+    }
+  }
+});
+
+// Average WER
+new Chart(document.getElementById('avgWerChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Whisper Small.en', 'Whisper Large-v3-Turbo', 'Parakeet TDT v2'],
+    datasets: [{
+      label: 'Average WER %',
+      data: [13, 7.75, 6.05],
+      backgroundColor: [colors.small.bg, colors.turbo.bg, colors.parakeet.bg],
+      borderColor: [colors.small.border, colors.turbo.border, colors.parakeet.border],
+      borderWidth: 1,
+      borderRadius: 4
+    }]
+  },
+  options: {
+    ...defaultOptions,
+    plugins: { ...defaultOptions.plugins, legend: { display: false } },
+    scales: {
+      ...defaultOptions.scales,
+      y: { ...defaultOptions.scales.y, title: { display: true, text: 'WER %', color: '#8b949e' } }
+    }
+  }
+});
+
+// Transcription Time
+new Chart(document.getElementById('transcribeTime'), {
+  type: 'bar',
+  data: {
+    labels: ['Whisper Small.en', 'Whisper Large-v3-Turbo', 'Parakeet TDT v2'],
+    datasets: [{
+      label: 'Seconds to transcribe 60 min',
+      data: [90, 17, 1],
+      backgroundColor: [colors.small.bg, colors.turbo.bg, colors.parakeet.bg],
+      borderColor: [colors.small.border, colors.turbo.border, colors.parakeet.border],
+      borderWidth: 1,
+      borderRadius: 4
+    }]
+  },
+  options: {
+    ...defaultOptions,
+    plugins: { ...defaultOptions.plugins, legend: { display: false } },
+    scales: {
+      ...defaultOptions.scales,
+      y: {
+        type: 'logarithmic',
+        ticks: { color: '#8b949e' },
+        grid: { color: '#21262d' },
+        title: { display: true, text: 'Seconds (log scale)', color: '#8b949e' }
+      }
+    }
+  }
+});
+
+// Radar Chart
+new Chart(document.getElementById('radarChart'), {
+  type: 'radar',
+  data: {
+    labels: ['Accuracy', 'Speed', 'Low VRAM', 'Noise Robustness'],
+    datasets: [
+      {
+        label: 'Whisper Small.en',
+        data: [40, 15, 90, 35],
+        borderColor: colors.small.border,
+        backgroundColor: 'rgba(88, 166, 255, 0.15)',
+        borderWidth: 2,
+        pointBackgroundColor: colors.small.border
+      },
+      {
+        label: 'Whisper Large-v3-Turbo',
+        data: [70, 45, 40, 55],
+        borderColor: colors.turbo.border,
+        backgroundColor: 'rgba(210, 153, 34, 0.15)',
+        borderWidth: 2,
+        pointBackgroundColor: colors.turbo.border
+      },
+      {
+        label: 'Parakeet TDT v2',
+        data: [95, 100, 90, 80],
+        borderColor: colors.parakeet.border,
+        backgroundColor: 'rgba(63, 185, 80, 0.15)',
+        borderWidth: 2,
+        pointBackgroundColor: colors.parakeet.border
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        labels: { color: '#8b949e', font: { size: 12 } }
+      }
+    },
+    scales: {
+      r: {
+        beginAtZero: true,
+        max: 100,
+        ticks: { color: '#484f58', backdropColor: 'transparent', stepSize: 25 },
+        grid: { color: '#21262d' },
+        angleLines: { color: '#21262d' },
+        pointLabels: { color: '#8b949e', font: { size: 12 } }
+      }
+    }
+  }
+});
+</script>
+
+</body>
+</html>

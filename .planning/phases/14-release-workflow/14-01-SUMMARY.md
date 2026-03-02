@@ -105,6 +105,14 @@ None - no external service configuration required.
 - Phase 14 milestone complete — v1.1 Auto-Updates & CI/CD milestone fully delivered
 - Future work: Claude skill for automated release flow (identified as deferred in context)
 
+## Self-Check: PASSED
+
+- FOUND: RELEASING.md
+- FOUND: CHANGELOG.md
+- FOUND: .planning/phases/14-release-workflow/14-01-SUMMARY.md
+- FOUND: f3278b3 (Task 1 commit)
+- FOUND: 5926675 (Task 2 commit)
+
 ---
 *Phase: 14-release-workflow*
 *Completed: 2026-03-02*

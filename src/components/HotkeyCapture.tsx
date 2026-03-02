@@ -65,6 +65,16 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
   const [error, setError] = useState<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
+  // Unregister the global hotkey when entering capture mode so that
+  // pressing the current key combo gets captured as input rather than
+  // triggering the shortcut action. Re-register when leaving capture
+  // mode without a change (Escape / click-away).
+  useEffect(() => {
+    if (listening && value) {
+      invoke('unregister_hotkey', { key: value }).catch(() => {});
+    }
+  }, [listening, value]);
+
   useEffect(() => {
     if (!listening) return;
 
@@ -74,6 +84,10 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
 
       if (e.code === 'Escape') {
         setListening(false);
+        // Re-register the original hotkey since the user cancelled.
+        if (value) {
+          invoke('register_hotkey', { key: value }).catch(() => {});
+        }
         return;
       }
 
@@ -83,18 +97,44 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
       setListening(false);
       setError(null);
 
+      if (combo === value) {
+        // Same key pressed — just re-register it, no persist needed.
+        invoke('register_hotkey', { key: value }).catch(() => {});
+        return;
+      }
+
       try {
-        await invoke('rebind_hotkey', { old: value, newKey: combo });
+        // Old key is already unregistered; just register the new one.
+        await invoke('rebind_hotkey', { old: '', newKey: combo });
         const store = await getStore();
         await store.set('hotkey', combo);
         onChange(combo);
       } catch (err) {
+        // Registration failed — restore the original hotkey.
+        if (value) {
+          invoke('register_hotkey', { key: value }).catch(() => {});
+        }
         setError(String(err));
       }
     };
 
+    // Also handle click-away: if the user clicks outside the capture box,
+    // cancel listening and re-register the original hotkey.
+    const handleClickOutside = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+        setListening(false);
+        if (value) {
+          invoke('register_hotkey', { key: value }).catch(() => {});
+        }
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
+    document.addEventListener('mousedown', handleClickOutside, true);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+      document.removeEventListener('mousedown', handleClickOutside, true);
+    };
   }, [listening, value, onChange]);
 
   function formatHotkey(hotkey: string): string {
