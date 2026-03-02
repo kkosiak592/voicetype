@@ -1,5 +1,4 @@
 use serde::Serialize;
-use tauri::Manager;
 use tauri_plugin_updater::UpdaterExt;
 
 /// Result of checking for an available update.
