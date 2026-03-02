@@ -55,7 +55,10 @@
   3. After Ctrl+Win activates dictation, the Start menu does not open on Win key release; pressing Win alone (without Ctrl) continues to open the Start menu normally
   4. Closing VoiceType while the hook is installed leaves no dangling hook — subsequent keyboard input is unaffected and no error appears in Event Viewer
   5. Rapid Ctrl+Win activations (20 in sequence) produce exactly 20 recording sessions with no dropped or duplicate events, confirming the non-blocking callback stays under the 5ms budget
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 15-01-PLAN.md — Hook thread infrastructure, Cargo.toml features, DeviceEventFilter fix
+- [ ] 15-02-PLAN.md — Modifier state machine with debounce, exact-match, VK_E8 suppression
+- [ ] 15-03-PLAN.md — Wire into setup(), conditional routing, default hotkey change, end-to-end verification
 
 ### Phase 16: Rebind and Coexistence
 **Goal**: Changing the hotkey in settings correctly switches between the hook backend and tauri-plugin-global-shortcut at runtime, with no double-firing, and surfaces hook installation failure as a visible status in settings
@@ -94,7 +97,7 @@ Phases execute in numeric order: 15 → 16 → 17 (parallelizable with 16 after 
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 15. Hook Module | v1.2 | 0/? | Not started | - |
+| 15. Hook Module | v1.2 | 0/3 | Planned | - |
 | 16. Rebind and Coexistence | v1.2 | 0/? | Not started | - |
 | 17. Frontend Capture UI | v1.2 | 0/? | Not started | - |
 | 18. Integration and Distribution | v1.2 | 0/? | Not started | - |
