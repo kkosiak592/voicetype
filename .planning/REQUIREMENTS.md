@@ -30,8 +30,8 @@ Requirements for auto-updates and CI/CD release infrastructure. Each maps to roa
 
 - [x] **REL-01**: Source code pushed to public GitHub repository
 - [x] **REL-02**: tauri.conf.json updater endpoint configured to point at GitHub Releases latest.json
-- [ ] **REL-03**: Documented release workflow: version bump → commit → tag → push → automatic build
-- [ ] **REL-04**: Changelog/release notes template for consistent release communication
+- [x] **REL-03**: Documented release workflow: version bump → commit → tag → push → automatic build
+- [x] **REL-04**: Changelog/release notes template for consistent release communication
 
 ## v2 Requirements
 
@@ -75,8 +75,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CICD-06 | Phase 11 | Complete |
 | REL-01 | Phase 11 | Complete |
 | REL-02 | Phase 12 | Complete |
-| REL-03 | Phase 14 | Pending |
-| REL-04 | Phase 14 | Pending |
+| REL-03 | Phase 14 | Complete |
+| REL-04 | Phase 14 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 17 total

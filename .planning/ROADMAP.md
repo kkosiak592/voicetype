@@ -30,7 +30,7 @@
 - [x] **Phase 11: Signing & Repo Setup** - Generate Ed25519 keypair, push source to public GitHub repo, configure secrets (completed 2026-03-02)
 - [x] **Phase 12: Plugin Integration** - Add updater plugin to app, implement update check UI with progress and relaunch (completed 2026-03-02)
 - [x] **Phase 13: CI/CD Pipeline** - GitHub Actions workflow that builds, signs, and publishes releases on tag push (completed 2026-03-02)
-- [ ] **Phase 14: Release Workflow** - Document release process and changelog template; verify end-to-end update delivery
+- [x] **Phase 14: Release Workflow** - Document release process and changelog template; verify end-to-end update delivery (completed 2026-03-02)
 
 ## Phase Details
 
@@ -112,6 +112,6 @@ Phases execute in numeric order: 11 → 12 → 13 → 14
 | 11. Signing & Repo Setup | 1/1 | Complete    | 2026-03-02 | - |
 | 12. Plugin Integration | 2/2 | Complete    | 2026-03-02 | - |
 | 13. CI/CD Pipeline | 1/1 | Complete    | 2026-03-02 | - |
-| 14. Release Workflow | v1.1 | 0/1 | Not started | - |
+| 14. Release Workflow | 1/1 | Complete   | 2026-03-02 | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`

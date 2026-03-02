@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Auto-Updates & CI/CD
 status: planning
-last_updated: "2026-03-02T20:17:12.278Z"
+last_updated: "2026-03-02T20:23:06.941Z"
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Session State
@@ -23,12 +23,12 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Position
 
 **Milestone:** v1.1 Auto-Updates & CI/CD
-**Phase:** 13 of 14 (CI/CD Pipeline)
+**Phase:** 14 of 14 (Release Workflow)
 **Plan:** 01 (complete)
-**Status:** Ready to plan
-Last activity: 2026-03-02 - Completed Phase 13 Plan 01: CI/CD Pipeline — GitHub Actions release workflow with CUDA + LLVM build environment, Ed25519 signing, NSIS installer, latest.json generation
+**Status:** Milestone complete
+Last activity: 2026-03-02 - Completed Phase 14 Plan 01: Release Workflow — RELEASING.md runbook and CHANGELOG.md with Keep a Changelog format
 
-Progress: [████████░░] 80% (4/5 plans)
+Progress: [██████████] 100% (5/5 plans)
 
 ## Accumulated Context
 
@@ -47,6 +47,9 @@ Progress: [████████░░] 80% (4/5 plans)
 - 12-02: Tray menus in Tauri 2 must be rebuilt from scratch; set_tray_update_indicator creates new Menu and calls set_menu()
 - 13-01: Jimver/cuda-toolkit minimal sub-packages (nvcc, cudart, cublas, cublas_dev, thrust, visual_studio_integration) avoids 4 GB full toolkit download in CI
 - 13-01: CMAKE_CUDA_ARCHITECTURES=61;75;86;89 targets Pascal/Turing/Ampere/Ada in one binary; tagName uses github.ref_name directly (tag is release source of truth)
+- [Phase 14-release-workflow]: Annotated git tags over lightweight tags — store tagger info and work better with git describe
+- [Phase 14-release-workflow]: git push --follow-tags used in release runbook — single command pushes commit and annotated tag together
+- [Phase 14-release-workflow]: Keep a Changelog format chosen — industry standard that maps directly to GitHub Release descriptions
 
 ### Pending Todos
 
@@ -67,5 +70,5 @@ None active. (Ed25519 private key backup completed by user at Task 2 checkpoint 
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 13-01-PLAN.md (Phase 13 Plan 01: CI/CD Pipeline — release workflow)
+Stopped at: Completed 14-01-PLAN.md (Phase 14 Plan 01: Release Workflow — RELEASING.md runbook and CHANGELOG.md)
 Resume file: None
