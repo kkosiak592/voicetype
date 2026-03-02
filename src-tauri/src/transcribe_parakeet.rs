@@ -5,7 +5,7 @@
 // API version: parakeet-rs 0.1.9 — uses ort "^2.0.0-rc.10" (matches voice_activity_detector).
 // 0.3.x was not used because it requires ort "^2.0.0-rc.11", conflicting with the VAD crate.
 
-use parakeet_rs::{ExecutionConfig, ExecutionProvider, ParakeetTDT};
+use parakeet_rs::{ExecutionConfig, ExecutionProvider, ParakeetTDT, TimestampMode};
 use std::time::Instant;
 
 /// Loads a Parakeet TDT model from a directory of ONNX files.
@@ -55,6 +55,8 @@ pub fn load_parakeet(model_dir: &str, use_cuda: bool) -> Result<ParakeetTDT, Str
 /// Note: `parakeet` requires `&mut self` — callers must hold a mutable reference
 /// or use Mutex<ParakeetTDT> for concurrent access.
 ///
+/// Uses TimestampMode::Sentences to enable word-level deduplication (strips repeated tokens).
+///
 /// Returns the trimmed transcription text, or an error string on failure.
 /// Logs transcription duration and the first 80 characters of the result.
 pub fn transcribe_with_parakeet(
@@ -67,7 +69,7 @@ pub fn transcribe_with_parakeet(
     let audio_vec: Vec<f32> = audio.to_vec();
 
     let result = parakeet
-        .transcribe_samples(audio_vec, 16000, 1, None)
+        .transcribe_samples(audio_vec, 16000, 1, Some(TimestampMode::Sentences))
         .map_err(|e| format!("Parakeet transcription error: {}", e))?;
 
     let text = result.text.trim().to_string();
