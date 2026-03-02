@@ -1,0 +1,79 @@
+name: Release
+
+# Trigger on any tag starting with v (e.g. v0.1.0, v1.2.3)
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write  # Required for creating GitHub Releases and uploading assets
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          # Cache even on failure so partial builds are not wasted on the next run
+          cache-on-failure: true
+
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.21
+        with:
+          cuda: '12.6.3'
+          method: network
+          # Minimal subset for compilation — nvcc, headers, cuBLAS for whisper.cpp/parakeet-rs.
+          # Avoids downloading the full 4 GB toolkit; visual_studio_integration is required
+          # for MSVC + nvcc integration on windows-latest.
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "thrust", "visual_studio_integration"]'
+        # CUDA_PATH is set automatically by this action after installation
+
+      - name: Install LLVM/clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: '18'
+          directory: ${{ runner.temp }}/llvm
+        # LIBCLANG_PATH is set automatically; required by whisper-rs bindgen
+
+      - name: Set CUDA architecture targets
+        shell: bash
+        run: |
+          # Build for multiple GPU generations so one binary supports all common NVIDIA GPUs:
+          # 61 = Pascal (GTX 10xx), 75 = Turing (RTX 20xx), 86 = Ampere (RTX 30xx), 89 = Ada (RTX 40xx)
+          echo "CMAKE_CUDA_ARCHITECTURES=61;75;86;89" >> $GITHUB_ENV
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and publish release with Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          # Use the pushed tag directly (e.g. v0.1.0) as the release tag
+          tagName: ${{ github.ref_name }}
+          releaseName: 'VoiceType ${{ github.ref_name }}'
+          releaseBody: 'See the assets to download and install VoiceType ${{ github.ref_name }}.'
+          # Publish immediately — no draft review step
+          releaseDraft: false
+          prerelease: false
+          # Generate latest.json with download URLs and Ed25519 signatures for the auto-updater
+          includeUpdaterJson: true
+          # Prefer the NSIS .exe installer in latest.json (tauri.conf.json targets NSIS, not MSI)
+          updaterJsonPreferNsis: true
