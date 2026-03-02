@@ -38,7 +38,7 @@
 
 **Milestone Goal:** Replace tauri-plugin-global-shortcut with a custom WH_KEYBOARD_LL low-level keyboard hook, enabling Ctrl+Win modifier-only hotkey activation with debounce for reliable key ordering.
 
-- [ ] **Phase 15: Hook Module** - Install WH_KEYBOARD_LL on a dedicated thread, implement modifier state machine with debounce and Start menu suppression, wire hold-to-talk end-to-end
+- [x] **Phase 15: Hook Module** - Install WH_KEYBOARD_LL on a dedicated thread, implement modifier state machine with debounce and Start menu suppression, wire hold-to-talk end-to-end (completed 2026-03-02)
 - [ ] **Phase 16: Rebind and Coexistence** - Route modifier-only combos through the hook and standard combos through tauri-plugin-global-shortcut; surface hook failure to user
 - [ ] **Phase 17: Frontend Capture UI** - Accept and display modifier-only combos in the hotkey capture dialog and settings panel
 - [ ] **Phase 18: Integration and Distribution** - Verify behavior across all critical runtime conditions and confirm VirusTotal clean on signed v1.2 binary
@@ -99,7 +99,7 @@ Phases execute in numeric order: 15 → 16 → 17 (parallelizable with 16 after 
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 15. Hook Module | 2/3 | In Progress|  | - |
+| 15. Hook Module | 3/3 | Complete   | 2026-03-02 | - |
 | 16. Rebind and Coexistence | v1.2 | 0/? | Not started | - |
 | 17. Frontend Capture UI | v1.2 | 0/? | Not started | - |
 | 18. Integration and Distribution | v1.2 | 0/? | Not started | - |

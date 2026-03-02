@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Keyboard Hook
 status: executing
-last_updated: "2026-03-02T22:49:55.635Z"
+last_updated: "2026-03-02T23:01:53.414Z"
 progress:
   total_phases: 2
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 2
+  completed_plans: 3
 ---
 
 # Session State
@@ -18,18 +18,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** Phase 15 — Hook Module (Plan 02 complete)
+**Current focus:** Phase 15 — Hook Module (Plan 03 Task 1 complete — awaiting human verification)
 
 ## Position
 
 **Milestone:** v1.2 Keyboard Hook
 **Phase:** 15 — Hook Module
-**Plan:** 02 complete, ready for Plan 03
-**Status:** Phase 15 in progress — modifier state machine + VK_E8 injection implemented
+**Plan:** 03 Task 1 complete, awaiting Task 2 human-verify checkpoint
+**Status:** Phase 15 in progress — hook wired into Tauri lifecycle, handle_hotkey_event extracted, default hotkey ctrl+win
 
 [##########------------------------------------------] 0% (0/4 phases)
 
-Last activity: 2026-03-02 — Phase 15 Plan 02 complete (hook_proc state machine, inject_mask_key, reset_state)
+Last activity: 2026-03-02 — Phase 15 Plan 03 Task 1 complete (hook wiring, handle_hotkey_event, conditional install)
 
 ## Performance Metrics
 
@@ -40,6 +40,7 @@ Last activity: 2026-03-02 — Phase 15 Plan 02 complete (hook_proc state machine
 | Plans complete | 1 |
 | Blockers | 0 |
 | Phase 15-hook-module P02 | 2 | 2 tasks | 1 files |
+| Phase 15-hook-module P03 | 9 | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -56,6 +57,9 @@ Last activity: 2026-03-02 — Phase 15 Plan 02 complete (hook_proc state machine
 - 15-01: LLKHF_INJECTED guard in hook_proc prevents recursion from Plan 02 VK_E8 injection
 - [Phase 15-02]: Tasks 1+2 combined into single commit — inject_mask_key is called inline from hook_proc, atomically correct; separating would require intermediate broken state
 - [Phase 15-02]: Repeated Win keydown during active combo suppressed with inject+LRESULT(1) to prevent Start menu mid-recording
+- [Phase 15-hook-module]: handle_hotkey_event(pressed: bool) avoids constructing private ShortcutEvent — both code paths converge on bool
+- [Phase 15-hook-module]: 15-03: Tauri v2 Builder.run() takes only Context — hook cleanup moved to tray quit handler; HookHandle::Drop is safety net
+- [Phase 15-hook-module]: 15-03: Default hotkey changed to ctrl+win for fresh installs; existing users keep saved hotkey
 
 ### Research Flags (from SUMMARY.md)
 
@@ -75,5 +79,5 @@ None active.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 15-02-PLAN.md
+Stopped at: 15-03 Task 2 checkpoint — human-verify hold-to-talk end-to-end
 Resume file: None
