@@ -190,6 +190,48 @@ fn read_saved_engine(app: &tauri::App) -> TranscriptionEngine {
     }
 }
 
+/// Read the saved Parakeet model variant from settings.json.
+/// Returns "parakeet-tdt-v2" (int8) by default.
+fn read_saved_parakeet_model(app_handle: &tauri::AppHandle) -> String {
+    let json = read_settings(app_handle).unwrap_or_else(|_| serde_json::json!({}));
+    json.get("parakeet_model")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("parakeet-tdt-v2")
+        .to_string()
+}
+
+/// Read the saved Parakeet model variant from settings.json at startup.
+/// Returns "parakeet-tdt-v2" (int8) by default.
+fn read_saved_parakeet_model_startup(app: &tauri::App) -> String {
+    let data_dir = match app.path().app_data_dir() {
+        Ok(d) => d,
+        Err(_) => return "parakeet-tdt-v2".to_string(),
+    };
+    let settings_path = data_dir.join("settings.json");
+    let contents = match std::fs::read_to_string(&settings_path) {
+        Ok(c) => c,
+        Err(_) => return "parakeet-tdt-v2".to_string(),
+    };
+    let json: serde_json::Value = match serde_json::from_str(&contents) {
+        Ok(j) => j,
+        Err(_) => return "parakeet-tdt-v2".to_string(),
+    };
+    json.get("parakeet_model")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("parakeet-tdt-v2")
+        .to_string()
+}
+
+/// Resolve the model directory for a Parakeet variant.
+fn resolve_parakeet_dir(model_id: &str) -> std::path::PathBuf {
+    match model_id {
+        "parakeet-tdt-v2-fp32" => download::parakeet_fp32_model_dir(),
+        _ => download::parakeet_model_dir(), // default to int8
+    }
+}
+
 #[tauri::command]
 fn set_recording_mode(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     // Update managed state immediately
@@ -228,11 +270,14 @@ fn get_engine(app: tauri::AppHandle) -> String {
 
 /// Switch the active transcription engine.
 ///
-/// If switching to Parakeet and the model is not already loaded, attempts to load it.
+/// Accepts an optional `parakeet_model` parameter to specify which Parakeet variant
+/// (int8 or fp32) to load. When None, falls back to the saved variant in settings.json.
+/// Always reloads the Parakeet model on any parakeet switch — required for variant switching
+/// (int8 -> fp32 or fp32 -> int8) to take effect without an app restart.
 /// Reverts to Whisper and returns Err if loading fails or model is not downloaded.
 /// Persists the selection to settings.json.
 #[tauri::command]
-fn set_engine(app: tauri::AppHandle, engine: String) -> Result<(), String> {
+fn set_engine(app: tauri::AppHandle, engine: String, parakeet_model: Option<String>) -> Result<(), String> {
     let new_engine = match engine.as_str() {
         "parakeet" => TranscriptionEngine::Parakeet,
         _ => TranscriptionEngine::Whisper,
@@ -243,49 +288,49 @@ fn set_engine(app: tauri::AppHandle, engine: String) -> Result<(), String> {
         let mut guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
         *guard = new_engine;
     }
-    // If switching to Parakeet and ParakeetStateMutex is None, try to load model
+    // If switching to Parakeet, always reload model (required for variant switching)
     #[cfg(feature = "parakeet")]
     if new_engine == TranscriptionEngine::Parakeet {
         let parakeet_state = app.state::<ParakeetStateMutex>();
-        let is_none = {
-            let guard = parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
-            guard.is_none()
-        };
-        if is_none {
-            let model_dir = download::parakeet_model_dir();
-            if model_dir.exists() {
-                let dir_str = model_dir.to_string_lossy().to_string();
-                match transcribe_parakeet::load_parakeet(&dir_str, true) {
-                    Ok(p) => {
-                        let mut guard = parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
-                        *guard = Some(std::sync::Arc::new(std::sync::Mutex::new(p)));
-                        log::info!("Parakeet model loaded on engine switch");
-                    }
-                    Err(e) => {
-                        log::error!("Failed to load Parakeet on engine switch: {}", e);
-                        // Revert to Whisper since Parakeet failed
-                        let state = app.state::<ActiveEngine>();
-                        let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
-                        *guard = TranscriptionEngine::Whisper;
-                        return Err(format!(
-                            "Parakeet model failed to load: {}. Reverting to Whisper.",
-                            e
-                        ));
-                    }
+        let parakeet_model_id = parakeet_model
+            .clone()
+            .unwrap_or_else(|| read_saved_parakeet_model(&app));
+        let model_dir = resolve_parakeet_dir(&parakeet_model_id);
+        if model_dir.exists() {
+            let dir_str = model_dir.to_string_lossy().to_string();
+            match transcribe_parakeet::load_parakeet(&dir_str, true) {
+                Ok(p) => {
+                    let mut guard = parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                    *guard = Some(std::sync::Arc::new(std::sync::Mutex::new(p)));
+                    log::info!("Parakeet model loaded on engine switch (variant: {})", parakeet_model_id);
                 }
-            } else {
-                // Revert — model not downloaded
-                let state = app.state::<ActiveEngine>();
-                let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
-                *guard = TranscriptionEngine::Whisper;
-                return Err(
-                    "Parakeet model not downloaded. Download it first from Settings.".to_string(),
-                );
+                Err(e) => {
+                    log::error!("Failed to load Parakeet on engine switch: {}", e);
+                    // Revert to Whisper since Parakeet failed
+                    let state = app.state::<ActiveEngine>();
+                    let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+                    *guard = TranscriptionEngine::Whisper;
+                    return Err(format!(
+                        "Parakeet model failed to load: {}. Reverting to Whisper.",
+                        e
+                    ));
+                }
             }
+        } else {
+            // Revert — model not downloaded
+            let state = app.state::<ActiveEngine>();
+            let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+            *guard = TranscriptionEngine::Whisper;
+            return Err(
+                "Parakeet model not downloaded. Download it first from Settings.".to_string(),
+            );
         }
     }
     // Persist to settings.json
     let mut json = read_settings(&app)?;
+    if let Some(ref variant) = parakeet_model {
+        json["parakeet_model"] = serde_json::Value::String(variant.clone());
+    }
     json["active_engine"] = serde_json::Value::String(engine);
     write_settings(&app, &json)?;
     log::info!("Transcription engine set to: {:?}", new_engine);
@@ -847,14 +892,23 @@ fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
         },
     ];
 
-    // Parakeet TDT is always listed regardless of the parakeet feature flag
+    // Parakeet TDT int8 — always listed regardless of the parakeet feature flag
     // (download.rs is not feature-gated, so parakeet_model_exists() is always available).
     models.push(ModelInfo {
         id: "parakeet-tdt-v2".to_string(),
-        name: "Parakeet TDT".to_string(),
+        name: "Parakeet TDT (int8)".to_string(),
         description: "Fastest — 661 MB — requires NVIDIA GPU (ONNX)".to_string(),
         recommended: false, // Whisper is recommended per locked decision
         downloaded: crate::download::parakeet_model_exists(),
+    });
+
+    // Parakeet TDT fp32 — full precision variant, larger but higher accuracy potential
+    models.push(ModelInfo {
+        id: "parakeet-tdt-v2-fp32".to_string(),
+        name: "Parakeet TDT (fp32)".to_string(),
+        description: "Full precision — 2.56 GB — requires NVIDIA GPU (ONNX)".to_string(),
+        recommended: false,
+        downloaded: crate::download::parakeet_fp32_model_exists(),
     });
 
     Ok(models)
@@ -884,10 +938,11 @@ fn check_first_run(app: tauri::AppHandle) -> FirstRunStatus {
     let dir = models_dir();
     let large_exists = dir.join("ggml-large-v3-turbo-q5_0.bin").exists();
     let small_exists = dir.join("ggml-small.en-q5_1.bin").exists();
-    // Parakeet is also a valid installed model — skip first-run if it's present
+    // Parakeet variants are also valid installed models — skip first-run if any is present
     let parakeet_exists = crate::download::parakeet_model_exists();
+    let parakeet_fp32_exists = crate::download::parakeet_fp32_model_exists();
     FirstRunStatus {
-        needs_setup: !large_exists && !small_exists && !parakeet_exists,
+        needs_setup: !large_exists && !small_exists && !parakeet_exists && !parakeet_fp32_exists,
         gpu_detected: gpu_mode,
         recommended_model: if gpu_mode {
             "large-v3-turbo".to_string()
@@ -1186,6 +1241,7 @@ pub fn run() {
             set_all_caps,
             download::download_model,
             download::download_parakeet_model,
+            download::download_parakeet_fp32_model,
             enable_autostart,
             #[cfg(feature = "whisper")]
             check_first_run,
@@ -1243,6 +1299,7 @@ pub fn run() {
             }
 
             // If saved engine is Parakeet and parakeet feature is enabled, load model at startup.
+            // Uses variant-aware directory resolution so fp32 is loaded if that was the last selected variant.
             #[cfg(feature = "parakeet")]
             {
                 let saved_engine = {
@@ -1251,7 +1308,8 @@ pub fn run() {
                     *guard
                 };
                 if saved_engine == TranscriptionEngine::Parakeet {
-                    let model_dir = download::parakeet_model_dir();
+                    let parakeet_model_id = read_saved_parakeet_model_startup(app);
+                    let model_dir = resolve_parakeet_dir(&parakeet_model_id);
                     if model_dir.exists() {
                         let dir_str = model_dir.to_string_lossy().to_string();
                         match transcribe_parakeet::load_parakeet(&dir_str, true) {
@@ -1261,7 +1319,8 @@ pub fn run() {
                                     parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
                                 *guard = Some(std::sync::Arc::new(std::sync::Mutex::new(p)));
                                 log::info!(
-                                    "Parakeet model loaded at startup (saved engine=parakeet)"
+                                    "Parakeet model loaded at startup (variant: {})",
+                                    parakeet_model_id
                                 );
                             }
                             Err(e) => {
@@ -1277,7 +1336,8 @@ pub fn run() {
                         }
                     } else {
                         log::warn!(
-                            "Parakeet set as engine but model files not found — falling back to Whisper"
+                            "Parakeet set as engine but model files not found (variant: {}) — falling back to Whisper",
+                            parakeet_model_id
                         );
                         let engine_state = app.state::<ActiveEngine>();
                         let mut guard = engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
