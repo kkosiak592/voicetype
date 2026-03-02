@@ -28,7 +28,7 @@ const MODELS = [
     id: 'parakeet-tdt-v2',
     name: 'Parakeet TDT (int8)',
     size: '661 MB',
-    quality: 'Fastest (GPU)',
+    quality: 'Fast (GPU)',
     requirement: 'Requires NVIDIA GPU',
     gpuOnly: true,
   },
@@ -206,7 +206,6 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
         <div className={gridClass}>
           {visibleModels.map((model) => {
             const isRecommended = model.id === recommendedModel;
-            const isFastest = model.id === 'parakeet-tdt-v2' && gpuDetected; // int8 only — fastest due to quantization
             const isDownloading = downloadingId === model.id && downloadState === 'downloading';
             const isValidating = downloadingId === model.id && downloadState === 'validating';
             const isComplete = downloadingId === model.id && downloadState === 'complete';
@@ -229,11 +228,6 @@ export function FirstRun({ gpuDetected, recommendedModel, onComplete }: FirstRun
                 {isRecommended && (
                   <span className="absolute -top-2.5 left-3 rounded-full bg-indigo-500 px-2 py-0.5 text-xs font-semibold text-white">
                     Recommended
-                  </span>
-                )}
-                {isFastest && (
-                  <span className="absolute -top-2.5 right-3 rounded-full bg-green-500 px-2 py-0.5 text-xs font-semibold text-white">
-                    Fastest
                   </span>
                 )}
 
