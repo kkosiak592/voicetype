@@ -7,6 +7,7 @@ mod pipeline;
 mod profiles;
 mod tray;
 mod vad;
+mod updater;
 #[cfg(test)]
 mod corrections_tests;
 
@@ -1326,7 +1327,8 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_autostart::Builder::new().build());
+        .plugin(tauri_plugin_autostart::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
 
     // GPU cache MUST be registered on Builder (before .run()) because webview2
     // COM init pumps Win32 messages, allowing frontend IPC before setup() runs.
@@ -1368,6 +1370,7 @@ pub fn run() {
             download::download_model,
             download::download_parakeet_fp32_model,
             enable_autostart,
+            updater::check_for_update,
             #[cfg(feature = "whisper")]
             check_first_run,
             #[cfg(feature = "whisper")]
@@ -1383,6 +1386,10 @@ pub fn run() {
         ])
         .setup(|app| {
             build_tray(app)?;
+
+            // Auto-updater plugin — checks GitHub Releases endpoint configured in tauri.conf.json.
+            // Must be registered in setup() (needs app handle), same pattern as global-shortcut.
+            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
 
             // Configure pill overlay: no focus steal + restore saved position
             if let Some(pill_window) = app.get_webview_window("pill") {
