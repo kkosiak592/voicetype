@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: MVP
+milestone: v1.1
+milestone_name: Auto-Updates & CI/CD
 current_phase: null
 current_plan: null
-status: milestone_complete
-last_updated: "2026-03-02T18:27:39Z"
+status: defining_requirements
+last_updated: "2026-03-02T20:00:00Z"
 progress:
-  total_phases: 10
-  completed_phases: 10
-  total_plans: 26
-  completed_plans: 26
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Session State
@@ -20,14 +20,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** Planning next milestone
+**Current focus:** v1.1 Auto-Updates & CI/CD
 
 ## Position
 
-**Milestone:** v1.0 MVP — SHIPPED 2026-03-02
-**Status:** Milestone complete, archived to .planning/milestones/
-
-Last activity: 2026-03-02 - Completed quick task 24: Change default engine from Whisper to GPU-aware (Parakeet on GPU, Whisper on CPU-only)
+**Milestone:** v1.1 Auto-Updates & CI/CD
+**Phase:** Not started (defining requirements)
+**Plan:** —
+**Status:** Defining requirements
+Last activity: 2026-03-02 — Milestone v1.1 started
 
 ## Accumulated Context
 

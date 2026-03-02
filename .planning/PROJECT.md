@@ -33,7 +33,15 @@ Voice dictation must feel instant — sub-1500ms from end-of-speech to text appe
 
 ### Active
 
-(None — planning next milestone)
+## Current Milestone: v1.1 Auto-Updates & CI/CD
+
+**Goal:** Enable seamless auto-updates via tauri-plugin-updater backed by GitHub Releases, with GitHub Actions CI/CD for automated builds and signing.
+
+**Target features:**
+- tauri-plugin-updater integration with Ed25519 signing
+- GitHub Actions workflow (tauri-action) for automated builds, signing, and release publishing
+- In-app update check on launch with download/install/relaunch UX
+- Public GitHub repo as release distribution backend
 
 ### Out of Scope
 
@@ -87,4 +95,8 @@ Voice dictation must feel instant — sub-1500ms from end-of-speech to text appe
 | VAD gate bypass for hold-to-talk | Saves 20-30ms by skipping Silero scan when user explicitly controls recording | ✓ Good — noticeable latency reduction |
 
 ---
-*Last updated: 2026-03-02 after v1.0 milestone*
+| tauri-plugin-updater + GitHub Releases | Zero cost, excellent UX, official Tauri approach, simplest for <20 users | — Pending |
+| Public GitHub repo | Updater needs unauthenticated access to release assets, source visibility acceptable | — Pending |
+
+---
+*Last updated: 2026-03-02 after v1.1 milestone start*
