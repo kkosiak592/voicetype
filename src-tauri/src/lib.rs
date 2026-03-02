@@ -255,7 +255,7 @@ fn set_engine(app: tauri::AppHandle, engine: String) -> Result<(), String> {
             let model_dir = download::parakeet_model_dir();
             if model_dir.exists() {
                 let dir_str = model_dir.to_string_lossy().to_string();
-                match transcribe_parakeet::load_parakeet(&dir_str, false) {
+                match transcribe_parakeet::load_parakeet(&dir_str, true) {
                     Ok(p) => {
                         let mut guard = parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
                         *guard = Some(std::sync::Arc::new(std::sync::Mutex::new(p)));
@@ -1243,7 +1243,7 @@ pub fn run() {
                     let model_dir = download::parakeet_model_dir();
                     if model_dir.exists() {
                         let dir_str = model_dir.to_string_lossy().to_string();
-                        match transcribe_parakeet::load_parakeet(&dir_str, false) {
+                        match transcribe_parakeet::load_parakeet(&dir_str, true) {
                             Ok(p) => {
                                 let parakeet_state = app.state::<ParakeetStateMutex>();
                                 let mut guard =

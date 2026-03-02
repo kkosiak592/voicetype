@@ -13,35 +13,28 @@ use std::time::Instant;
 /// `model_dir` must contain the encoder, decoder_joint, vocab, and config files
 /// from the `istupakov/parakeet-tdt-0.6b-v2-onnx` HuggingFace repo (int8 variant).
 ///
-/// `use_cuda`: true → CUDA execution provider (GPU); false → CPU execution provider.
+/// Uses CUDA execution provider when use_cuda=true, CPU otherwise.
+/// ort automatically falls back to CPU if CUDA is unavailable at runtime.
 ///
 /// Logs model load duration at INFO level.
 pub fn load_parakeet(model_dir: &str, use_cuda: bool) -> Result<ParakeetTDT, String> {
     let start = Instant::now();
 
-    log::info!(
-        "Loading Parakeet TDT model from: {} (CUDA={})",
-        model_dir,
-        use_cuda
-    );
+    log::info!("Loading Parakeet TDT model from: {}", model_dir);
 
     let config = if use_cuda {
-        Some(
-            ExecutionConfig::new()
-                .with_execution_provider(ExecutionProvider::Cuda),
-        )
+        log::info!("Requesting CUDA ExecutionProvider for Parakeet TDT");
+        Some(ExecutionConfig::new().with_execution_provider(ExecutionProvider::Cuda))
     } else {
-        // None → parakeet-rs defaults to CPU ExecutionProvider
-        None
+        None // CPU ExecutionProvider (default)
     };
 
     let parakeet = ParakeetTDT::from_pretrained(model_dir, config)
         .map_err(|e| format!("Failed to load Parakeet TDT model from '{}': {}", model_dir, e))?;
 
     log::info!(
-        "Parakeet TDT model loaded in {}ms (CUDA={})",
+        "Parakeet TDT model loaded in {}ms",
         start.elapsed().as_millis(),
-        use_cuda
     );
 
     Ok(parakeet)

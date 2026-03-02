@@ -13,7 +13,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [features]
-default = ["whisper"]
+default = ["whisper", "parakeet"]
 # Enable whisper-rs CUDA transcription. Requires:
 #   - LIBCLANG_PATH (LLVM clang for bindgen)
 #   - CUDA Toolkit 11.7 (CUDA_PATH)
@@ -24,7 +24,6 @@ whisper = ["dep:whisper-rs", "dep:nvml-wrapper"]
 # Enable Parakeet TDT ONNX inference via parakeet-rs. Requires:
 #   - ONNX Runtime libraries (downloaded automatically by ort build script)
 #   - cuda feature enables GPU inference via ort/cuda
-# NOTE: parakeet is NOT in default features — wire into pipeline in Plan 02.
 parakeet = ["dep:parakeet-rs"]
 
 [dependencies]
@@ -66,10 +65,24 @@ futures-util = "0.3"
 # which pins ort = "=2.0.0-rc.10". parakeet-rs 0.1.9 uses ort = "^2.0.0-rc.10".
 # The cuda feature enables ort/cuda for GPU inference at runtime.
 # API in 0.1.x: ParakeetTDT::from_pretrained(path, config), transcribe_samples(&mut self, ...)
-# NOTE: No "cuda" feature here — cuda requires CUDA toolkit at link time. Without a CUDA
-# toolkit we still compile; the CPU ExecutionProvider is always available. Add cuda feature
-# once deployment environment is confirmed to have CUDA.
-parakeet-rs = { version = "0.1.9", optional = true }
+# NOTE: "cuda" feature enabled — ort downloads pre-compiled CUDA binaries via download-binaries
+# feature (same mechanism as whisper-rs). CUDA toolkit is already present (used by whisper).
+# At runtime, ort uses CUDA EP with automatic CPU fallback if CUDA is unavailable.
+parakeet-rs = { version = "0.1.9", features = ["cuda"], optional = true }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-global-shortcut = "2"
+
+# Patch esaxx-rs to use dynamic CRT (/MD) instead of static CRT (/MT).
+# esaxx-rs 0.1.10 hardcodes .static_crt(true) in its build.rs, which compiles esaxx.cpp
+# with /MT. onnxruntime.lib (from ort-sys) is compiled /MD. MSVC LNK2038 treats a
+# /MT vs /MD mismatch as a fatal error that /NODEFAULTLIB cannot suppress.
+# The local patch changes .static_crt(true) -> .static_crt(false) so esaxx uses /MD,
+# matching onnxruntime.lib and whisper. No functional change — this only affects
+# which CRT DLL is used at link time, and the binary already imports MSVCP140.dll.
+[patch.crates-io]
+esaxx-rs = { path = "patches/esaxx-rs" }
+# Patch parakeet-rs to read vocab_size from config.json instead of hardcoding 8193.
+# The parakeet-tdt-0.6b-v2 int8 model has vocab_size=1025; the hardcoded default causes
+# blank_id=8192 which crashes the ONNX Gather node (valid range is [-1025,1024]).
+parakeet-rs = { path = "patches/parakeet-rs" }
