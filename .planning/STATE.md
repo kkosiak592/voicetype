@@ -26,7 +26,7 @@ See: .planning/PROJECT.md
 **Current plan:** 08-01 complete
 **Status:** Executing
 
-Last activity: 2026-03-01 - Completed quick task 11: Switch Parakeet transcription to TimestampMode::Sentences
+Last activity: 2026-03-02 - Completed quick task 12: VAD silence trimming for pipeline — vad_trim_silence() + pipeline integration
 
 ## Session Log
 
@@ -50,6 +50,7 @@ Last activity: 2026-03-01 - Completed quick task 11: Switch Parakeet transcripti
 - 2026-03-01: 08-03 (Parakeet frontend integration) — Task 1: 3-card GPU model selection in FirstRun, Fastest badge, Parakeet download routing, set_engine on complete; engine selector + Parakeet download section in ModelSection settings (commit 9b430b8); awaiting human verification
 - 2026-03-01: Quick task 10 (enable CUDA GPU acceleration for Parakeet TDT) — cuda feature on parakeet-rs, CUDA ExecutionProvider wired in load_parakeet, both call sites updated to use_cuda=true (commit 1f2a9c5)
 - 2026-03-01: Quick task 11 (switch Parakeet transcription to TimestampMode::Sentences) — TimestampMode imported, None -> Some(TimestampMode::Sentences) at transcribe_samples call site, activates group_by_sentences -> deduplicate_words pipeline (commit 2a30c48)
+- 2026-03-02: Quick task 12 (VAD silence trimming) — vad_trim_silence() added to vad.rs (fresh VAD, 1-chunk padding, fail-open); integrated into pipeline.rs after speech gate before engine dispatch (commits 70c66c4, 05266f5)
 
 ## Decisions
 
@@ -94,6 +95,10 @@ Last activity: 2026-03-01 - Completed quick task 11: Switch Parakeet transcripti
 - [quick-10-cuda]: parakeet_rs::{ExecutionConfig, ExecutionProvider} used (top-level re-exports) not parakeet_rs::execution::* (private module)
 - [quick-10-cuda]: both load_parakeet call sites pass use_cuda=true — CUDA EP always requested; ort falls back to CPU if CUDA unavailable at runtime
 - [quick-11-sentences]: TimestampMode::Sentences used for TDT — TDT predicts punctuation enabling sentence boundaries; activates deduplicate_words to strip repeated-token model artifacts
+- [quick-12-vad-trim]: Fresh VoiceActivityDetector per vad_trim_silence call — prevents LSTM state contamination between recordings
+- [quick-12-vad-trim]: 1-chunk (512 samples = 32ms) padding on each side of speech boundaries — prevents onset/offset clipping
+- [quick-12-vad-trim]: Fail-open on no-speech detection — returns full buffer rather than empty buffer
+- [quick-12-vad-trim]: Single trim point in pipeline.rs before engine dispatch — applies to both Whisper and Parakeet without per-engine changes
 
 ### Roadmap Evolution
 
@@ -112,6 +117,7 @@ Last activity: 2026-03-01 - Completed quick task 11: Switch Parakeet transcripti
 | 8 | Fix pill position to bottom-center above taskbar, remove dragging, add multi-monitor support | 2026-03-01 | 000463d | [8-fix-pill-position-to-bottom-center-above](./quick/8-fix-pill-position-to-bottom-center-above/) |
 | 10 | Enable CUDA GPU acceleration for Parakeet TDT — cuda feature on parakeet-rs, CUDA ExecutionProvider with CPU fallback | 2026-03-01 | 1f2a9c5 | [10-enable-cuda-gpu-acceleration-for-parakee](./quick/10-enable-cuda-gpu-acceleration-for-parakee/) |
 | 11 | Switch Parakeet transcription to TimestampMode::Sentences — activates group_by_sentences -> deduplicate_words pipeline | 2026-03-01 | 2a30c48 | [11-switch-parakeet-transcription-from-times](./quick/11-switch-parakeet-transcription-from-times/) |
+| 12 | VAD silence trimming: strip leading/trailing silence before engine dispatch, 1-chunk padding, fail-open | 2026-03-02 | 05266f5 | [12-implement-vad-silence-trimming-for-parak](./quick/12-implement-vad-silence-trimming-for-parak/) |
 
 ## Accumulated Context
 
