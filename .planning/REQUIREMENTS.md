@@ -19,11 +19,11 @@ Requirements for auto-updates and CI/CD release infrastructure. Each maps to roa
 
 ### CI/CD Pipeline
 
-- [ ] **CICD-01**: GitHub Actions workflow triggers on version tag push (v*)
-- [ ] **CICD-02**: Workflow builds Windows NSIS installer using tauri-action
-- [ ] **CICD-03**: Workflow signs release artifacts with Ed25519 private key from GitHub secrets
-- [ ] **CICD-04**: Workflow generates latest.json with correct download URLs and signature
-- [ ] **CICD-05**: Workflow creates GitHub Release with installer, latest.json, and release notes
+- [x] **CICD-01**: GitHub Actions workflow triggers on version tag push (v*)
+- [x] **CICD-02**: Workflow builds Windows NSIS installer using tauri-action
+- [x] **CICD-03**: Workflow signs release artifacts with Ed25519 private key from GitHub secrets
+- [x] **CICD-04**: Workflow generates latest.json with correct download URLs and signature
+- [x] **CICD-05**: Workflow creates GitHub Release with installer, latest.json, and release notes
 - [x] **CICD-06**: GitHub repo secrets configured for TAURI_SIGNING_PRIVATE_KEY and password
 
 ### Release Infrastructure
@@ -67,11 +67,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UPD-05 | Phase 12 | Complete |
 | UPD-06 | Phase 12 | Complete |
 | UPD-07 | Phase 12 | Complete |
-| CICD-01 | Phase 13 | Pending |
-| CICD-02 | Phase 13 | Pending |
-| CICD-03 | Phase 13 | Pending |
-| CICD-04 | Phase 13 | Pending |
-| CICD-05 | Phase 13 | Pending |
+| CICD-01 | Phase 13 | Complete |
+| CICD-02 | Phase 13 | Complete |
+| CICD-03 | Phase 13 | Complete |
+| CICD-04 | Phase 13 | Complete |
+| CICD-05 | Phase 13 | Complete |
 | CICD-06 | Phase 11 | Complete |
 | REL-01 | Phase 11 | Complete |
 | REL-02 | Phase 12 | Complete |

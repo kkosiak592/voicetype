@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Auto-Updates & CI/CD
 status: planning
-last_updated: "2026-03-02T20:07:34.644Z"
+last_updated: "2026-03-02T20:10:34Z"
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Session State
@@ -23,12 +23,12 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Position
 
 **Milestone:** v1.1 Auto-Updates & CI/CD
-**Phase:** 12 of 14 (Plugin Integration)
-**Plan:** 02 (complete)
+**Phase:** 13 of 14 (CI/CD Pipeline)
+**Plan:** 01 (complete)
 **Status:** Ready to plan
-Last activity: 2026-03-02 - Completed Phase 12 Plan 02: Plugin Integration — update UI with UpdateBanner component, useUpdater hook, tray indicator, GeneralSection version display
+Last activity: 2026-03-02 - Completed Phase 13 Plan 01: CI/CD Pipeline — GitHub Actions release workflow with CUDA + LLVM build environment, Ed25519 signing, NSIS installer, latest.json generation
 
-Progress: [██████░░░░] 60% (3/5 plans)
+Progress: [████████░░] 80% (4/5 plans)
 
 ## Accumulated Context
 
@@ -45,6 +45,8 @@ Progress: [██████░░░░] 60% (3/5 plans)
 - 12-02: JS plugin API handles download (not Rust IPC) — enables progress callbacks; Update ref lost on unmount so mid-download close resets banner to 'available'
 - 12-02: Updater config belongs under top-level plugins key in tauri.conf.json (Tauri v2 format), not under app section
 - 12-02: Tray menus in Tauri 2 must be rebuilt from scratch; set_tray_update_indicator creates new Menu and calls set_menu()
+- 13-01: Jimver/cuda-toolkit minimal sub-packages (nvcc, cudart, cublas, cublas_dev, thrust, visual_studio_integration) avoids 4 GB full toolkit download in CI
+- 13-01: CMAKE_CUDA_ARCHITECTURES=61;75;86;89 targets Pascal/Turing/Ampere/Ada in one binary; tagName uses github.ref_name directly (tag is release source of truth)
 
 ### Pending Todos
 
@@ -65,5 +67,5 @@ None active. (Ed25519 private key backup completed by user at Task 2 checkpoint 
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 12-02-PLAN.md (Phase 12 Plan 02: Plugin Integration — update UI)
+Stopped at: Completed 13-01-PLAN.md (Phase 13 Plan 01: CI/CD Pipeline — release workflow)
 Resume file: None
