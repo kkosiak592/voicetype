@@ -68,7 +68,9 @@
   1. Changing the hotkey from Ctrl+Win to a standard combo (e.g. Ctrl+Shift+V) in settings stops the hook for that combo and registers it via tauri-plugin-global-shortcut — both activate dictation correctly with no double-firing
   2. Changing back from a standard hotkey to Ctrl+Win unregisters the standard hotkey and re-enables the hook path — no overlap period where both fire
   3. If WH_KEYBOARD_LL installation fails at startup, the settings panel shows a "hook unavailable, using fallback" status and the standard hotkey continues to work
-**Plans**: TBD
+**Plans**: 2 plans
+  - [ ] 16-01-PLAN.md — Backend routing logic (is_modifier_only, routed IPC commands, startup routing, hook-failure fallback, get_hook_status IPC)
+  - [ ] 16-02-PLAN.md — Frontend hook-failure warning (load hook status on mount, inline warning in GeneralSection)
 
 ### Phase 17: Frontend Capture UI
 **Goal**: The hotkey capture dialog and settings panel fully support modifier-only combos — users can configure Ctrl+Win without needing to press a letter key, and the display reads naturally
