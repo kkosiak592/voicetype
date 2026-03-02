@@ -112,6 +112,6 @@ Phases execute in numeric order: 11 → 12 → 13 → 14
 | 11. Signing & Repo Setup | 1/1 | Complete    | 2026-03-02 | - |
 | 12. Plugin Integration | 2/2 | Complete    | 2026-03-02 | - |
 | 13. CI/CD Pipeline | 1/1 | Complete    | 2026-03-02 | - |
-| 14. Release Workflow | 1/1 | Complete   | 2026-03-02 | - |
+| 14. Release Workflow | 1/1 | Complete    | 2026-03-02 | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
