@@ -26,7 +26,7 @@ See: .planning/PROJECT.md
 **Current plan:** 08-01 complete
 **Status:** Executing
 
-Last activity: 2026-03-02 - Completed quick task 12: VAD silence trimming for pipeline — vad_trim_silence() + pipeline integration
+Last activity: 2026-03-01 - Completed quick task 15: Skip redundant Whisper model reload — early-return guard in set_model()
 
 ## Session Log
 
@@ -118,6 +118,7 @@ Last activity: 2026-03-02 - Completed quick task 12: VAD silence trimming for pi
 | 10 | Enable CUDA GPU acceleration for Parakeet TDT — cuda feature on parakeet-rs, CUDA ExecutionProvider with CPU fallback | 2026-03-01 | 1f2a9c5 | [10-enable-cuda-gpu-acceleration-for-parakee](./quick/10-enable-cuda-gpu-acceleration-for-parakee/) |
 | 11 | Switch Parakeet transcription to TimestampMode::Sentences — activates group_by_sentences -> deduplicate_words pipeline | 2026-03-01 | 2a30c48 | [11-switch-parakeet-transcription-from-times](./quick/11-switch-parakeet-transcription-from-times/) |
 | 12 | VAD silence trimming: strip leading/trailing silence before engine dispatch, 1-chunk padding, fail-open | 2026-03-02 | 05266f5 | [12-implement-vad-silence-trimming-for-parak](./quick/12-implement-vad-silence-trimming-for-parak/) |
+| 15 | Skip redundant Whisper model reload when already loaded — early-return guard in set_model() using settings.json as source of truth | 2026-03-01 | c5e7126 | [15-skip-redundant-whisper-model-reload-when](./quick/15-skip-redundant-whisper-model-reload-when/) |
 
 ## Accumulated Context
 
