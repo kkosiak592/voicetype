@@ -26,7 +26,7 @@ The app checks for updates on launch and guides the user through download, insta
 - Download is cancellable with a Cancel button (matches FirstRun pattern)
 - On failure: show error message immediately with Retry button (matches FirstRun pattern, no auto-retry)
 - Download runs in the Rust backend — continues even if settings window is closed
-- When settings is reopened, UI reconnects to current download state
+- ~~When settings is reopened, UI reconnects to current download state~~ **Removed:** JS plugin API stores the `Update` object in a React ref that is destroyed on unmount. No reconnect mechanism exists. If settings closes mid-download, reopening resets banner to 'available' state.
 
 ### Relaunch Behavior
 - After download completes: show "Update ready — Restart now?" with Restart Now / Later buttons
