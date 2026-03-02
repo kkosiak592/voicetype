@@ -78,7 +78,13 @@ parakeet-rs = { version = "0.1.9", features = ["cuda", "directml"], optional = t
 tauri-plugin-global-shortcut = "2"
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.58", features = ["Win32_Graphics_Dxgi"] }
+windows = { version = "0.58", features = [
+    "Win32_Graphics_Dxgi",
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_Threading",
+] }
 
 # Patch esaxx-rs to use dynamic CRT (/MD) instead of static CRT (/MT).
 # esaxx-rs 0.1.10 hardcodes .static_crt(true) in its build.rs, which compiles esaxx.cpp

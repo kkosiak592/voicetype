@@ -8,6 +8,8 @@ mod profiles;
 mod tray;
 mod vad;
 mod updater;
+#[cfg(windows)]
+mod keyboard_hook;
 #[cfg(test)]
 mod corrections_tests;
 
@@ -1337,6 +1339,7 @@ pub fn run() {
     };
 
     let mut builder = tauri::Builder::default()
+        .device_event_filter(tauri::DeviceEventFilter::Always) // HOOK-03: fix tauri#13919
         // single-instance MUST be registered first (before setup)
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // Second instance launched — show and focus existing settings window
