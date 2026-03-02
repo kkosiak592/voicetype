@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Auto-Updates & CI/CD
-status: completed
-last_updated: "2026-03-02T19:20:57.442Z"
+status: in_progress
+last_updated: "2026-03-02T19:43:43Z"
 progress:
-  total_phases: 1
+  total_phases: 3
   completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  total_plans: 5
+  completed_plans: 2
 ---
 
 # Session State
@@ -23,12 +23,12 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Position
 
 **Milestone:** v1.1 Auto-Updates & CI/CD
-**Phase:** 11 of 14 (Signing & Repo Setup)
+**Phase:** 12 of 14 (Plugin Integration)
 **Plan:** 01 (complete)
-**Status:** Milestone complete
-Last activity: 2026-03-02 - Completed Phase 11 Plan 01: Signing & Repo Setup — Ed25519 keypair, public GitHub repo kkosiak592/voicetype, GitHub Actions secrets set, signing round-trip verified
+**Status:** In Progress
+Last activity: 2026-03-02 - Completed Phase 12 Plan 01: Plugin Integration — tauri-plugin-updater and tauri-plugin-process wired into Rust backend with check_for_update IPC command, capabilities permissions, and frontend npm packages
 
-Progress: [██░░░░░░░░] 20% (1/5 plans)
+Progress: [████░░░░░░] 40% (2/5 plans)
 
 ## Accumulated Context
 
@@ -40,6 +40,8 @@ Progress: [██░░░░░░░░] 20% (1/5 plans)
 - 11-01: bundle.createUpdaterArtifacts set to "v1Compatible" for Tauri 2 backward-compatible signature format
 - 11-01: tauri-plugin-updater NOT added to Cargo.toml in Phase 11 — Phase 12 scope; pubkey/endpoint config only here
 - 11-01: Ed25519 private key lives in ~/.voicetype-signing.key — outside repo, no .gitignore entry needed
+- 12-01: tauri-plugin-updater registered in setup() not on Builder — requires app handle to read updater config from tauri.conf.json
+- 12-01: Rust check_for_update command is check-only; download/install handled by JS plugin API (check().downloadAndInstall())
 
 ### Pending Todos
 
@@ -60,5 +62,5 @@ None active. (Ed25519 private key backup completed by user at Task 2 checkpoint 
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 11-01-PLAN.md (Phase 11 Plan 01: Signing & Repo Setup)
+Stopped at: Completed 12-01-PLAN.md (Phase 12 Plan 01: Plugin Integration — updater backend)
 Resume file: None
