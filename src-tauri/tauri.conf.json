@@ -33,11 +33,19 @@
     "withGlobalTauri": true,
     "security": {
       "csp": null
+    },
+    "updater": {
+      "active": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIxQzY0OUEwODM2REI4N0UKUldSK3VHMkRvRW5Hc2Z3T3hZODRDdXFFSDFBR0JFZXI2cGdUR2RQdktreFdVT0ZJeTNFRVBpa0kK",
+      "endpoints": [
+        "https://github.com/kkosiak592/voicetype/releases/latest/download/latest.json"
+      ]
     }
   },
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "createUpdaterArtifacts": "v1Compatible",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
