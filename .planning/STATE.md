@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 **Milestone:** v1.0 MVP — SHIPPED 2026-03-02
 **Status:** Milestone complete, archived to .planning/milestones/
 
-Last activity: 2026-03-02 - Completed v1.0 milestone archival
+Last activity: 2026-03-02 - Completed quick task 21: Update model descriptions across Settings and First Run screens to be accurate and consistent
 
 ## Accumulated Context
 
@@ -36,3 +36,9 @@ Last activity: 2026-03-02 - Completed v1.0 milestone archival
 1. Investigate microphone icon persisting in system tray (area: ui)
 2. Implement sub-500ms transcription latency improvements (area: backend)
 3. Simplify profiles to shared dictionary and editable prompts (area: ui)
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 21 | Update model descriptions across Settings and First Run screens to be accurate and consistent | 2026-03-02 | 2e291b9 | [21-update-model-descriptions-across-setting](./quick/21-update-model-descriptions-across-setting/) |
