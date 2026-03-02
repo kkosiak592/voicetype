@@ -886,7 +886,11 @@ fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
         ModelInfo {
             id: "small-en".to_string(),
             name: "Small (English)".to_string(),
-            description: "Fastest — 190 MB — works on any CPU".to_string(),
+            description: if gpu_mode {
+                "Fast — 190 MB — GPU accelerated".to_string()
+            } else {
+                "Fast — 190 MB — works on any CPU".to_string()
+            },
             recommended: !gpu_mode,
             downloaded: dir.join("ggml-small.en-q5_1.bin").exists(),
         },
@@ -990,12 +994,8 @@ async fn set_model(app: tauri::AppHandle, model_id: String) -> Result<(), String
     let path_str = model_path.to_string_lossy().to_string();
     let model_id_clone = model_id.clone();
 
-    // Determine GPU mode: large-v3-turbo uses GPU, others use CPU
-    let mode = if model_id == "large-v3-turbo" {
-        crate::transcribe::ModelMode::Gpu
-    } else {
-        crate::transcribe::ModelMode::Cpu
-    };
+    // Determine GPU mode based on GPU availability (not model_id)
+    let mode = app.state::<CachedGpuMode>().0.clone();
 
     // Load new context on a blocking thread — model loading is CPU-intensive
     let new_ctx = tauri::async_runtime::spawn_blocking(move || {
@@ -1434,12 +1434,8 @@ pub fn run() {
                     match model_path_result {
                         Ok(path) if path.exists() => {
                             let path_str = path.to_string_lossy().to_string();
-                            // Determine GPU mode based on model selection
-                            let mode = if model_id == "large-v3-turbo" {
-                                transcribe::ModelMode::Gpu
-                            } else {
-                                transcribe::ModelMode::Cpu
-                            };
+                            // Determine GPU mode based on GPU availability (not model_id)
+                            let mode = app.state::<CachedGpuMode>().0.clone();
                             match transcribe::load_whisper_context(&path_str, &mode) {
                                 Ok(ctx) => {
                                     log::info!("Whisper context loaded from saved model '{}' ({:?} mode)", model_id, mode);
