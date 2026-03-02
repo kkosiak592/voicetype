@@ -11,10 +11,10 @@ Requirements for auto-updates and CI/CD release infrastructure. Each maps to roa
 
 - [x] **UPD-01**: App generates Ed25519 signing keypair and configures tauri-plugin-updater with public key
 - [x] **UPD-02**: App registers tauri-plugin-updater and tauri-plugin-process plugins in Rust backend
-- [ ] **UPD-03**: App checks for updates on launch by fetching latest.json from GitHub Releases endpoint
-- [ ] **UPD-04**: User sees a non-blocking notification when an update is available showing version and release notes
-- [ ] **UPD-05**: User can download update with visible progress indication
-- [ ] **UPD-06**: App installs update and relaunches automatically after download completes
+- [x] **UPD-03**: App checks for updates on launch by fetching latest.json from GitHub Releases endpoint
+- [x] **UPD-04**: User sees a non-blocking notification when an update is available showing version and release notes
+- [x] **UPD-05**: User can download update with visible progress indication
+- [x] **UPD-06**: App installs update and relaunches automatically after download completes
 - [x] **UPD-07**: Updater capabilities permissions (updater:default, process:allow-restart) are configured
 
 ### CI/CD Pipeline
@@ -62,10 +62,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | UPD-01 | Phase 11 | Complete |
 | UPD-02 | Phase 12 | Complete |
-| UPD-03 | Phase 12 | Pending |
-| UPD-04 | Phase 12 | Pending |
-| UPD-05 | Phase 12 | Pending |
-| UPD-06 | Phase 12 | Pending |
+| UPD-03 | Phase 12 | Complete |
+| UPD-04 | Phase 12 | Complete |
+| UPD-05 | Phase 12 | Complete |
+| UPD-06 | Phase 12 | Complete |
 | UPD-07 | Phase 12 | Complete |
 | CICD-01 | Phase 13 | Pending |
 | CICD-02 | Phase 13 | Pending |

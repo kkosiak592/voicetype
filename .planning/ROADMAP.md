@@ -28,7 +28,7 @@
 **Milestone Goal:** Enable seamless auto-updates via tauri-plugin-updater backed by GitHub Releases, with GitHub Actions CI/CD for automated builds, signing, and release publishing.
 
 - [x] **Phase 11: Signing & Repo Setup** - Generate Ed25519 keypair, push source to public GitHub repo, configure secrets (completed 2026-03-02)
-- [ ] **Phase 12: Plugin Integration** - Add updater plugin to app, implement update check UI with progress and relaunch
+- [x] **Phase 12: Plugin Integration** - Add updater plugin to app, implement update check UI with progress and relaunch (completed 2026-03-02)
 - [ ] **Phase 13: CI/CD Pipeline** - GitHub Actions workflow that builds, signs, and publishes releases on tag push
 - [ ] **Phase 14: Release Workflow** - Document release process and changelog template; verify end-to-end update delivery
 
@@ -110,7 +110,7 @@ Phases execute in numeric order: 11 → 12 → 13 → 14
 | 7. Distribution | v1.0 | 3/3 | Complete | 2026-03-01 |
 | 8. Parakeet TDT + Latency | v1.0 | 3/3 | Complete | 2026-03-02 |
 | 11. Signing & Repo Setup | 1/1 | Complete    | 2026-03-02 | - |
-| 12. Plugin Integration | 1/2 | In Progress|  | - |
+| 12. Plugin Integration | 2/2 | Complete   | 2026-03-02 | - |
 | 13. CI/CD Pipeline | v1.1 | 0/1 | Not started | - |
 | 14. Release Workflow | v1.1 | 0/1 | Not started | - |
 

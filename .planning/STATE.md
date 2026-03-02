@@ -8,7 +8,7 @@ progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 5
-  completed_plans: 2
+  completed_plans: 3
 ---
 
 # Session State
@@ -24,11 +24,11 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Milestone:** v1.1 Auto-Updates & CI/CD
 **Phase:** 12 of 14 (Plugin Integration)
-**Plan:** 01 (complete)
+**Plan:** 02 (complete)
 **Status:** In Progress
-Last activity: 2026-03-02 - Completed Phase 12 Plan 01: Plugin Integration — tauri-plugin-updater and tauri-plugin-process wired into Rust backend with check_for_update IPC command, capabilities permissions, and frontend npm packages
+Last activity: 2026-03-02 - Completed Phase 12 Plan 02: Plugin Integration — update UI with UpdateBanner component, useUpdater hook, tray indicator, GeneralSection version display
 
-Progress: [████░░░░░░] 40% (2/5 plans)
+Progress: [██████░░░░] 60% (3/5 plans)
 
 ## Accumulated Context
 
@@ -42,6 +42,9 @@ Progress: [████░░░░░░] 40% (2/5 plans)
 - 11-01: Ed25519 private key lives in ~/.voicetype-signing.key — outside repo, no .gitignore entry needed
 - 12-01: tauri-plugin-updater registered in setup() not on Builder — requires app handle to read updater config from tauri.conf.json
 - 12-01: Rust check_for_update command is check-only; download/install handled by JS plugin API (check().downloadAndInstall())
+- 12-02: JS plugin API handles download (not Rust IPC) — enables progress callbacks; Update ref lost on unmount so mid-download close resets banner to 'available'
+- 12-02: Updater config belongs under top-level plugins key in tauri.conf.json (Tauri v2 format), not under app section
+- 12-02: Tray menus in Tauri 2 must be rebuilt from scratch; set_tray_update_indicator creates new Menu and calls set_menu()
 
 ### Pending Todos
 
@@ -62,5 +65,5 @@ None active. (Ed25519 private key backup completed by user at Task 2 checkpoint 
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 12-01-PLAN.md (Phase 12 Plan 01: Plugin Integration — updater backend)
+Stopped at: Completed 12-02-PLAN.md (Phase 12 Plan 02: Plugin Integration — update UI)
 Resume file: None
