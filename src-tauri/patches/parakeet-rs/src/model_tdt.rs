@@ -240,41 +240,42 @@ impl ParakeetTDTModel {
                 0
             };
 
-            // Always update LSTM states — the prediction network must accumulate
-            // context from every step (including blank). Without this, leading silence
-            // leaves the LSTM at zero state and the first speech frame decodes wrong.
-            if let Ok((h_shape, h_data)) = outputs["output_states_1"].try_extract_tensor::<f32>() {
-                let dims = h_shape.as_ref();
-                state_h = Array3::from_shape_vec((dims[0] as usize, dims[1] as usize, dims[2] as usize), h_data.to_vec())
-                    .map_err(|e| Error::Model(format!("Failed to update state_h: {e}")))?;
-            }
-            if let Ok((c_shape, c_data)) = outputs["output_states_2"].try_extract_tensor::<f32>() {
-                let dims = c_shape.as_ref();
-                state_c = Array3::from_shape_vec((dims[0] as usize, dims[1] as usize, dims[2] as usize), c_data.to_vec())
-                    .map_err(|e| Error::Model(format!("Failed to update state_c: {e}")))?;
-            }
-
+            // Non-blank: update LSTM state and emit token (matches onnx-asr: prev_state = state
+            // is inside the `if token != blank_idx` block — blank tokens do NOT update state).
             if token_id != blank_id {
+                if let Ok((h_shape, h_data)) = outputs["output_states_1"].try_extract_tensor::<f32>() {
+                    let dims = h_shape.as_ref();
+                    state_h = Array3::from_shape_vec(
+                        (dims[0] as usize, dims[1] as usize, dims[2] as usize),
+                        h_data.to_vec(),
+                    )
+                    .map_err(|e| Error::Model(format!("Failed to update state_h: {e}")))?;
+                }
+                if let Ok((c_shape, c_data)) = outputs["output_states_2"].try_extract_tensor::<f32>() {
+                    let dims = c_shape.as_ref();
+                    state_c = Array3::from_shape_vec(
+                        (dims[0] as usize, dims[1] as usize, dims[2] as usize),
+                        c_data.to_vec(),
+                    )
+                    .map_err(|e| Error::Model(format!("Failed to update state_c: {e}")))?;
+                }
+
                 tokens.push(token_id);
                 frame_indices.push(t);
                 durations.push(duration_step);
                 last_emitted_token = token_id as i32;
                 emitted_tokens += 1;
-
-                // Don't advance yet - try to emit more tokens from the same frame
-            } else {
-                // Blank token - advance frame pointer
-                // Duration prediction applies when we finally move to next frame after emitting tokens
-                if duration_step > 0 && emitted_tokens > 0 {
-                    t += duration_step;
-                } else {
-                    t += 1;
-                }
-                emitted_tokens = 0;
             }
 
-            // Safety check: if we've emitted too many tokens from the same frame, advance
-            if emitted_tokens >= max_tokens_per_step {
+            // Frame advancement — separate from token emission (matches onnx-asr exactly):
+            // duration_step > 0: advance by step for ANY token type (blank or non-blank)
+            // blank + step=0: advance by 1 to prevent stall
+            // max tokens hit: force advance by 1
+            // non-blank + step=0: stay on same frame, try more tokens from same frame
+            if duration_step > 0 {
+                t += duration_step;
+                emitted_tokens = 0;
+            } else if token_id == blank_id || emitted_tokens >= max_tokens_per_step {
                 t += 1;
                 emitted_tokens = 0;
             }
