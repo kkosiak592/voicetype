@@ -111,7 +111,7 @@ Phases execute in numeric order: 11 → 12 → 13 → 14
 | 8. Parakeet TDT + Latency | v1.0 | 3/3 | Complete | 2026-03-02 |
 | 11. Signing & Repo Setup | 1/1 | Complete    | 2026-03-02 | - |
 | 12. Plugin Integration | 2/2 | Complete    | 2026-03-02 | - |
-| 13. CI/CD Pipeline | 1/1 | Complete   | 2026-03-02 | - |
+| 13. CI/CD Pipeline | 1/1 | Complete    | 2026-03-02 | - |
 | 14. Release Workflow | v1.1 | 0/1 | Not started | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
