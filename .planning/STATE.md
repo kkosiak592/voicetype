@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 08-add-parakeet-tdt-model-and-optimize-transcription-latency
-current_plan: 08-03 checkpoint (human-verify pending)
+current_plan: 08-01 complete
 status: executing
-last_updated: "2026-03-01T17:47:00Z"
+last_updated: "2026-03-02T13:48:16.864Z"
 progress:
   total_phases: 10
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 26
-  completed_plans: 25
+  completed_plans: 26
 ---
 
 # Session State
@@ -102,6 +102,8 @@ Last activity: 2026-03-01 - Completed quick task 13: Add fp32 Parakeet model var
 - [quick-13-fp32]: set_engine always reloads Parakeet model (no is_none guard) — required for int8<->fp32 variant switching to take effect without app restart
 - [quick-13-fp32]: fp32 dir is models/parakeet-tdt-v2-fp32 (separate from int8 dir models/parakeet-tdt-v2)
 - [quick-13-fp32]: isFastest badge kept on int8 only — quantization makes it faster than fp32
+- [Phase quick-16]: LSTM state updates only on non-blank token emission — matches onnx-asr prev_state = state inside if token != blank_idx block
+- [Phase quick-16]: Frame advancement check unconditional on duration_step > 0 — no emitted_tokens guard, applies at utterance start and after blank sequences
 
 ### Roadmap Evolution
 
