@@ -175,24 +175,31 @@ fn read_saved_mode(app: &tauri::App) -> Mode {
 }
 
 /// Read the saved transcription engine from settings.json.
-/// Returns TranscriptionEngine::Whisper on first launch, file missing, or parse error.
-fn read_saved_engine(app: &tauri::App) -> TranscriptionEngine {
+/// Defaults to Parakeet when `gpu_mode` is true, Whisper otherwise.
+/// Falls back to the GPU-aware default on first launch, file missing, or parse error.
+fn read_saved_engine(app: &tauri::App, gpu_mode: bool) -> TranscriptionEngine {
+    let default_engine = if gpu_mode {
+        TranscriptionEngine::Parakeet
+    } else {
+        TranscriptionEngine::Whisper
+    };
     let data_dir = match app.path().app_data_dir() {
         Ok(d) => d,
-        Err(_) => return TranscriptionEngine::Whisper,
+        Err(_) => return default_engine,
     };
     let settings_path = data_dir.join("settings.json");
     let contents = match std::fs::read_to_string(&settings_path) {
         Ok(c) => c,
-        Err(_) => return TranscriptionEngine::Whisper,
+        Err(_) => return default_engine,
     };
     let json: serde_json::Value = match serde_json::from_str(&contents) {
         Ok(j) => j,
-        Err(_) => return TranscriptionEngine::Whisper,
+        Err(_) => return default_engine,
     };
     match json.get("active_engine").and_then(|v| v.as_str()) {
         Some("parakeet") => TranscriptionEngine::Parakeet,
-        _ => TranscriptionEngine::Whisper,
+        Some("whisper") => TranscriptionEngine::Whisper,
+        _ => default_engine,
     }
 }
 
@@ -1372,7 +1379,10 @@ pub fn run() {
 
             // Update ActiveEngine from saved settings (Builder registered it as Whisper default).
             {
-                let saved_engine = read_saved_engine(app);
+                use crate::transcribe::ModelMode;
+                let cached = app.state::<CachedGpuMode>();
+                let gpu_mode = matches!(cached.0, ModelMode::Gpu);
+                let saved_engine = read_saved_engine(app, gpu_mode);
                 log::info!("Transcription engine (saved): {:?}", saved_engine);
                 let engine_state = app.state::<ActiveEngine>();
                 let mut guard = engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
