@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Keyboard Hook
-status: active
-last_updated: "2026-03-02"
+status: executing
+last_updated: "2026-03-02T22:49:55.635Z"
 progress:
-  total_phases: 4
+  total_phases: 2
   completed_phases: 0
-  total_plans: 1
-  completed_plans: 1
+  total_plans: 5
+  completed_plans: 2
 ---
 
 # Session State
@@ -18,18 +18,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** Phase 15 — Hook Module (Plan 01 complete)
+**Current focus:** Phase 15 — Hook Module (Plan 02 complete)
 
 ## Position
 
 **Milestone:** v1.2 Keyboard Hook
 **Phase:** 15 — Hook Module
-**Plan:** 01 complete, ready for Plan 02
-**Status:** Phase 15 in progress — hook infrastructure built
+**Plan:** 02 complete, ready for Plan 03
+**Status:** Phase 15 in progress — modifier state machine + VK_E8 injection implemented
 
 [##########------------------------------------------] 0% (0/4 phases)
 
-Last activity: 2026-03-02 — Phase 15 Plan 01 complete (keyboard_hook.rs infrastructure)
+Last activity: 2026-03-02 — Phase 15 Plan 02 complete (hook_proc state machine, inject_mask_key, reset_state)
 
 ## Performance Metrics
 
@@ -39,6 +39,7 @@ Last activity: 2026-03-02 — Phase 15 Plan 01 complete (keyboard_hook.rs infras
 | Requirements mapped | 15/15 |
 | Plans complete | 1 |
 | Blockers | 0 |
+| Phase 15-hook-module P02 | 2 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -53,6 +54,8 @@ Last activity: 2026-03-02 — Phase 15 Plan 01 complete (keyboard_hook.rs infras
 - 15-01: std::thread::spawn for hook thread (not tokio) — WH_KEYBOARD_LL requires stable OS thread with Win32 message pump
 - 15-01: hmod=None in SetWindowsHookExW (dwThreadId=0) — correct for global hooks; using GetModuleHandle causes silent removal
 - 15-01: LLKHF_INJECTED guard in hook_proc prevents recursion from Plan 02 VK_E8 injection
+- [Phase 15-02]: Tasks 1+2 combined into single commit — inject_mask_key is called inline from hook_proc, atomically correct; separating would require intermediate broken state
+- [Phase 15-02]: Repeated Win keydown during active combo suppressed with inject+LRESULT(1) to prevent Start menu mid-recording
 
 ### Research Flags (from SUMMARY.md)
 
@@ -72,5 +75,5 @@ None active.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 15-01-PLAN.md
+Stopped at: Completed 15-02-PLAN.md
 Resume file: None

@@ -16,11 +16,11 @@ Requirements for Ctrl+Win modifier-only hotkey activation. Each maps to roadmap 
 
 ### Modifier Detection
 
-- [ ] **MOD-01**: Hook detects Ctrl+Win held simultaneously and sends Pressed event to handle_shortcut()
-- [ ] **MOD-02**: Hook detects Ctrl or Win released after combo and sends Released event to handle_shortcut()
-- [ ] **MOD-03**: 50ms debounce window allows either key to be pressed first without affecting detection
-- [ ] **MOD-04**: Start menu is suppressed when Ctrl+Win combo is active via VK_E8 mask injection
-- [ ] **MOD-05**: Win key alone still opens Start menu when not part of Ctrl+Win combo
+- [x] **MOD-01**: Hook detects Ctrl+Win held simultaneously and sends Pressed event to handle_shortcut()
+- [x] **MOD-02**: Hook detects Ctrl or Win released after combo and sends Released event to handle_shortcut()
+- [x] **MOD-03**: 50ms debounce window allows either key to be pressed first without affecting detection
+- [x] **MOD-04**: Start menu is suppressed when Ctrl+Win combo is active via VK_E8 mask injection
+- [x] **MOD-05**: Win key alone still opens Start menu when not part of Ctrl+Win combo
 
 ### Integration
 
@@ -82,11 +82,11 @@ Deferred to future release. Tracked but not in current roadmap.
 | HOOK-02 | Phase 15 | Complete |
 | HOOK-03 | Phase 15 | Complete |
 | HOOK-04 | Phase 15 | Complete |
-| MOD-01 | Phase 15 | Pending |
-| MOD-02 | Phase 15 | Pending |
-| MOD-03 | Phase 15 | Pending |
-| MOD-04 | Phase 15 | Pending |
-| MOD-05 | Phase 15 | Pending |
+| MOD-01 | Phase 15 | Complete |
+| MOD-02 | Phase 15 | Complete |
+| MOD-03 | Phase 15 | Complete |
+| MOD-04 | Phase 15 | Complete |
+| MOD-05 | Phase 15 | Complete |
 | INT-01 | Phase 15 | Pending |
 | INT-02 | Phase 16 | Pending |
 | INT-03 | Phase 16 | Pending |
