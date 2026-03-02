@@ -109,6 +109,10 @@ Last activity: 2026-03-02 - Completed quick task 20: DirectML EP for Parakeet + 
 - [quick-17]: parakeet-tdt-v2-fp32 is recommended for GPU users — recommended=gpu_mode in list_models, recommended_model="parakeet-tdt-v2-fp32" in check_first_run
 - [quick-17]: Fastest badge removed from FirstRun entirely; int8 quality label changed to "Fast (GPU)"
 - [quick-18]: All Whisper models use CachedGpuMode for GPU selection — no model_id-to-mode hardcoding remains; small-en description dynamically reflects GPU capability
+- [quick-20]: DirectML feature added to parakeet-rs alongside cuda — ort/directml EP for Intel/AMD GPUs on Windows
+- [quick-20]: load_parakeet accepts provider string ("cuda"/"directml"/"cpu") — cleaner API than bool for 3+ EP options
+- [quick-20]: detect_gpu_full always returns "directml" for non-NVIDIA — relies on ort runtime CPU fallback if DirectML unavailable
+- [quick-20]: CachedGpuDetection registered alongside CachedGpuMode — separate concerns (Whisper GPU vs Parakeet EP selection)
 - [quick-19]: parakeet_model_dir/parakeet_model_exists deleted; resolve_parakeet_dir always returns fp32 dir; all Parakeet defaults point to parakeet-tdt-v2-fp32
 - [quick-20]: load_parakeet changed from use_cuda:bool to provider:&str — clean API supporting cuda/directml/cpu without bool ambiguity
 - [quick-20]: detect_gpu_full() runs alongside detect_gpu() at startup — both cached in managed state before Builder::run()
@@ -140,7 +144,7 @@ Last activity: 2026-03-02 - Completed quick task 20: DirectML EP for Parakeet + 
 | 17 | Remove Fastest badge from FirstRun, move Recommended badge to Parakeet TDT fp32 for GPU users | 2026-03-02 | ccd1e5d | | [17-remove-fastest-badge-and-move-recommende](./quick/17-remove-fastest-badge-and-move-recommende/) |
 | 18 | Enable GPU acceleration for Whisper small.en — CachedGpuMode used for all Whisper model GPU selection, no model_id hardcoding | 2026-03-02 | da85907 | | [18-enable-gpu-acceleration-for-whisper-smal](./quick/18-enable-gpu-acceleration-for-whisper-smal/) |
 | 19 | Remove Parakeet int8 model from entire codebase — fp32 only remains; FirstRun 3 GPU cards, simplified ModelSelector/ModelSection | 2026-03-02 | 0ef9a61 | Verified | [19-remove-herakeet-int8-model-from-entire-c](./quick/19-remove-herakeet-int8-model-from-entire-c/) |
-| 20 | DirectML EP for Parakeet TDT on non-NVIDIA GPUs; GPU status indicator in ModelSection; DirectML-aware FirstRun badge | 2026-03-02 | 29c129c | | [20-add-directml-support-for-parakeet-on-non](./quick/20-add-directml-support-for-parakeet-on-non/) |
+| 20 | DirectML EP for Parakeet TDT on non-NVIDIA GPUs; GPU status indicator in ModelSection; DirectML-aware FirstRun badge | 2026-03-02 | 29c129c | Verified | [20-add-directml-support-for-parakeet-on-non](./quick/20-add-directml-support-for-parakeet-on-non/) |
 
 ## Accumulated Context
 
