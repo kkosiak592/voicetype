@@ -43,10 +43,10 @@
   2. Source code is accessible at a public GitHub repository URL
   3. GitHub repo secrets contain TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD
   4. Running `tauri signer verify` against a test artifact with the public key succeeds
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 11-01: Generate Ed25519 signing keypair and initialize public GitHub repository with secrets
+- [ ] 11-01-PLAN.md — Generate Ed25519 keypair, push source to public GitHub repo, store signing secrets, verify round-trip signing
 
 ### Phase 12: Plugin Integration
 **Goal**: The app checks for updates on launch and guides the user through download, install, and relaunch without blocking normal use
