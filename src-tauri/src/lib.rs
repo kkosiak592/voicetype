@@ -505,6 +505,40 @@ fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<
     })
     .map_err(|e| e.to_string())?;
 
+    // Persist the new hotkey to settings.json so it survives app restarts.
+    // The frontend also writes via the Tauri plugin-store (same file), but that
+    // write is debounced 100ms and can be lost if another Rust write_settings
+    // call races it or if the app closes before the debounce fires.
+    let mut json = read_settings(&app)?;
+    json["hotkey"] = serde_json::Value::String(new_key);
+    write_settings(&app, &json)?;
+
+    Ok(())
+}
+
+/// Temporarily unregister the global hotkey so keystrokes can be captured
+/// by the frontend hotkey-rebind UI without triggering the shortcut action.
+#[tauri::command]
+fn unregister_hotkey(app: tauri::AppHandle, key: String) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+    if !key.is_empty() {
+        app.global_shortcut().unregister(key.as_str()).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Re-register a previously unregistered hotkey (e.g. when the user cancels
+/// the hotkey capture without choosing a new key).
+#[tauri::command]
+fn register_hotkey(app: tauri::AppHandle, key: String) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+    if !key.is_empty() {
+        app.global_shortcut()
+            .on_shortcut(key.as_str(), |app, _shortcut, event| {
+                handle_shortcut(app, &event);
+            })
+            .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -1018,14 +1052,17 @@ fn check_first_run(app: tauri::AppHandle) -> FirstRunStatus {
     let small_exists = dir.join("ggml-small.en-q5_1.bin").exists();
     // Parakeet fp32 is also a valid installed model — skip first-run if it is present
     let parakeet_fp32_exists = crate::download::parakeet_fp32_model_exists();
-    // directml_available: non-NVIDIA systems get DirectML for Parakeet GPU acceleration
-    let directml_available = !gpu_mode;
+    // directml_available: only true when a discrete non-NVIDIA GPU exists (AMD RX, Intel Arc).
+    // Integrated-only GPUs (Intel UHD, AMD APU) cannot run Parakeet at useful speed via DirectML.
+    let directml_available = detection.0.has_discrete_gpu && !detection.0.is_nvidia;
     FirstRunStatus {
         needs_setup: !large_exists && !small_exists && !parakeet_fp32_exists,
         gpu_detected: gpu_mode,
         gpu_name: detection.0.gpu_name.clone(),
         directml_available,
         recommended_model: if gpu_mode {
+            "parakeet-tdt-v2-fp32".to_string()
+        } else if detection.0.has_discrete_gpu {
             "parakeet-tdt-v2-fp32".to_string()
         } else {
             "small-en".to_string()
@@ -1312,6 +1349,8 @@ pub fn run() {
 
     builder.invoke_handler(tauri::generate_handler![
             rebind_hotkey,
+            unregister_hotkey,
+            register_hotkey,
             set_recording_mode,
             get_recording_mode,
             get_engine,

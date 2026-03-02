@@ -27,6 +27,81 @@ pub struct GpuDetection {
     pub parakeet_provider: String,
     /// Whether this is an NVIDIA GPU (for Whisper CUDA and ModelMode::Gpu)
     pub is_nvidia: bool,
+    /// Whether a discrete (dedicated) GPU with >512 MB VRAM was detected via DXGI.
+    /// True for NVIDIA GPUs (always discrete) and discrete AMD/Intel Arc GPUs.
+    /// False for integrated-only GPUs (Intel UHD, AMD APU) or when DXGI fails.
+    pub has_discrete_gpu: bool,
+}
+
+/// Detects whether a discrete GPU with sufficient VRAM (>512 MB dedicated) exists via DXGI.
+///
+/// Enumerates DXGI adapters and returns true if any non-software adapter has
+/// DedicatedVideoMemory > 512 MB. This distinguishes discrete GPUs (AMD RX, Intel Arc)
+/// from integrated-only GPUs (Intel UHD, AMD APU) which share system RAM.
+///
+/// Returns false on any DXGI error (safe fallback — recommends small-en).
+/// Non-Windows builds always return false.
+#[cfg(target_os = "windows")]
+pub fn has_discrete_gpu() -> bool {
+    use windows::Win32::Graphics::Dxgi::{
+        CreateDXGIFactory1, IDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE,
+    };
+
+    let factory: IDXGIFactory1 = match unsafe { CreateDXGIFactory1() } {
+        Ok(f) => f,
+        Err(e) => {
+            log::warn!("DXGI: CreateDXGIFactory1 failed: {} — assuming no discrete GPU", e);
+            return false;
+        }
+    };
+
+    let mut i = 0u32;
+    loop {
+        let adapter = match unsafe { factory.EnumAdapters1(i) } {
+            Ok(a) => a,
+            Err(_) => break, // No more adapters
+        };
+
+        let desc = match unsafe { adapter.GetDesc1() } {
+            Ok(d) => d,
+            Err(e) => {
+                log::warn!("DXGI: GetDesc1 failed for adapter {}: {}", i, e);
+                i += 1;
+                continue;
+            }
+        };
+
+        // Convert wide string description to a Rust String for logging
+        let name_wide = &desc.Description;
+        let name_len = name_wide.iter().position(|&c| c == 0).unwrap_or(name_wide.len());
+        let name = String::from_utf16_lossy(&name_wide[..name_len]);
+
+        let dedicated_vram_mb = desc.DedicatedVideoMemory / (1024 * 1024);
+        let is_software = (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32) != 0;
+
+        log::info!(
+            "DXGI adapter {}: '{}' — dedicated VRAM: {} MB — software: {}",
+            i,
+            name,
+            dedicated_vram_mb,
+            is_software
+        );
+
+        if !is_software && desc.DedicatedVideoMemory > 512 * 1024 * 1024 {
+            log::info!("DXGI: Discrete GPU found: '{}' ({} MB VRAM)", name, dedicated_vram_mb);
+            return true;
+        }
+
+        i += 1;
+    }
+
+    log::info!("DXGI: No discrete GPU with >512 MB VRAM found — integrated-only or no GPU");
+    false
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn has_discrete_gpu() -> bool {
+    false
 }
 
 /// Detects whether an NVIDIA GPU is available at runtime using NVML.
@@ -60,7 +135,9 @@ pub fn detect_gpu() -> ModelMode {
 }
 
 /// Full GPU detection returning a `GpuDetection` with GPU name, Parakeet provider recommendation,
-/// and NVIDIA flag. On NVIDIA: provider="cuda". On non-NVIDIA: provider="directml". No GPU: provider="cpu".
+/// NVIDIA flag, and discrete GPU flag. On NVIDIA: provider="cuda", has_discrete_gpu=true.
+/// On non-NVIDIA: DXGI enumeration determines has_discrete_gpu; provider="directml" if discrete,
+/// "cpu" if integrated-only.
 ///
 /// Used at startup to populate `CachedGpuDetection` for provider selection and UI display.
 pub fn detect_gpu_full() -> GpuDetection {
@@ -74,23 +151,36 @@ pub fn detect_gpu_full() -> GpuDetection {
                     gpu_name: name,
                     parakeet_provider: "cuda".to_string(),
                     is_nvidia: true,
+                    has_discrete_gpu: true, // NVIDIA GPUs are always discrete
                 }
             }
             Err(e) => {
-                log::info!("GPU detection (full): NVML init OK but no device: {} — using DirectML", e);
+                log::info!("GPU detection (full): NVML init OK but no device: {} — checking DXGI for discrete GPU", e);
+                let discrete = has_discrete_gpu();
                 GpuDetection {
-                    gpu_name: "DirectML (auto-detected)".to_string(),
-                    parakeet_provider: "directml".to_string(),
+                    gpu_name: if discrete {
+                        "DirectML (auto-detected)".to_string()
+                    } else {
+                        "Integrated GPU".to_string()
+                    },
+                    parakeet_provider: if discrete { "directml".to_string() } else { "cpu".to_string() },
                     is_nvidia: false,
+                    has_discrete_gpu: discrete,
                 }
             }
         },
         Err(e) => {
-            log::info!("GPU detection (full): NVML failed: {} — using DirectML", e);
+            log::info!("GPU detection (full): NVML failed: {} — checking DXGI for discrete GPU", e);
+            let discrete = has_discrete_gpu();
             GpuDetection {
-                gpu_name: "DirectML (auto-detected)".to_string(),
-                parakeet_provider: "directml".to_string(),
+                gpu_name: if discrete {
+                    "DirectML (auto-detected)".to_string()
+                } else {
+                    "Integrated GPU".to_string()
+                },
+                parakeet_provider: if discrete { "directml".to_string() } else { "cpu".to_string() },
                 is_nvidia: false,
+                has_discrete_gpu: discrete,
             }
         }
     }
