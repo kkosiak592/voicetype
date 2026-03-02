@@ -26,7 +26,7 @@ See: .planning/PROJECT.md
 **Current plan:** 08-01 complete
 **Status:** Executing
 
-Last activity: 2026-03-02 - Completed quick task 17: Remove Fastest badge, move Recommended to Parakeet TDT fp32 for GPU users
+Last activity: 2026-03-02 - Completed quick task 18: Enable GPU acceleration for Whisper small.en via CachedGpuMode
 
 ## Session Log
 
