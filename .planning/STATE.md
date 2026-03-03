@@ -42,7 +42,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 [##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
 
-Last activity: 2026-03-03 - Completed quick task 31: Add VAD-based chunking to benchmark for Moonshine/SenseVoice on clips >30s
+Last activity: 2026-03-03 - Completed quick task 32: Add 2 more phrase variants per clip duration + markdown report output
 
 ## Performance Metrics
 
@@ -126,9 +126,10 @@ None active.
 | 29 | Patch transcribe-rs locally for configurable CUDA/DirectML execution providers in Moonshine/SenseVoice benchmarks | 2026-03-03 | 222db00 | Verified | [29-patch-transcribe-rs-for-gpu-execution-pr](./quick/29-patch-transcribe-rs-for-gpu-execution-pr/) |
 | 30 | Switch audio capture from persistent stream to on-demand (open on record start, drop after pipeline) — removes Windows mic tray icon when idle | 2026-03-03 | db6fb28 | Verified | [30-switch-audio-capture-from-persistent-str](./quick/30-switch-audio-capture-from-persistent-str/) |
 | 31 | Add VAD-based chunking to benchmark for Moonshine/SenseVoice on clips >30s | 2026-03-03 | 2dfaeef | Verified | [31-add-vad-based-chunking-to-benchmark-for-](./quick/31-add-vad-based-chunking-to-benchmark-for-/) |
+| 32 | Add 2 more phrase variants per clip duration (9 total WAVs) + markdown report output | 2026-03-03 | 220b0bf | Complete | [32-add-2-more-phrase-variants-per-clip-dura](./quick/32-add-2-more-phrase-variants-per-clip-dura/) |
 
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Quick task 31 complete — benchmark binary now VAD-chunks audio >30s for Moonshine/SenseVoice models
+Stopped at: Quick task 32 complete — benchmark expanded to 9 WAV clips with markdown report output
 Resume file: None
