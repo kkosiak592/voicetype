@@ -103,11 +103,22 @@ pub struct VadWorkerState(pub std::sync::Mutex<Option<vad::VadWorkerHandle>>);
 #[cfg(windows)]
 pub struct HookHandleState(pub std::sync::Mutex<Option<keyboard_hook::HookHandle>>);
 
-/// Returns true if the hotkey string represents a modifier-only combo
-/// that requires the WH_KEYBOARD_LL hook (e.g. "ctrl+win").
-/// Standard combos with a letter/number key use tauri-plugin-global-shortcut.
-fn is_hook_hotkey(hotkey: &str) -> bool {
-    hotkey.eq_ignore_ascii_case("ctrl+win")
+/// Tracks whether WH_KEYBOARD_LL hook installation succeeded.
+/// Set at startup, queried by get_hook_status IPC and rebind_hotkey.
+pub struct HookAvailable(pub std::sync::Arc<std::sync::atomic::AtomicBool>);
+
+/// Returns true if the hotkey string contains only modifier tokens and no base key.
+/// Used as the single routing predicate for hook vs global-shortcut backend.
+///
+/// "ctrl+win" -> true (modifier-only -> hook backend)
+/// "ctrl+shift+v" -> false (has base key -> global-shortcut backend)
+fn is_modifier_only(hotkey: &str) -> bool {
+    const MODIFIER_TOKENS: &[&str] = &["ctrl", "alt", "shift", "meta", "win", "super"];
+    !hotkey.is_empty()
+        && hotkey
+            .split('+')
+            .filter(|t| !t.is_empty())
+            .all(|t| MODIFIER_TOKENS.contains(&t.to_lowercase().as_str()))
 }
 
 // WhisperState and related types are only available with the whisper feature.
@@ -564,6 +575,13 @@ fn register_hotkey(app: tauri::AppHandle, key: String) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// Returns whether the keyboard hook is available on this system.
+/// Called by the frontend settings panel to display hook-failure warning.
+#[tauri::command]
+fn get_hook_status(app: tauri::AppHandle) -> bool {
+    app.state::<HookAvailable>().0.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// Start recording: clears the audio buffer and sets the recording flag.
@@ -1403,6 +1421,7 @@ pub fn run() {
             rebind_hotkey,
             unregister_hotkey,
             register_hotkey,
+            get_hook_status,
             set_recording_mode,
             get_recording_mode,
             get_engine,
@@ -1579,45 +1598,88 @@ pub fn run() {
                 app.manage(corrections::CorrectionsState(std::sync::Mutex::new(engine)));
             }
 
-            // Conditional hotkey routing:
-            // - "ctrl+win" (modifier-only): install WH_KEYBOARD_LL hook (Windows only)
-            // - Standard combos: use tauri-plugin-global-shortcut as before
-            #[cfg(windows)]
-            let hook_active = if is_hook_hotkey(&hotkey) {
-                match keyboard_hook::install(app.handle().clone()) {
-                    Ok(handle) => {
-                        log::info!("Keyboard hook installed for hotkey: {}", hotkey);
-                        let hook_state = app.state::<HookHandleState>();
-                        let mut guard = hook_state.0.lock().unwrap_or_else(|e| e.into_inner());
-                        *guard = Some(handle);
-                        true
+            // Hook-availability flag — set based on startup hook-install result.
+            let hook_available = Arc::new(AtomicBool::new(false));
+
+            // Startup hotkey routing — routes based on is_modifier_only predicate:
+            // - Modifier-only combo (e.g. "ctrl+win"): attempt WH_KEYBOARD_LL hook installation
+            // - Standard combo (e.g. "ctrl+shift+space"): use tauri-plugin-global-shortcut
+            // Global-shortcut plugin is always registered (with or without shortcuts) so
+            // GlobalShortcutExt methods are available if the user later rebinds to a standard combo.
+            {
+                // Determine the effective hotkey after possible fallback override
+                let effective_hotkey: std::borrow::Cow<str>;
+
+                #[cfg(all(desktop, windows))]
+                if is_modifier_only(&hotkey) {
+                    // Modifier-only combo: attempt WH_KEYBOARD_LL hook installation
+                    match keyboard_hook::install(app.handle().clone()) {
+                        Ok(handle) => {
+                            hook_available.store(true, std::sync::atomic::Ordering::Relaxed);
+                            log::info!("Keyboard hook installed for hotkey: {}", hotkey);
+                            let hook_state = app.state::<HookHandleState>();
+                            let mut guard = hook_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                            *guard = Some(handle);
+                            effective_hotkey = std::borrow::Cow::Borrowed("");  // no plugin shortcuts needed
+                        }
+                        Err(e) => {
+                            log::warn!("WH_KEYBOARD_LL install failed: {} — falling back to ctrl+shift+space", e);
+                            // hook_available stays false
+                            let fallback = "ctrl+shift+space".to_owned();
+                            // Persist fallback so frontend displays correct hotkey
+                            if let Ok(mut json) = read_settings(app.handle()) {
+                                json["hotkey"] = serde_json::Value::String(fallback.clone());
+                                let _ = write_settings(app.handle(), &json);
+                            }
+                            effective_hotkey = std::borrow::Cow::Owned(fallback);
+                        }
                     }
-                    Err(e) => {
-                        log::error!("Failed to install keyboard hook: {} — falling back to global shortcut", e);
-                        false
+                } else {
+                    effective_hotkey = std::borrow::Cow::Borrowed(hotkey.as_str());
+                }
+
+                #[cfg(all(desktop, not(windows)))]
+                {
+                    // Non-Windows: modifier-only combos not supported, fall through to standard path
+                    effective_hotkey = std::borrow::Cow::Borrowed(hotkey.as_str());
+                }
+
+                #[cfg(not(desktop))]
+                {
+                    // Mobile: no hotkeys
+                    effective_hotkey = std::borrow::Cow::Borrowed("");
+                }
+
+                // Register global-shortcut plugin.
+                // - Hook success path: no shortcuts (plugin registered for runtime rebind availability)
+                // - Standard path or fallback path: with hotkey shortcut
+                #[cfg(desktop)]
+                {
+                    if effective_hotkey.is_empty() {
+                        // Hook is active — register plugin with no shortcuts (runtime rebind support)
+                        app.handle().plugin(
+                            tauri_plugin_global_shortcut::Builder::new()
+                                .with_handler(|app, _shortcut, event| {
+                                    handle_shortcut(app, &event);
+                                })
+                                .build(),
+                        )?;
+                    } else {
+                        // Standard combo or fallback
+                        app.handle().plugin(
+                            tauri_plugin_global_shortcut::Builder::new()
+                                .with_shortcuts([effective_hotkey.as_ref()])?
+                                .with_handler(|app, _shortcut, event| {
+                                    handle_shortcut(app, &event);
+                                })
+                                .build(),
+                        )?;
                     }
                 }
-            } else {
-                false
-            };
-
-            #[cfg(not(windows))]
-            let hook_active = false;
-
-            // Register global hotkey plugin (desktop only — no Android/iOS support).
-            // Skipped when the hook is active (hook handles Ctrl+Win directly).
-            // Always registered for standard combos (non-hook hotkeys).
-            #[cfg(desktop)]
-            if !hook_active {
-                app.handle().plugin(
-                    tauri_plugin_global_shortcut::Builder::new()
-                        .with_shortcuts([hotkey.as_str()])?
-                        .with_handler(|app, _shortcut, event| {
-                            handle_shortcut(app, &event);
-                        })
-                        .build(),
-                )?;
             }
+
+            // Register HookAvailable managed state (always, after routing)
+            app.manage(HookAvailable(hook_available));
 
             // Start persistent audio capture stream.
             // Prefer saved mic device if found; fall back to system default silently (RESEARCH.md Pitfall 6).

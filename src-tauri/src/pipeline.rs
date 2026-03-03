@@ -41,6 +41,16 @@ impl PipelineState {
     pub fn reset_to_idle(&self) {
         self.0.store(Phase::Idle as u8, Ordering::SeqCst);
     }
+
+    /// Read the current pipeline phase without modifying it.
+    /// Used by rebind_hotkey to refuse backend switches mid-recording.
+    pub fn current(&self) -> Phase {
+        match self.0.load(Ordering::Relaxed) {
+            1 => Phase::Recording,
+            2 => Phase::Processing,
+            _ => Phase::Idle,
+        }
+    }
 }
 
 /// Core pipeline orchestration — called from the Released hotkey handler.
