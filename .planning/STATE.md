@@ -127,9 +127,10 @@ None active.
 | 30 | Switch audio capture from persistent stream to on-demand (open on record start, drop after pipeline) — removes Windows mic tray icon when idle | 2026-03-03 | db6fb28 | Verified | [30-switch-audio-capture-from-persistent-str](./quick/30-switch-audio-capture-from-persistent-str/) |
 | 31 | Add VAD-based chunking to benchmark for Moonshine/SenseVoice on clips >30s | 2026-03-03 | 2dfaeef | Verified | [31-add-vad-based-chunking-to-benchmark-for-](./quick/31-add-vad-based-chunking-to-benchmark-for-/) |
 | 32 | Add 2 more phrase variants per clip duration (9 total WAVs) + markdown report output | 2026-03-03 | 220b0bf | Complete | [32-add-2-more-phrase-variants-per-clip-dura](./quick/32-add-2-more-phrase-variants-per-clip-dura/) |
+| 33 | Add GPU execution_providers to streaming Moonshine engine; wire moonshine-streaming-tiny/small/medium into benchmark | 2026-03-03 | 61171c7 | Complete | [33-add-moonshine-v2-streaming-models-to-ben](./quick/33-add-moonshine-v2-streaming-models-to-ben/) |
 
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Quick task 32 complete — benchmark expanded to 9 WAV clips with markdown report output
+Stopped at: Quick task 33 complete — GPU provider support in streaming engine + 3 new streaming model bench sections
 Resume file: None
