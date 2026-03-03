@@ -3,6 +3,26 @@ use enigo::{Direction::{Click, Press, Release}, Enigo, Key, Keyboard, Settings};
 use std::thread;
 use std::time::Duration;
 
+/// Release both LWIN and RWIN via Enigo before simulating Ctrl+V.
+///
+/// This is a defensive layer against the Win-key-stuck failure mode: if the
+/// keyboard_hook passes Win-down through to the OS (Win-first press order) and the
+/// synthetic Win-up injection in keyboard_hook.rs somehow fails or races, inject_text
+/// would fire Ctrl+V while the OS still considers Win held — producing Win+Ctrl+V
+/// (not a paste shortcut), causing a silent paste failure.
+///
+/// Releasing a key that is not actually held is a no-op at the OS level, so this is
+/// always safe to call. Errors are logged and ignored: if we cannot release the Win key
+/// via Enigo, we proceed with the paste attempt anyway (it may still succeed).
+fn release_win_keys(enigo: &mut Enigo) {
+    if let Err(e) = enigo.key(Key::LWin, Release) {
+        log::warn!("inject_text: failed to release LWin before paste: {}", e);
+    }
+    if let Err(e) = enigo.key(Key::RWin, Release) {
+        log::warn!("inject_text: failed to release RWin before paste: {}", e);
+    }
+}
+
 /// Inject text at the current cursor position using clipboard paste.
 ///
 /// Sequence:
@@ -33,9 +53,19 @@ pub fn inject_text(text: &str) -> Result<(), String> {
 
     // Simulate Ctrl+V — fresh Enigo instance per call (anti-pattern: sharing instances)
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
+
+    // Defensive: release Win keys before paste. If the hook's Win-first press path
+    // passed Win-down through to the OS and the synthetic Win-up injection raced or
+    // failed, the OS would treat our Ctrl+V as Win+Ctrl+V — a silent paste failure.
+    // Releasing a key that is not held is a no-op; this is always safe to call.
+    release_win_keys(&mut enigo);
+
+    // Hold Ctrl, click V, release Ctrl — ensuring Ctrl is always released even if
+    // V-click fails (previously ? on the middle call would early-return with Ctrl held).
     enigo.key(Key::Control, Press).map_err(|e| e.to_string())?;
-    enigo.key(Key::Unicode('v'), Click).map_err(|e| e.to_string())?;
+    let v_result = enigo.key(Key::Unicode('v'), Click).map_err(|e| e.to_string());
     enigo.key(Key::Control, Release).map_err(|e| e.to_string())?;
+    v_result?;
 
     // Allow target app to consume the paste before clipboard restore
     // 80ms paste consumption. Previously reduced to 50ms alongside the propagation delay

@@ -198,6 +198,31 @@ unsafe fn inject_mask_key() {
     SendInput(&[input], std::mem::size_of::<INPUT>() as i32);
 }
 
+/// Inject a synthetic Win keyup event for the given VK (VK_LWIN or VK_RWIN) via SendInput.
+///
+/// Purpose: when the Win-first press order occurs (Win-down passed through to OS, then
+/// combo activates), the subsequent Win keyup is suppressed by the hook to prevent Start
+/// menu activation. Without a synthetic Win-up, the OS retains Win-down state indefinitely
+/// — all subsequent keypresses are interpreted as Win+key (e.g. E = Explorer, D = Desktop).
+///
+/// This synthetic event has LLKHF_INJECTED set, so hook_proc's injected-event filter
+/// (line 225) passes it through to the OS without re-processing, preventing infinite loops.
+unsafe fn inject_win_up(vk: VIRTUAL_KEY) {
+    let input = INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: vk,
+                wScan: 0,
+                dwFlags: KEYEVENTF_KEYUP,
+                time: 0,
+                dwExtraInfo: 0,
+            },
+        },
+    };
+    SendInput(&[input], std::mem::size_of::<INPUT>() as i32);
+}
+
 /// Reset all modifier state to defaults. Called on uninstall or error recovery.
 fn reset_state() {
     STATE.ctrl_held.store(false, Ordering::Relaxed);
@@ -337,7 +362,23 @@ unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) 
                     }
                 }
             }
-            // Suppress Win keyup to prevent Start menu opening (MOD-04)
+            // Inject a synthetic Win-up so the OS sees a balanced down/up pair.
+            //
+            // When Win is pressed FIRST (before Ctrl), the Win-down event was passed
+            // through to the OS (combo was not yet active). When combo_active becomes
+            // true and the user releases Win, we suppress the real Win-up here (LRESULT(1))
+            // to prevent the Start menu from opening (MOD-04). Without the synthetic Win-up,
+            // the OS retains Win-held state, causing all subsequent keys to register as
+            // Win+key — keyboard glitch where E opens Explorer, D shows Desktop, etc.
+            //
+            // When Ctrl is pressed FIRST, Win-down was already suppressed (LRESULT(1) at
+            // the Win keydown handler), so no Win-up needs to be injected — but injecting
+            // one anyway is harmless (releasing a key that was never pressed is a no-op
+            // at the OS level). We inject unconditionally for simplicity.
+            //
+            // The injected event has LLKHF_INJECTED set, so hook_proc's filter at line 225
+            // passes it through without re-processing — no infinite loop.
+            inject_win_up(vk);
             return LRESULT(1);
         }
 
