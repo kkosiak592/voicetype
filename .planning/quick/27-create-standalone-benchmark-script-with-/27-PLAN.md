@@ -113,8 +113,7 @@ Create a PowerShell script that uses `System.Speech.Synthesis.SpeechSynthesizer`
 - `test-fixtures/benchmark-60s.wav` — A longer passage of ~60 seconds. Use a multi-paragraph passage repeated/extended to fill ~60s of TTS output. For example, repeat variations of common English dictation text (e.g., multiple sentences from different domains: tech, business, casual).
 
 Script requirements:
-- Set output format: 16kHz, 16-bit, mono PCM WAV (use `[System.Speech.AudioFormatInfo]::new([System.Speech.Synthesis.SpeakOutputFormat]::Riff16Khz16BitMono)` or equivalent — set `SpeechSynthesizer.SetOutputToWaveFile(path, format)` with AudioFormatInfo specifying 16kHz, 16 bits, 1 channel)
-- Actually the simplest approach: use `$synth.SetOutputToWaveFile($path)` which outputs WAV at the default rate, then we handle resampling in the Rust reader. BUT the benchmark binary needs 16kHz input. Better approach: use `[System.Speech.AudioFormatInfo]` constructor with `EncodingFormat=Pcm, SamplesPerSecond=16000, BitsPerSample=16, ChannelCount=1`. The class is `System.Speech.AudioFormatInfo(System.Speech.Synthesis.EncodingFormat, int samplesPerSec, int bitsPerSample, int channelCount)`. Call `$synth.SetOutputToWaveFile($path, $format)`.
+- Set output format to 16kHz, 16-bit, mono PCM WAV. Use `[System.Speech.AudioFormatInfo]::new([System.Speech.Synthesis.EncodingFormat]::Pcm, 16000, 16, 1)` and pass it to `$synth.SetOutputToWaveFile($path, $format)`. This produces WAV files that whisper-rs and parakeet-rs can consume directly.
 - Add `Add-Type -AssemblyName System.Speech` at the top
 - Print file sizes after generation
 - Overwrite existing files (the current ones are 22050Hz and wrong duration)
@@ -127,6 +126,7 @@ Add after the `[lib]` section:
 [[bin]]
 name = "benchmark"
 path = "src/bin/benchmark.rs"
+required-features = ["whisper", "parakeet"]
 # Standalone benchmark binary — does NOT depend on Tauri.
 # Run: cargo run --bin benchmark --features whisper,parakeet --release
 ```
@@ -137,7 +137,7 @@ Create the directory `src-tauri/src/bin/` first.
 
 The benchmark binary should:
 
-1. **WAV reader function** — `read_wav_to_f32(path: &str) -> Result<(Vec<f32>, u32), String>` that handles both Float and Int WAV formats, downmixes to mono. Replicate the pattern from lib.rs:1325 (it's gated behind `#[cfg(debug_assertions)]` so we cannot import it). If the WAV sample rate is not 16000, resample using simple linear interpolation (good enough for benchmark purposes) or just require 16kHz input and error if not.
+1. **WAV reader function** — `read_wav_to_f32(path: &str) -> Result<Vec<f32>, String>` that handles both Float and Int WAV formats, downmixes to mono. Replicate the pattern from lib.rs:1325 (it's gated behind `#[cfg(debug_assertions)]` so we cannot import it). If the WAV sample rate is not 16000, **always perform linear resampling** to 16000Hz (mandatory — do not error on non-16kHz input). This ensures the benchmark works even if the WAV generation produces a different sample rate.
 
 2. **GPU detection** — Use `nvml_wrapper::Nvml` to detect NVIDIA GPU (same pattern as `detect_gpu()` in transcribe.rs). Set `use_gpu = true` if NVIDIA found, false otherwise. Print detection result.
 
@@ -248,13 +248,11 @@ If compilation or runtime errors occur, fix them in `benchmark.rs`. Common issue
 - hound WAV reading: `reader.spec()` returns by value, not reference
   </action>
   <verify>
-    <automated>cd C:/Users/kkosiak.TITANPC/Desktop/Code/voice-to-text && powershell -ExecutionPolicy Bypass -File test-fixtures/generate-benchmark-wavs.ps1 && cd src-tauri && cargo run --bin benchmark --features whisper,parakeet --release 2>&1 | tail -20</automated>
+    <automated>cd C:/Users/kkosiak.TITANPC/Desktop/Code/voice-to-text && powershell -ExecutionPolicy Bypass -File test-fixtures/generate-benchmark-wavs.ps1 && ls -la test-fixtures/benchmark-5s.wav test-fixtures/benchmark-60s.wav 2>&1</automated>
   </verify>
   <done>
   - WAV files exist at correct sizes (~160KB for 5s, ~1.9MB for 60s) at 16kHz 16-bit mono
-  - `cargo run --bin benchmark --release` completes without crashes
-  - Summary table is printed with avg/min/max latency for each downloaded model
-  - Models not present on disk are skipped with an informational message
+  - MANUAL: Run `cd src-tauri && cargo run --bin benchmark --features whisper,parakeet --release` (takes 10-30 min for first CUDA build + benchmark execution). Verify: summary table is printed with avg/min/max latency for each downloaded model, and missing models are skipped with an informational message.
   </done>
 </task>
 
