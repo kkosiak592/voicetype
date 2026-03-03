@@ -3,6 +3,19 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Keyboard Hook
 status: planning
+last_updated: "2026-03-03T15:22:44.378Z"
+progress:
+  total_phases: 7
+  completed_phases: 4
+  total_plans: 12
+  completed_plans: 7
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.2
+milestone_name: Keyboard Hook
+status: planning
 last_updated: "2026-03-03T15:06:28.550Z"
 progress:
   total_phases: 6
@@ -18,18 +31,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** Phase 17 — Frontend Capture UI (modifier-only hotkey capture in settings panel)
+**Current focus:** Phase 19 — Include distil-large-v3.5 as download option and first-time run
 
 ## Position
 
 **Milestone:** v1.2 Keyboard Hook
-**Phase:** 17 — Frontend Capture UI
-**Plan:** 01 complete (2026-03-03)
-**Status:** Ready to plan
+**Phase:** 19 — Include distil-large-v3.5 as download option and first-time run
+**Plan:** 01 complete (2026-03-03) — awaiting human-verify checkpoint
+**Status:** Plan 01 complete, checkpoint pending
 
-[##########------------------------------------------] 0% (0/4 phases)
+[##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
 
-Last activity: 2026-03-03 — Phase 17 Plan 01 complete (modifier-only capture, comboRef fix, HookAvailable builder registration, hook warning condition)
+Last activity: 2026-03-03 — Phase 19 Plan 01 complete (distil-large-v3.5 added to backend + FirstRun.tsx, human-verify checkpoint pending)
 
 ## Performance Metrics
 
@@ -44,6 +57,7 @@ Last activity: 2026-03-03 — Phase 17 Plan 01 complete (modifier-only capture, 
 | Phase 16-rebind-and-coexistence P01 | 5 | 2 tasks | 2 files |
 | Phase 16-rebind-and-coexistence P02 | 8 | 2 tasks | 2 files |
 | Phase 17-frontend-capture-ui P01 | 5 | 2 tasks | 4 files |
+| Phase 19 P01 | 4 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -75,6 +89,8 @@ Last activity: 2026-03-03 — Phase 17 Plan 01 complete (modifier-only capture, 
 - 17-01: MODIFIER_ORDER sorts tokens deterministically (ctrl < alt < shift < meta) regardless of press order
 - 17-01: HookAvailable registered on Builder (not setup closure) — webview2 COM pumps messages before setup() runs
 - 17-01: Hook warning gated on modifier-only hotkey; status refreshed after rebind
+- [Phase 19]: model_info() 4-tuple embeds URL per-model; download_url() removed — supports multi-repo Whisper models
+- [Phase 19]: SHA256 for distil-large-v3.5 obtained from LFS pointer file; actual size 1,519,521,155 bytes
 
 ### Research Flags (from SUMMARY.md)
 
@@ -91,6 +107,7 @@ Last activity: 2026-03-03 — Phase 17 Plan 01 complete (modifier-only capture, 
 
 - Phase 19 added: Include distil-large-v3.5 as download option and first-time run
 - Phase 20 added: Implement dual CPU/GPU installers with variant-specific auto-updates
+- Phase 21 added: Integration and Distribution (moved from Phase 18 — voided Phase 18 to allow 19-20 to execute first)
 
 ### Blockers/Concerns
 
@@ -99,5 +116,5 @@ None active.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Phase 16 Plan 02 complete — ready for next plan in Phase 16
+Stopped at: Phase 19 Plan 01 — 2 tasks complete, awaiting human-verify checkpoint (Task 3)
 Resume file: None
