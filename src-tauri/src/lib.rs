@@ -529,21 +529,89 @@ fn handle_shortcut(app: &tauri::AppHandle, event: &tauri_plugin_global_shortcut:
 fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<(), String> {
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
-    let gs = app.global_shortcut();
-
-    if !old.is_empty() {
-        gs.unregister(old.as_str()).map_err(|e| e.to_string())?;
+    // Guard: refuse to switch backends mid-recording
+    let pipeline = app.state::<pipeline::PipelineState>();
+    if pipeline.current() != pipeline::Phase::Idle {
+        return Err("Recording in progress — wait for it to finish before changing hotkey".to_string());
     }
 
-    gs.on_shortcut(new_key.as_str(), |app, _shortcut, event| {
-        handle_shortcut(app, &event);
-    })
-    .map_err(|e| e.to_string())?;
+    // Tear down old backend (old off before new on)
+    if !old.is_empty() {
+        if is_modifier_only(&old) {
+            // Stop hook backend: take handle from managed state (Drop calls uninstall)
+            #[cfg(windows)]
+            {
+                let hook_state = app.state::<HookHandleState>();
+                let mut guard = hook_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(handle) = guard.take() {
+                    handle.uninstall();
+                }
+            }
+        } else {
+            app.global_shortcut().unregister(old.as_str()).map_err(|e| e.to_string())?;
+        }
+    }
+
+    // Start new backend
+    if is_modifier_only(&new_key) {
+        // Check hook availability before attempting modifier-only combo
+        let hook_status = app.state::<HookAvailable>();
+        if !hook_status.0.load(std::sync::atomic::Ordering::Relaxed) {
+            // Hook not yet installed — attempt installation now
+            #[cfg(windows)]
+            {
+                match keyboard_hook::install(app.clone()) {
+                    Ok(handle) => {
+                        hook_status.0.store(true, std::sync::atomic::Ordering::Relaxed);
+                        let hook_state = app.state::<HookHandleState>();
+                        let mut guard = hook_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                        *guard = Some(handle);
+                        log::info!("Keyboard hook installed via rebind for: {}", new_key);
+                    }
+                    Err(e) => {
+                        return Err(format!(
+                            "Modifier-only combos require the keyboard hook, which failed to install: {}. Choose a standard combo like Ctrl+Shift+V.",
+                            e
+                        ));
+                    }
+                }
+            }
+            #[cfg(not(windows))]
+            {
+                return Err("Modifier-only combos require the keyboard hook, which is unavailable on this system. Choose a standard combo like Ctrl+Shift+V.".to_string());
+            }
+        } else {
+            // Hook was previously installed — re-install to activate for new combo
+            // (hook may have been stopped by the old-backend teardown above)
+            #[cfg(windows)]
+            {
+                let hook_state = app.state::<HookHandleState>();
+                let already_active = {
+                    let guard = hook_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                    guard.is_some()
+                };
+                if !already_active {
+                    match keyboard_hook::install(app.clone()) {
+                        Ok(handle) => {
+                            let mut guard = hook_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                            *guard = Some(handle);
+                        }
+                        Err(e) => {
+                            return Err(format!("Failed to re-install keyboard hook: {}", e));
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        app.global_shortcut()
+            .on_shortcut(new_key.as_str(), |app, _shortcut, event| {
+                handle_shortcut(app, &event);
+            })
+            .map_err(|e| e.to_string())?;
+    }
 
     // Persist the new hotkey to settings.json so it survives app restarts.
-    // The frontend also writes via the Tauri plugin-store (same file), but that
-    // write is debounced 100ms and can be lost if another Rust write_settings
-    // call races it or if the app closes before the debounce fires.
     let mut json = read_settings(&app)?;
     json["hotkey"] = serde_json::Value::String(new_key);
     write_settings(&app, &json)?;
@@ -555,9 +623,21 @@ fn rebind_hotkey(app: tauri::AppHandle, old: String, new_key: String) -> Result<
 /// by the frontend hotkey-rebind UI without triggering the shortcut action.
 #[tauri::command]
 fn unregister_hotkey(app: tauri::AppHandle, key: String) -> Result<(), String> {
-    use tauri_plugin_global_shortcut::GlobalShortcutExt;
     if !key.is_empty() {
-        app.global_shortcut().unregister(key.as_str()).map_err(|e| e.to_string())?;
+        if is_modifier_only(&key) {
+            // Stop hook backend: take handle from managed state (Drop calls uninstall)
+            #[cfg(windows)]
+            {
+                let hook_state = app.state::<HookHandleState>();
+                let mut guard = hook_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(handle) = guard.take() {
+                    handle.uninstall();
+                }
+            }
+        } else {
+            use tauri_plugin_global_shortcut::GlobalShortcutExt;
+            app.global_shortcut().unregister(key.as_str()).map_err(|e| e.to_string())?;
+        }
     }
     Ok(())
 }
@@ -566,13 +646,36 @@ fn unregister_hotkey(app: tauri::AppHandle, key: String) -> Result<(), String> {
 /// the hotkey capture without choosing a new key).
 #[tauri::command]
 fn register_hotkey(app: tauri::AppHandle, key: String) -> Result<(), String> {
-    use tauri_plugin_global_shortcut::GlobalShortcutExt;
     if !key.is_empty() {
-        app.global_shortcut()
-            .on_shortcut(key.as_str(), |app, _shortcut, event| {
-                handle_shortcut(app, &event);
-            })
-            .map_err(|e| e.to_string())?;
+        if is_modifier_only(&key) {
+            // Re-install hook backend
+            #[cfg(windows)]
+            {
+                let hook_state = app.state::<HookHandleState>();
+                let already_active = {
+                    let guard = hook_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                    guard.is_some()
+                };
+                if !already_active {
+                    match keyboard_hook::install(app.clone()) {
+                        Ok(handle) => {
+                            let mut guard = hook_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                            *guard = Some(handle);
+                        }
+                        Err(e) => {
+                            return Err(format!("Failed to re-install keyboard hook: {}", e));
+                        }
+                    }
+                }
+            }
+        } else {
+            use tauri_plugin_global_shortcut::GlobalShortcutExt;
+            app.global_shortcut()
+                .on_shortcut(key.as_str(), |app, _shortcut, event| {
+                    handle_shortcut(app, &event);
+                })
+                .map_err(|e| e.to_string())?;
+        }
     }
     Ok(())
 }
