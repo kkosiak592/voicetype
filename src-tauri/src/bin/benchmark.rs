@@ -20,7 +20,7 @@ use parakeet_rs::{ExecutionConfig, ExecutionProvider, ParakeetTDT, TimestampMode
 #[cfg(feature = "bench_extra")]
 use transcribe_rs::{
     TranscriptionEngine,
-    engines::moonshine::{MoonshineEngine, MoonshineModelParams},
+    engines::moonshine::{MoonshineEngine, MoonshineModelParams, MoonshineStreamingEngine, StreamingModelParams},
     engines::sense_voice::{SenseVoiceEngine, SenseVoiceModelParams},
 };
 
@@ -542,6 +542,39 @@ fn main() {
             None
         }
     };
+    #[cfg(feature = "bench_extra")]
+    let moonshine_streaming_tiny_path: Option<PathBuf> = {
+        let p = models_dir.join("moonshine-streaming-tiny");
+        if p.exists() && p.is_dir() {
+            println!("  FOUND    moonshine-streaming-tiny");
+            Some(p)
+        } else {
+            println!("  MISSING  moonshine-streaming-tiny ({})", p.display());
+            None
+        }
+    };
+    #[cfg(feature = "bench_extra")]
+    let moonshine_streaming_small_path: Option<PathBuf> = {
+        let p = models_dir.join("moonshine-streaming-small");
+        if p.exists() && p.is_dir() {
+            println!("  FOUND    moonshine-streaming-small");
+            Some(p)
+        } else {
+            println!("  MISSING  moonshine-streaming-small ({})", p.display());
+            None
+        }
+    };
+    #[cfg(feature = "bench_extra")]
+    let moonshine_streaming_medium_path: Option<PathBuf> = {
+        let p = models_dir.join("moonshine-streaming-medium");
+        if p.exists() && p.is_dir() {
+            println!("  FOUND    moonshine-streaming-medium");
+            Some(p)
+        } else {
+            println!("  MISSING  moonshine-streaming-medium ({})", p.display());
+            None
+        }
+    };
     #[cfg(not(feature = "bench_extra"))]
     println!("  (bench_extra feature disabled — skipping moonshine/sensevoice models)");
 
@@ -1000,6 +1033,267 @@ fn main() {
 
                 results.push(BenchResult {
                     model: "moonshine-base".to_string(),
+                    clip: clip_label.to_string(),
+                    avg_ms: avg,
+                    min_ms: min,
+                    max_ms: max,
+                    wer,
+                    first_text,
+                });
+            }
+        }
+
+        // --- Moonshine streaming tiny ---
+        if let Some(ref mpath) = moonshine_streaming_tiny_path {
+            println!("\n=== moonshine-streaming-tiny (provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
+            let load_start = Instant::now();
+            let mut engine = MoonshineStreamingEngine::new();
+            let mut params = StreamingModelParams::default();
+            params.execution_providers = bench_extra_providers.clone();
+            match engine.load_model_with_params(mpath.as_path(), params) {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("  ERROR loading moonshine-streaming-tiny: {}", e);
+                }
+            }
+            println!("  Load time: {}ms", load_start.elapsed().as_millis());
+
+            for (wav_path, clip_label) in &clip_paths {
+                println!("  Clip: {}", clip_label);
+                let audio = match read_wav_to_f32(wav_path) {
+                    Ok(a) => a,
+                    Err(e) => {
+                        eprintln!("  ERROR reading WAV: {}", e);
+                        continue;
+                    }
+                };
+
+                // Streaming engine handles long audio natively — no VAD chunking needed
+                let chunks: Vec<Vec<f32>> = vec![audio];
+
+                let mut latencies: Vec<u64> = Vec::with_capacity(ITERATIONS);
+                let mut first_text = String::new();
+
+                for i in 0..ITERATIONS {
+                    let t = Instant::now();
+                    let mut combined_text = String::new();
+                    let mut had_error = false;
+
+                    for (seg_idx, seg) in chunks.iter().enumerate() {
+                        match engine.transcribe_samples(seg.clone(), None) {
+                            Ok(result) => {
+                                if !combined_text.is_empty() && !result.text.trim().is_empty() {
+                                    combined_text.push(' ');
+                                }
+                                combined_text.push_str(result.text.trim());
+                            }
+                            Err(e) => {
+                                eprintln!("  ERROR during inference run {} seg {}: {}", i + 1, seg_idx, e);
+                                had_error = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if had_error { break; }
+
+                    let elapsed = t.elapsed().as_millis() as u64;
+                    latencies.push(elapsed);
+                    if i == 0 {
+                        first_text = combined_text.trim().to_string();
+                        println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
+                    } else {
+                        println!("  [run {}] {}ms", i + 1, elapsed);
+                    }
+                }
+
+                if latencies.is_empty() {
+                    continue;
+                }
+                let avg = latencies.iter().sum::<u64>() / latencies.len() as u64;
+                let min = *latencies.iter().min().unwrap();
+                let max = *latencies.iter().max().unwrap();
+
+                let reference = reference_for_clip(clip_label);
+                let (wer, subs, ins, dels, ref_n) = compute_wer(reference, &first_text);
+                println!("  -> avg={}ms  min={}ms  max={}ms  WER={:.1}% (S={} I={} D={} / {} words)", avg, min, max, wer, subs, ins, dels, ref_n);
+
+                results.push(BenchResult {
+                    model: "moonshine-streaming-tiny".to_string(),
+                    clip: clip_label.to_string(),
+                    avg_ms: avg,
+                    min_ms: min,
+                    max_ms: max,
+                    wer,
+                    first_text,
+                });
+            }
+        }
+
+        // --- Moonshine streaming small ---
+        if let Some(ref mpath) = moonshine_streaming_small_path {
+            println!("\n=== moonshine-streaming-small (provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
+            let load_start = Instant::now();
+            let mut engine = MoonshineStreamingEngine::new();
+            let mut params = StreamingModelParams::default();
+            params.execution_providers = bench_extra_providers.clone();
+            match engine.load_model_with_params(mpath.as_path(), params) {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("  ERROR loading moonshine-streaming-small: {}", e);
+                }
+            }
+            println!("  Load time: {}ms", load_start.elapsed().as_millis());
+
+            for (wav_path, clip_label) in &clip_paths {
+                println!("  Clip: {}", clip_label);
+                let audio = match read_wav_to_f32(wav_path) {
+                    Ok(a) => a,
+                    Err(e) => {
+                        eprintln!("  ERROR reading WAV: {}", e);
+                        continue;
+                    }
+                };
+
+                // Streaming engine handles long audio natively — no VAD chunking needed
+                let chunks: Vec<Vec<f32>> = vec![audio];
+
+                let mut latencies: Vec<u64> = Vec::with_capacity(ITERATIONS);
+                let mut first_text = String::new();
+
+                for i in 0..ITERATIONS {
+                    let t = Instant::now();
+                    let mut combined_text = String::new();
+                    let mut had_error = false;
+
+                    for (seg_idx, seg) in chunks.iter().enumerate() {
+                        match engine.transcribe_samples(seg.clone(), None) {
+                            Ok(result) => {
+                                if !combined_text.is_empty() && !result.text.trim().is_empty() {
+                                    combined_text.push(' ');
+                                }
+                                combined_text.push_str(result.text.trim());
+                            }
+                            Err(e) => {
+                                eprintln!("  ERROR during inference run {} seg {}: {}", i + 1, seg_idx, e);
+                                had_error = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if had_error { break; }
+
+                    let elapsed = t.elapsed().as_millis() as u64;
+                    latencies.push(elapsed);
+                    if i == 0 {
+                        first_text = combined_text.trim().to_string();
+                        println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
+                    } else {
+                        println!("  [run {}] {}ms", i + 1, elapsed);
+                    }
+                }
+
+                if latencies.is_empty() {
+                    continue;
+                }
+                let avg = latencies.iter().sum::<u64>() / latencies.len() as u64;
+                let min = *latencies.iter().min().unwrap();
+                let max = *latencies.iter().max().unwrap();
+
+                let reference = reference_for_clip(clip_label);
+                let (wer, subs, ins, dels, ref_n) = compute_wer(reference, &first_text);
+                println!("  -> avg={}ms  min={}ms  max={}ms  WER={:.1}% (S={} I={} D={} / {} words)", avg, min, max, wer, subs, ins, dels, ref_n);
+
+                results.push(BenchResult {
+                    model: "moonshine-streaming-small".to_string(),
+                    clip: clip_label.to_string(),
+                    avg_ms: avg,
+                    min_ms: min,
+                    max_ms: max,
+                    wer,
+                    first_text,
+                });
+            }
+        }
+
+        // --- Moonshine streaming medium ---
+        if let Some(ref mpath) = moonshine_streaming_medium_path {
+            println!("\n=== moonshine-streaming-medium (provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
+            let load_start = Instant::now();
+            let mut engine = MoonshineStreamingEngine::new();
+            let mut params = StreamingModelParams::default();
+            params.execution_providers = bench_extra_providers.clone();
+            match engine.load_model_with_params(mpath.as_path(), params) {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("  ERROR loading moonshine-streaming-medium: {}", e);
+                }
+            }
+            println!("  Load time: {}ms", load_start.elapsed().as_millis());
+
+            for (wav_path, clip_label) in &clip_paths {
+                println!("  Clip: {}", clip_label);
+                let audio = match read_wav_to_f32(wav_path) {
+                    Ok(a) => a,
+                    Err(e) => {
+                        eprintln!("  ERROR reading WAV: {}", e);
+                        continue;
+                    }
+                };
+
+                // Streaming engine handles long audio natively — no VAD chunking needed
+                let chunks: Vec<Vec<f32>> = vec![audio];
+
+                let mut latencies: Vec<u64> = Vec::with_capacity(ITERATIONS);
+                let mut first_text = String::new();
+
+                for i in 0..ITERATIONS {
+                    let t = Instant::now();
+                    let mut combined_text = String::new();
+                    let mut had_error = false;
+
+                    for (seg_idx, seg) in chunks.iter().enumerate() {
+                        match engine.transcribe_samples(seg.clone(), None) {
+                            Ok(result) => {
+                                if !combined_text.is_empty() && !result.text.trim().is_empty() {
+                                    combined_text.push(' ');
+                                }
+                                combined_text.push_str(result.text.trim());
+                            }
+                            Err(e) => {
+                                eprintln!("  ERROR during inference run {} seg {}: {}", i + 1, seg_idx, e);
+                                had_error = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if had_error { break; }
+
+                    let elapsed = t.elapsed().as_millis() as u64;
+                    latencies.push(elapsed);
+                    if i == 0 {
+                        first_text = combined_text.trim().to_string();
+                        println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
+                    } else {
+                        println!("  [run {}] {}ms", i + 1, elapsed);
+                    }
+                }
+
+                if latencies.is_empty() {
+                    continue;
+                }
+                let avg = latencies.iter().sum::<u64>() / latencies.len() as u64;
+                let min = *latencies.iter().min().unwrap();
+                let max = *latencies.iter().max().unwrap();
+
+                let reference = reference_for_clip(clip_label);
+                let (wer, subs, ins, dels, ref_n) = compute_wer(reference, &first_text);
+                println!("  -> avg={}ms  min={}ms  max={}ms  WER={:.1}% (S={} I={} D={} / {} words)", avg, min, max, wer, subs, ins, dels, ref_n);
+
+                results.push(BenchResult {
+                    model: "moonshine-streaming-medium".to_string(),
                     clip: clip_label.to_string(),
                     avg_ms: avg,
                     min_ms: min,

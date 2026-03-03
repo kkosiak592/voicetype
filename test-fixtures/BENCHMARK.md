@@ -74,5 +74,10 @@ Models that aren't downloaded are skipped automatically.
 | moonshine-tiny | `moonshine-tiny-ONNX/` | ~108 MB | [onnx-community/moonshine-tiny-ONNX](https://huggingface.co/onnx-community/moonshine-tiny-ONNX) |
 | moonshine-base | `moonshine-base-ONNX/` | ~240 MB | [onnx-community/moonshine-base-ONNX](https://huggingface.co/onnx-community/moonshine-base-ONNX) |
 | sensevoice-small | `sensevoice-small/` | ~229 MB | [sherpa-onnx SenseVoice](https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17) |
+| moonshine-streaming-tiny   | `moonshine-streaming-tiny/`   | ~? MB | [usefulsensors/moonshine](https://huggingface.co/usefulsensors/moonshine) streaming ONNX |
+| moonshine-streaming-small  | `moonshine-streaming-small/`  | ~? MB | [usefulsensors/moonshine](https://huggingface.co/usefulsensors/moonshine) streaming ONNX |
+| moonshine-streaming-medium | `moonshine-streaming-medium/` | ~? MB | [usefulsensors/moonshine](https://huggingface.co/usefulsensors/moonshine) streaming ONNX |
+
+> Moonshine streaming models use the 5-session streaming ONNX pipeline (frontend, encoder, adapter, cross_kv, decoder_kv) and do not require VAD chunking — they handle audio of any length natively via sliding-window encoder.
 
 All models are stored in `%APPDATA%\VoiceType\models\`.
