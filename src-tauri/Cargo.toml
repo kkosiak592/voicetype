@@ -35,7 +35,7 @@ whisper = ["dep:whisper-rs", "dep:nvml-wrapper"]
 parakeet = ["dep:parakeet-rs"]
 # Enable Moonshine and SenseVoice benchmarks via transcribe-rs (benchmark binary only).
 # Run: cargo run --bin benchmark --features whisper,parakeet,bench_extra --release
-bench_extra = ["dep:transcribe-rs"]
+bench_extra = ["dep:transcribe-rs", "dep:ort"]
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
@@ -87,6 +87,9 @@ parakeet-rs = { version = "0.1.9", features = ["cuda", "directml"], optional = t
 # Moonshine + SenseVoice inference via transcribe-rs (optional — benchmark only).
 # Uses ort = "2.0.0-rc.10" (same version as parakeet-rs and voice_activity_detector — no conflict).
 transcribe-rs = { version = "0.2.8", features = ["moonshine", "sense_voice", "cuda", "directml"], optional = true }
+# ORT execution providers — used by benchmark binary to construct CUDA/CPU provider vecs
+# for transcribe-rs models. Version must match transcribe-rs's ort dependency.
+ort = { version = "2.0.0-rc.10", optional = true }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-global-shortcut = "2"

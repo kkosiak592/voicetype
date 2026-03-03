@@ -23,6 +23,9 @@ use transcribe_rs::{
     engines::sense_voice::{SenseVoiceEngine, SenseVoiceModelParams},
 };
 
+#[cfg(feature = "bench_extra")]
+use ort::execution_providers::{CUDAExecutionProvider, CPUExecutionProvider};
+
 // ---------------------------------------------------------------------------
 // WAV reading
 // ---------------------------------------------------------------------------
@@ -626,12 +629,25 @@ fn main() {
     // -----------------------------------------------------------------------
     #[cfg(feature = "bench_extra")]
     {
+        let bench_extra_providers: Option<Vec<ort::execution_providers::ExecutionProviderDispatch>> =
+            if parakeet_provider == "cuda" {
+                println!("  [bench_extra] Using CUDA ExecutionProvider for Moonshine/SenseVoice");
+                Some(vec![
+                    CUDAExecutionProvider::default().with_tf32(true).build(),
+                    CPUExecutionProvider::default().build(),
+                ])
+            } else {
+                None // Use default CPU
+            };
+
         // --- Moonshine tiny ---
         if let Some(ref mpath) = moonshine_tiny_path {
-            println!("\n=== moonshine-tiny ===");
+            println!("\n=== moonshine-tiny (provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
             let load_start = Instant::now();
             let mut engine = MoonshineEngine::new();
-            match engine.load_model_with_params(mpath.as_path(), MoonshineModelParams::tiny()) {
+            let mut params = MoonshineModelParams::tiny();
+            params.execution_providers = bench_extra_providers.clone();
+            match engine.load_model_with_params(mpath.as_path(), params) {
                 Ok(_) => {}
                 Err(e) => {
                     eprintln!("  ERROR loading moonshine-tiny: {}", e);
@@ -697,10 +713,12 @@ fn main() {
 
         // --- Moonshine base ---
         if let Some(ref mpath) = moonshine_base_path {
-            println!("\n=== moonshine-base ===");
+            println!("\n=== moonshine-base (provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
             let load_start = Instant::now();
             let mut engine = MoonshineEngine::new();
-            match engine.load_model_with_params(mpath.as_path(), MoonshineModelParams::base()) {
+            let mut params = MoonshineModelParams::base();
+            params.execution_providers = bench_extra_providers.clone();
+            match engine.load_model_with_params(mpath.as_path(), params) {
                 Ok(_) => {}
                 Err(e) => {
                     eprintln!("  ERROR loading moonshine-base: {}", e);
@@ -766,10 +784,12 @@ fn main() {
 
         // --- SenseVoice small ---
         if let Some(ref spath) = sensevoice_path {
-            println!("\n=== sensevoice-small ===");
+            println!("\n=== sensevoice-small (provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
             let load_start = Instant::now();
             let mut engine = SenseVoiceEngine::new();
-            match engine.load_model_with_params(spath.as_path(), SenseVoiceModelParams::default()) {
+            let mut params = SenseVoiceModelParams::default();
+            params.execution_providers = bench_extra_providers.clone();
+            match engine.load_model_with_params(spath.as_path(), params) {
                 Ok(_) => {}
                 Err(e) => {
                     eprintln!("  ERROR loading sensevoice-small: {}", e);
