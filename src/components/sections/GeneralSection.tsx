@@ -80,7 +80,7 @@ export function GeneralSection({
             Click the box below then press your desired key combination.
           </p>
           <HotkeyCapture value={hotkey} onChange={onHotkeyChange} />
-          {!hookAvailable && (
+          {!hookAvailable && hotkey.split('+').every(k => ['ctrl', 'alt', 'shift', 'meta', 'win', 'super'].includes(k)) && (
             <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
               Hook unavailable — using standard shortcut fallback
             </p>

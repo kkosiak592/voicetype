@@ -155,7 +155,11 @@ function App() {
           {activeSection === 'general' && (
             <GeneralSection
               hotkey={hotkey}
-              onHotkeyChange={setHotkey}
+              onHotkeyChange={(newKey) => {
+                setHotkey(newKey);
+                // Re-query hook status — rebind_hotkey may have installed the hook on-demand
+                invoke<boolean>('get_hook_status').then(setHookAvailable).catch(() => {});
+              }}
               recordingMode={recordingMode}
               onRecordingModeChange={setRecordingMode}
               updaterState={updater.state}
