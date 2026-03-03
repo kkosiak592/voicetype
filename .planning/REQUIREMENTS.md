@@ -30,8 +30,8 @@ Requirements for Ctrl+Win modifier-only hotkey activation. Each maps to roadmap 
 
 ### Frontend
 
-- [ ] **UI-01**: Hotkey capture dialog accepts Ctrl+Win as a valid modifier-only combo without requiring a letter key
-- [ ] **UI-02**: Settings panel displays modifier-only combos as "Ctrl + Win"
+- [x] **UI-01**: Hotkey capture dialog accepts Ctrl+Win as a valid modifier-only combo without requiring a letter key
+- [x] **UI-02**: Settings panel displays modifier-only combos as "Ctrl + Win"
 
 ### Distribution
 
@@ -90,8 +90,8 @@ Deferred to future release. Tracked but not in current roadmap.
 | INT-01 | Phase 15 | Complete |
 | INT-02 | Phase 16 | Complete |
 | INT-03 | Phase 16 | Complete |
-| UI-01 | Phase 17 | Pending |
-| UI-02 | Phase 17 | Pending |
+| UI-01 | Phase 17 | Complete |
+| UI-02 | Phase 17 | Complete |
 | DIST-01 | Phase 18 | Pending |
 | UPD-01 | Phase 11 | Complete |
 | UPD-02 | Phase 12 | Complete |

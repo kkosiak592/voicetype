@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Keyboard Hook
 status: completed
-last_updated: "2026-03-03T14:10:34.003Z"
+last_updated: "2026-03-03T14:32:55.563Z"
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_phases: 6
+  completed_phases: 3
+  total_plans: 6
+  completed_plans: 6
 ---
 
 # Session State
@@ -69,6 +69,10 @@ Last activity: 2026-03-03 — Phase 16 Plan 02 complete (hook status UI warning:
 - 16-02: hookAvailable defaults to true — silent-catch IPC pattern prevents warning flicker and maintains pre-v1.2 compatibility
 - 16-02: Tasks 1+2 committed atomically — splitting would create intermediate TypeScript type error
 - 16-02: Amber color for hook warning (not red) — app still functions with fallback shortcut, warning severity not error severity
+- [Phase 17-01]: 17-01: modifierToken uses e.code (not e.ctrlKey/e.metaKey flags) on keyup — flags already false for released key
+- [Phase 17-01]: 17-01: read heldRef tokens BEFORE deleting on keyup — pre-delete state is the combo
+- [Phase 17-01]: 17-01: MODIFIER_ORDER sorts tokens deterministically (ctrl < alt < shift < meta) regardless of press order
+- [Phase 17-01]: 17-01: heldRef cleared on all cancel paths (Escape, click-away, useEffect cleanup) to prevent stale modifier state
 
 ### Research Flags (from SUMMARY.md)
 
@@ -80,6 +84,11 @@ Last activity: 2026-03-03 — Phase 16 Plan 02 complete (hook status UI warning:
 1. Investigate microphone icon persisting in system tray (area: ui)
 2. Implement sub-500ms transcription latency improvements (area: backend)
 3. Simplify profiles to shared dictionary and editable prompts (area: ui)
+
+### Roadmap Evolution
+
+- Phase 19 added: Include distil-large-v3.5 as download option and first-time run
+- Phase 20 added: Implement dual CPU/GPU installers with variant-specific auto-updates
 
 ### Blockers/Concerns
 

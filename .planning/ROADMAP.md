@@ -40,7 +40,7 @@
 
 - [x] **Phase 15: Hook Module** - Install WH_KEYBOARD_LL on a dedicated thread, implement modifier state machine with debounce and Start menu suppression, wire hold-to-talk end-to-end (completed 2026-03-03)
 - [x] **Phase 16: Rebind and Coexistence** - Route modifier-only combos through the hook and standard combos through tauri-plugin-global-shortcut; surface hook failure to user (completed 2026-03-03)
-- [ ] **Phase 17: Frontend Capture UI** - Accept and display modifier-only combos in the hotkey capture dialog and settings panel
+- [x] **Phase 17: Frontend Capture UI** - Accept and display modifier-only combos in the hotkey capture dialog and settings panel (completed 2026-03-03)
 - [ ] **Phase 18: Integration and Distribution** - Verify behavior across all critical runtime conditions and confirm VirusTotal clean on signed v1.2 binary
 
 ## Phase Details
@@ -102,7 +102,7 @@ Phases execute in numeric order: 15 → 16 → 17 (parallelizable with 16 after 
 |-------|-----------|----------------|--------|-----------|
 | 15. Hook Module | v1.2 | Complete    | 2026-03-03 | 2026-03-03 |
 | 16. Rebind and Coexistence | 2/2 | Complete    | 2026-03-03 | - |
-| 17. Frontend Capture UI | v1.2 | 0/1 | Planned | - |
+| 17. Frontend Capture UI | 1/1 | Complete   | 2026-03-03 | - |
 | 18. Integration and Distribution | v1.2 | 0/? | Not started | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
@@ -113,7 +113,17 @@ Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
 **Goal:** [To be planned]
 **Requirements**: TBD
 **Depends on:** Phase 18
-**Plans:** 0 plans
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 19 to break down)
+
+### Phase 20: Implement dual CPU/GPU installers with variant-specific auto-updates
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 19
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 20 to break down)
