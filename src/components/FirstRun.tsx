@@ -27,6 +27,14 @@ const MODELS = [
     gpuOnly: true,
   },
   {
+    id: 'distil-large-v3.5',
+    name: 'Distil Large v3.5',
+    size: '1.52 GB',
+    quality: 'High accuracy, fast',
+    requirement: 'GPU recommended, works on any hardware',
+    gpuOnly: false,
+  },
+  {
     id: 'parakeet-tdt-v2-fp32',
     name: 'Parakeet TDT (fp32)',
     size: '2.56 GB',
@@ -170,11 +178,13 @@ export function FirstRun({ gpuDetected, gpuName, directmlAvailable, recommendedM
     totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : null;
 
   const gridClass =
-    visibleModels.length >= 3
-      ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6'
-      : visibleModels.length === 2
-        ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 mb-6'
-        : 'grid grid-cols-1 gap-4 mb-6';
+    visibleModels.length >= 4
+      ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-6'
+      : visibleModels.length >= 3
+        ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6'
+        : visibleModels.length === 2
+          ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 mb-6'
+          : 'grid grid-cols-1 gap-4 mb-6';
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center px-8 py-10 bg-white dark:bg-gray-900">
