@@ -42,7 +42,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 [##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
 
-Last activity: 2026-03-03 - Completed quick task 29: Patch transcribe-rs for GPU execution providers in Moonshine/SenseVoice benchmarks
+Last activity: 2026-03-03 - Completed quick task 31: Add VAD-based chunking to benchmark for Moonshine/SenseVoice on clips >30s
 
 ## Performance Metrics
 
@@ -125,9 +125,10 @@ None active.
 | 28 | Add Moonshine tiny/base and SenseVoice to benchmark binary via transcribe-rs behind bench_extra feature flag | 2026-03-03 | bc32349 | Verified | [28-add-moonshine-and-sensevoice-to-benchmar](./quick/28-add-moonshine-and-sensevoice-to-benchmar/) |
 | 29 | Patch transcribe-rs locally for configurable CUDA/DirectML execution providers in Moonshine/SenseVoice benchmarks | 2026-03-03 | 222db00 | Verified | [29-patch-transcribe-rs-for-gpu-execution-pr](./quick/29-patch-transcribe-rs-for-gpu-execution-pr/) |
 | 30 | Switch audio capture from persistent stream to on-demand (open on record start, drop after pipeline) — removes Windows mic tray icon when idle | 2026-03-03 | db6fb28 | Verified | [30-switch-audio-capture-from-persistent-str](./quick/30-switch-audio-capture-from-persistent-str/) |
+| 31 | Add VAD-based chunking to benchmark for Moonshine/SenseVoice on clips >30s | 2026-03-03 | 2dfaeef | Verified | [31-add-vad-based-chunking-to-benchmark-for-](./quick/31-add-vad-based-chunking-to-benchmark-for-/) |
 
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Quick task 30 complete — audio capture is now on-demand, Windows mic tray icon only appears during active recording
+Stopped at: Quick task 31 complete — benchmark binary now VAD-chunks audio >30s for Moonshine/SenseVoice models
 Resume file: None
