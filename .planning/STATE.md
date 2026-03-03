@@ -91,6 +91,9 @@ Last activity: 2026-03-03 - Completed quick task 27: Create standalone benchmark
 - 17-01: Hook warning gated on modifier-only hotkey; status refreshed after rebind
 - [Phase 19]: model_info() 4-tuple embeds URL per-model; download_url() removed — supports multi-repo Whisper models
 - [Phase 19]: SHA256 for distil-large-v3.5 obtained from LFS pointer file; actual size 1,519,521,155 bytes
+- [Quick 26]: q5_0 for distil-large-v3.5 — 513 MB vs 1.52 GB fp16; hosted on GitHub Releases v1.2-models
+- [Quick 26]: set_model() early-return requires is_some() guard on WhisperContext — settings.json model_id alone insufficient after first-run
+- [Quick 26]: default-run = voice-to-text in Cargo.toml required when multiple [[bin]] targets exist
 
 ### Research Flags (from SUMMARY.md)
 
@@ -117,10 +120,11 @@ None active.
 
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
+| 26 | Quantize distil-large-v3.5 from fp16 (1.52 GB) to q5_0 (513 MB); fix set_model() early-return bug and Cargo.toml default-run | 2026-03-03 | d46e7ec | Verified | [26-quantize-distil-large-v3-5-from-fp16-to-](./quick/26-quantize-distil-large-v3-5-from-fp16-to-/) |
 | 27 | Create standalone benchmark script with TTS test WAV generation and multi-model latency measurement | 2026-03-03 | 76669d4 | Verified | [27-create-standalone-benchmark-script-with-](./quick/27-create-standalone-benchmark-script-with-/) |
 
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Phase 19 Plan 01 — 2 tasks complete, awaiting human-verify checkpoint (Task 3)
+Stopped at: Quick task 26 complete — distil-large-v3.5 q5_0 quantization, set_model bug fix, Cargo.toml default-run
 Resume file: None
