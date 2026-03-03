@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
@@ -12,8 +12,20 @@ pub enum HookEvent {
 }
 
 /// Static sender shared between install() and hook_proc.
-/// Set once during install(); hook_proc uses try_send (never blocks).
-static HOOK_TX: OnceLock<std::sync::mpsc::SyncSender<HookEvent>> = OnceLock::new();
+///
+/// Stored as `Mutex<Option<SyncSender>>` (not OnceLock) so that:
+/// 1. install() can be called again after a previous hook is torn down and
+///    the old sender cleared — necessary if the hook thread exits unexpectedly
+///    and must be reinstalled within the same process lifetime.
+/// 2. hook_proc reads it with try_lock() which never blocks (no contention:
+///    the hook thread only fires after install() has already set the sender
+///    and released the lock, so the Mutex is always uncontested in the callback).
+///
+/// Replacing the previous OnceLock<SyncSender> which permanently prevented
+/// a second install() call — the silent Err return from OnceLock::set() would
+/// cause the hook to appear installed but fire no events.
+static HOOK_TX: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<HookEvent>>> =
+    std::sync::Mutex::new(None);
 
 /// Modifier state tracked by the hook callback.
 /// All fields are atomic — hook_proc is called from a single thread but
@@ -76,9 +88,17 @@ impl Drop for HookHandle {
 pub fn install(app_handle: tauri::AppHandle) -> Result<HookHandle, String> {
     // Bounded channel — hook_proc uses try_send so it never blocks in the callback.
     let (tx, rx) = std::sync::mpsc::sync_channel::<HookEvent>(32);
-    HOOK_TX
-        .set(tx)
-        .map_err(|_| "HOOK_TX already initialised — install() called twice".to_string())?;
+
+    // Store the sender under the Mutex. Replaces any previous sender (e.g., from a
+    // previous install() call that has since been torn down). The old SyncSender, if
+    // any, is dropped here — its receiver end was already dropped when the previous
+    // dispatcher thread exited, so this is safe.
+    {
+        let mut guard = HOOK_TX
+            .lock()
+            .map_err(|_| "HOOK_TX mutex poisoned — cannot install hook".to_string())?;
+        *guard = Some(tx);
+    }
 
     let thread_id = Arc::new(AtomicU32::new(0));
     let thread_id_clone = Arc::clone(&thread_id);
@@ -123,6 +143,14 @@ pub fn install(app_handle: tauri::AppHandle) -> Result<HookHandle, String> {
 
             // Reset all modifier state on exit to prevent stale state on re-install.
             reset_state();
+
+            // Clear the sender from HOOK_TX so a future install() call can set a new one.
+            // After this, hook_proc's try_lock will see None and drop events silently —
+            // safe because UnhookWindowsHookEx below prevents hook_proc from being called
+            // after this point. The try_lock + None guard in hook_proc handles any race.
+            if let Ok(mut guard) = HOOK_TX.try_lock() {
+                *guard = None;
+            }
 
             // Clean up the hook before the thread exits.
             let _ = unsafe { UnhookWindowsHookEx(hook) };
@@ -182,8 +210,10 @@ fn reset_state() {
 
 /// Low-level keyboard hook procedure.
 ///
-/// MUST be sub-millisecond — no allocation, no Mutex, no async, no sleep.
-/// Only AtomicBool/AtomicU32 reads and mpsc::try_send are permitted here.
+/// MUST be sub-millisecond — no allocation, no blocking Mutex, no async, no sleep.
+/// Uses AtomicBool/AtomicU32 reads, mpsc::try_send, and HOOK_TX.try_lock() (non-blocking —
+/// never contended at call time because the Mutex is only held briefly during install/teardown,
+/// not during normal operation).
 unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if ncode < 0 {
         return CallNextHookEx(None, ncode, wparam, lparam);
@@ -224,9 +254,11 @@ unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) 
                 && !STATE.alt_held.load(Ordering::Relaxed);
             if elapsed <= 50 && no_extra {
                 STATE.combo_active.store(true, Ordering::Relaxed);
-                if let Some(tx) = HOOK_TX.get() {
-                    if let Err(e) = tx.try_send(HookEvent::Pressed) {
-                        log::warn!("Hook channel full — Pressed event dropped: {:?}", e);
+                if let Ok(guard) = HOOK_TX.try_lock() {
+                    if let Some(ref tx) = *guard {
+                        if let Err(e) = tx.try_send(HookEvent::Pressed) {
+                            log::warn!("Hook channel full — Pressed event dropped: {:?}", e);
+                        }
                     }
                 }
             }
@@ -244,9 +276,11 @@ unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) 
 
         if STATE.combo_active.load(Ordering::Relaxed) {
             STATE.combo_active.store(false, Ordering::Relaxed);
-            if let Some(tx) = HOOK_TX.get() {
-                if let Err(e) = tx.try_send(HookEvent::Released) {
-                    log::warn!("Hook channel full — Released event dropped: {:?}", e);
+            if let Ok(guard) = HOOK_TX.try_lock() {
+                if let Some(ref tx) = *guard {
+                    if let Err(e) = tx.try_send(HookEvent::Released) {
+                        log::warn!("Hook channel full — Released event dropped: {:?}", e);
+                    }
                 }
             }
         }
@@ -272,9 +306,11 @@ unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) 
             if elapsed <= 50 && no_extra {
                 STATE.combo_active.store(true, Ordering::Relaxed);
                 inject_mask_key();
-                if let Some(tx) = HOOK_TX.get() {
-                    if let Err(e) = tx.try_send(HookEvent::Pressed) {
-                        log::warn!("Hook channel full — Pressed event dropped: {:?}", e);
+                if let Ok(guard) = HOOK_TX.try_lock() {
+                    if let Some(ref tx) = *guard {
+                        if let Err(e) = tx.try_send(HookEvent::Pressed) {
+                            log::warn!("Hook channel full — Pressed event dropped: {:?}", e);
+                        }
                     }
                 }
                 return LRESULT(1); // Suppress Win keydown
@@ -294,9 +330,11 @@ unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) 
 
         if STATE.combo_active.load(Ordering::Relaxed) {
             STATE.combo_active.store(false, Ordering::Relaxed);
-            if let Some(tx) = HOOK_TX.get() {
-                if let Err(e) = tx.try_send(HookEvent::Released) {
-                    log::warn!("Hook channel full — Released event dropped: {:?}", e);
+            if let Ok(guard) = HOOK_TX.try_lock() {
+                if let Some(ref tx) = *guard {
+                    if let Err(e) = tx.try_send(HookEvent::Released) {
+                        log::warn!("Hook channel full — Released event dropped: {:?}", e);
+                    }
                 }
             }
             // Suppress Win keyup to prevent Start menu opening (MOD-04)

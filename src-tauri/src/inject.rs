@@ -8,9 +8,9 @@ use std::time::Duration;
 /// Sequence:
 ///   1. Save existing clipboard content (None if non-text or empty)
 ///   2. Write `text` to clipboard
-///   3. Sleep 30ms — Windows clipboard propagation delay (revert to 50ms if any app drops pastes)
+///   3. Sleep 50ms — Windows clipboard propagation delay
 ///   4. Simulate Ctrl+V
-///   5. Sleep 50ms — let target app consume paste before restore (revert to 80ms if any app drops pastes)
+///   5. Sleep 80ms — let target app consume paste before restore
 ///   6. Restore original clipboard (log warning on failure, do not error)
 ///
 /// Intentionally synchronous — callers must wrap in tokio::task::spawn_blocking.
@@ -25,8 +25,11 @@ pub fn inject_text(text: &str) -> Result<(), String> {
     clipboard.set_text(text).map_err(|e| e.to_string())?;
 
     // Allow clipboard write to propagate before paste (Windows requirement)
-    // 30ms clipboard propagation (reduced from 75ms — revert to 50ms if any app drops pastes)
-    thread::sleep(Duration::from_millis(30));
+    // 50ms clipboard propagation. Previously reduced to 30ms but intermittent paste failures
+    // were observed under CPU load (transcription). Reverted to 50ms per the documented
+    // fallback guidance. Windows clipboard propagation is async; arboard set_text() returning
+    // Ok() does not guarantee the data is visible to other processes yet.
+    thread::sleep(Duration::from_millis(50));
 
     // Simulate Ctrl+V — fresh Enigo instance per call (anti-pattern: sharing instances)
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
@@ -35,8 +38,9 @@ pub fn inject_text(text: &str) -> Result<(), String> {
     enigo.key(Key::Control, Release).map_err(|e| e.to_string())?;
 
     // Allow target app to consume the paste before clipboard restore
-    // 50ms paste consumption (reduced from 120ms — revert to 80ms if any app drops pastes)
-    thread::sleep(Duration::from_millis(50));
+    // 80ms paste consumption. Previously reduced to 50ms alongside the propagation delay
+    // reduction; reverting to 80ms to match the documented fallback guidance.
+    thread::sleep(Duration::from_millis(80));
 
     // Restore original clipboard content — per user decision: log failure, move on
     match saved {
