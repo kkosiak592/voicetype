@@ -102,7 +102,7 @@ Phases execute in numeric order: 15 → 16 → 17 (parallelizable with 16 after 
 |-------|-----------|----------------|--------|-----------|
 | 15. Hook Module | v1.2 | Complete    | 2026-03-03 | 2026-03-03 |
 | 16. Rebind and Coexistence | 2/2 | Complete    | 2026-03-03 | - |
-| 17. Frontend Capture UI | 1/1 | Complete   | 2026-03-03 | - |
+| 17. Frontend Capture UI | 1/1 | Complete    | 2026-03-03 | - |
 | 18. Integration and Distribution | v1.2 | 0/? | Not started | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
