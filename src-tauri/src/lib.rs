@@ -1270,13 +1270,18 @@ async fn set_model(app: tauri::AppHandle, model_id: String) -> Result<(), String
         return Err(format!("Model file not downloaded: {}", model_path.display()));
     }
 
-    // Skip reload if the requested model is already loaded
+    // Skip reload if the requested model is already loaded in memory
     {
         let json = read_settings(&app)?;
         if let Some(current) = json.get("whisper_model_id").and_then(|v| v.as_str()) {
             if current == model_id {
-                log::info!("Whisper model '{}' already loaded, skipping reload", model_id);
-                return Ok(());
+                let whisper_mutex = app.state::<WhisperStateMutex>();
+                let guard = whisper_mutex.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+                if guard.is_some() {
+                    log::info!("Whisper model '{}' already loaded, skipping reload", model_id);
+                    return Ok(());
+                }
+                log::info!("Whisper model '{}' in settings but not in memory, loading now", model_id);
             }
         }
     }
