@@ -9,6 +9,13 @@ edition = "2021"
 name = "voice_to_text_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[[bin]]
+name = "benchmark"
+path = "src/bin/benchmark.rs"
+required-features = ["whisper", "parakeet"]
+# Standalone benchmark binary — does NOT depend on Tauri.
+# Run: cargo run --bin benchmark --features whisper,parakeet --release
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
