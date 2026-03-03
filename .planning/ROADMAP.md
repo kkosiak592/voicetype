@@ -80,7 +80,8 @@
   1. Opening the hotkey capture dialog and pressing only Ctrl+Win (no additional key) registers as a valid hotkey and saves without error
   2. The settings panel displays the saved modifier-only combo as "Ctrl + Win" — not an error state, empty field, or raw key code
   3. The existing capture flow for standard hotkeys (letter key + modifiers) continues to work unchanged alongside the new modifier-only path
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 17-01-PLAN.md — Dual keydown/keyup capture with modifier-only support, progressive display, canonical token ordering, human verification
 
 ### Phase 18: Integration and Distribution
 **Goal**: All v1.2 behavior is verified under real runtime conditions that unit tests cannot cover, and the signed binary is confirmed safe for distribution
@@ -101,8 +102,18 @@ Phases execute in numeric order: 15 → 16 → 17 (parallelizable with 16 after 
 |-------|-----------|----------------|--------|-----------|
 | 15. Hook Module | v1.2 | Complete    | 2026-03-03 | 2026-03-03 |
 | 16. Rebind and Coexistence | 2/2 | Complete    | 2026-03-03 | - |
-| 17. Frontend Capture UI | v1.2 | 0/? | Not started | - |
+| 17. Frontend Capture UI | v1.2 | 0/1 | Planned | - |
 | 18. Integration and Distribution | v1.2 | 0/? | Not started | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
 Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
+
+### Phase 19: Include distil-large-v3.5 as download option and first-time run
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 18
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 19 to break down)
