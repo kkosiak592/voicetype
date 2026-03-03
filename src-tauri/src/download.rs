@@ -66,11 +66,12 @@ fn model_info(model_id: &str) -> Option<(&'static str, &'static str, &'static st
             "bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30",
             199_229_440,
         )),
+        // q5_0 quantized — ~513 MB (down from 1.52 GB fp16)
         "distil-large-v3.5" => Some((
             "ggml-distil-large-v3.5.bin",
-            "https://huggingface.co/distil-whisper/distil-large-v3.5-ggml/resolve/main/ggml-model.bin",
-            "ec2498919b498c5f6b00041adb45650124b3cd9f26f545fffa8f5d11c28dcf26",
-            1_519_521_155,
+            "https://github.com/kkosiak592/voicetype/releases/download/v1.2-models/ggml-distil-large-v3.5-q5_0.bin",
+            "e1cd9d36ee8628206fe0c8f9e067ee2679409b5845b4c4a14a7e2dd906fb9a19",
+            537_819_875,
         )),
         _ => None,
     }

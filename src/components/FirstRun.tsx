@@ -29,7 +29,7 @@ const MODELS = [
   {
     id: 'distil-large-v3.5',
     name: 'Distil Large v3.5',
-    size: '1.52 GB',
+    size: '513 MB',
     quality: 'High accuracy, fast',
     requirement: 'GPU recommended, works on any hardware',
     gpuOnly: false,

@@ -1102,7 +1102,7 @@ fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
     models.push(ModelInfo {
         id: "distil-large-v3.5".to_string(),
         name: "Distil Large v3.5".to_string(),
-        description: "High accuracy — 1.52 GB — GPU accelerated when available".to_string(),
+        description: "High accuracy — 513 MB — GPU accelerated when available".to_string(),
         recommended: false,
         downloaded: dir.join("ggml-distil-large-v3.5.bin").exists(),
     });
