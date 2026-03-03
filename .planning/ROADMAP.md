@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 MVP** — Phases 1-8 + 4.1, 6.1 (shipped 2026-03-02)
 - ✅ **v1.1 Auto-Updates & CI/CD** — Phases 11-14 (shipped 2026-03-02)
-- 🚧 **v1.2 Keyboard Hook** — Phases 15-18 (in progress)
+- 🚧 **v1.2 Keyboard Hook** — Phases 15-21 (in progress)
 
 ## Phases
 
@@ -41,7 +41,7 @@
 - [x] **Phase 15: Hook Module** - Install WH_KEYBOARD_LL on a dedicated thread, implement modifier state machine with debounce and Start menu suppression, wire hold-to-talk end-to-end (completed 2026-03-03)
 - [x] **Phase 16: Rebind and Coexistence** - Route modifier-only combos through the hook and standard combos through tauri-plugin-global-shortcut; surface hook failure to user (completed 2026-03-03)
 - [x] **Phase 17: Frontend Capture UI** - Accept and display modifier-only combos in the hotkey capture dialog and settings panel (completed 2026-03-03)
-- [ ] **Phase 18: Integration and Distribution** - Verify behavior across all critical runtime conditions and confirm VirusTotal clean on signed v1.2 binary
+- [x] **Phase 18: Integration and Distribution** - VOIDED — moved to Phase 21 (completed 2026-03-03)
 
 ## Phase Details
 
@@ -83,27 +83,23 @@
 **Plans**: 1 plan
 - [ ] 17-01-PLAN.md — Dual keydown/keyup capture with modifier-only support, progressive display, canonical token ordering, human verification
 
-### Phase 18: Integration and Distribution
-**Goal**: All v1.2 behavior is verified under real runtime conditions that unit tests cannot cover, and the signed binary is confirmed safe for distribution
-**Depends on**: Phase 16, Phase 17
-**Requirements**: DIST-01
-**Success Criteria** (what must be TRUE):
-  1. Alt+Tab away from VoiceType while holding Ctrl, then release Ctrl — no phantom recording session starts on return, confirming modifier state desync recovery
-  2. The signed v1.2 binary submitted to VirusTotal shows no new detections relative to the v1.1 baseline — any new detection is a blocking issue before distribution
-  3. On both Windows 10 and Windows 11 machines, Ctrl+Win activates dictation without opening the Start menu, and Win key alone continues to open the Start menu
-**Plans**: TBD
+### Phase 18: Integration and Distribution — VOIDED
+Moved to Phase 21 to allow phases 19-20 to complete first.
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 15 → 16 → 17 (parallelizable with 16 after Phase 15) → 18
+Phases execute in numeric order: 15 → 16 → 17 → 19 → 20 → 21
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 15. Hook Module | v1.2 | Complete    | 2026-03-03 | 2026-03-03 |
-| 16. Rebind and Coexistence | 2/2 | Complete    | 2026-03-03 | - |
-| 17. Frontend Capture UI | 1/1 | Complete    | 2026-03-03 | - |
-| 18. Integration and Distribution | v1.2 | 0/? | Not started | - |
+| 15. Hook Module | v1.2 | Complete | Complete | 2026-03-03 |
+| 16. Rebind and Coexistence | v1.2 | 2/2 | Complete | 2026-03-03 |
+| 17. Frontend Capture UI | v1.2 | 1/1 | Complete | 2026-03-03 |
+| 18. Integration and Distribution | v1.2 | — | Voided | 2026-03-03 |
+| 19. Distil-large-v3.5 | v1.2 | 0/? | Not started | - |
+| 20. Dual CPU/GPU Installers | v1.2 | 0/3 | Not started | - |
+| 21. Integration and Distribution | v1.2 | 0/1 | Not started | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
 Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
@@ -120,10 +116,12 @@ Plans:
 
 ### Phase 20: Implement dual CPU/GPU installers with variant-specific auto-updates
 
-**Goal:** [To be planned]
+**Goal:** Split the single NSIS installer into CPU and GPU variants with independent auto-update channels, so users without NVIDIA hardware can run VoiceType. Each variant gets its own updater manifest and the CI workflow produces both installers in parallel via a matrix build.
 **Requirements**: TBD
 **Depends on:** Phase 19
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 20 to break down)
+- [ ] 20-01-PLAN.md — Cargo cuda feature, config overlays, NSIS GPU hook, get_build_variant command
+- [ ] 20-02-PLAN.md — CI matrix workflow conversion with variant-specific updater JSON
+- [ ] 20-03-PLAN.md — Frontend variant display and human verification
