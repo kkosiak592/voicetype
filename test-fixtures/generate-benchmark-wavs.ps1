@@ -73,5 +73,125 @@ $synth.SetOutputToNull()
 $size60s = (Get-Item $file60s).Length
 Write-Host ("benchmark-60s.wav -> {0} bytes  ({1:F1}s expected at 16kHz/16bit/mono)" -f $size60s, ($size60s / (16000 * 2)))
 
+# -----------------------------------------------------------------------
+# 5-second clip variant B — copper wire / circuit board
+# -----------------------------------------------------------------------
+$file5sb = Join-Path $OutputDir "benchmark-5s-b.wav"
+$synth.SetOutputToWaveFile($file5sb, $format)
+$synth.Speak("A copper wire carries electrical current through the circuit board with minimal resistance.")
+$synth.SetOutputToNull()
+
+$size5sb = (Get-Item $file5sb).Length
+Write-Host ("benchmark-5s-b.wav  -> {0} bytes  ({1:F1}s expected at 16kHz/16bit/mono)" -f $size5sb, ($size5sb / (16000 * 2)))
+
+# -----------------------------------------------------------------------
+# 5-second clip variant C — satellite orbit
+# -----------------------------------------------------------------------
+$file5sc = Join-Path $OutputDir "benchmark-5s-c.wav"
+$synth.SetOutputToWaveFile($file5sc, $format)
+$synth.Speak("The satellite orbits Earth every ninety minutes, capturing high resolution photographs.")
+$synth.SetOutputToNull()
+
+$size5sc = (Get-Item $file5sc).Length
+Write-Host ("benchmark-5s-c.wav  -> {0} bytes  ({1:F1}s expected at 16kHz/16bit/mono)" -f $size5sc, ($size5sc / (16000 * 2)))
+
+# -----------------------------------------------------------------------
+# 30-second clip variant B — steel manufacturing
+# -----------------------------------------------------------------------
+$passage30sb = @"
+The process of steel manufacturing begins with iron ore extraction from open pit mines.
+Workers transport the raw material to blast furnaces where temperatures exceed fifteen hundred degrees.
+Carbon is introduced to create an alloy stronger than pure iron alone.
+Rolling mills then shape the molten steel into beams, sheets, and coiled wire.
+Quality control inspectors test samples for tensile strength and corrosion resistance.
+Modern foundries produce over two billion tonnes of steel worldwide each year.
+"@
+
+$file30sb = Join-Path $OutputDir "benchmark-30s-b.wav"
+$synth.SetOutputToWaveFile($file30sb, $format)
+$synth.Speak($passage30sb)
+$synth.SetOutputToNull()
+
+$size30sb = (Get-Item $file30sb).Length
+Write-Host ("benchmark-30s-b.wav -> {0} bytes  ({1:F1}s expected at 16kHz/16bit/mono)" -f $size30sb, ($size30sb / (16000 * 2)))
+
+# -----------------------------------------------------------------------
+# 30-second clip variant C — Mediterranean cooking
+# -----------------------------------------------------------------------
+$passage30sc = @"
+Mediterranean cooking relies heavily on olive oil, fresh herbs, and seasonal vegetables.
+Tomatoes were introduced to European cuisine after Spanish explorers returned from the Americas.
+A traditional risotto requires constant stirring to release starch from Arborio rice grains.
+Fermentation transforms grape juice into wine through the action of natural yeasts on sugar.
+Sourdough bread uses a live culture of bacteria and wild yeast instead of commercial packets.
+The Maillard reaction between amino acids and sugars creates the brown crust on grilled meat.
+"@
+
+$file30sc = Join-Path $OutputDir "benchmark-30s-c.wav"
+$synth.SetOutputToWaveFile($file30sc, $format)
+$synth.Speak($passage30sc)
+$synth.SetOutputToNull()
+
+$size30sc = (Get-Item $file30sc).Length
+Write-Host ("benchmark-30s-c.wav -> {0} bytes  ({1:F1}s expected at 16kHz/16bit/mono)" -f $size30sc, ($size30sc / (16000 * 2)))
+
+# -----------------------------------------------------------------------
+# 60-second clip variant B — Panama Canal
+# -----------------------------------------------------------------------
+$passage60sb = @"
+The Panama Canal connects the Atlantic and Pacific oceans through a series of concrete locks.
+Construction began in nineteen oh four and took ten years to complete at enormous human cost.
+Ships entering from the Atlantic side are raised twenty six metres above sea level by three lock chambers.
+Gatun Lake was created by damming the Chagres River and flooding an entire valley.
+Each lock chamber uses gravity fed water from the lake rather than mechanical pumps.
+A single transit moves approximately two hundred million litres of fresh water into the ocean.
+The canal was expanded in twenty sixteen with larger locks to accommodate modern container ships.
+These new Neopanamax locks use water saving basins that recycle sixty percent of each fill.
+Over fourteen thousand vessels pass through the canal annually carrying five percent of world trade.
+Drought conditions in recent years have forced authorities to limit daily transits and vessel draft.
+Tolls range from a few hundred dollars for small sailboats to nearly a million for the largest tankers.
+The canal remains one of the most significant engineering achievements of the twentieth century.
+Ongoing maintenance requires continuous dredging of the navigational channel to prevent silting.
+Tropical rainfall patterns directly influence water levels in Gatun and Alajuela lakes.
+The Panama Canal Authority employs over nine thousand workers to operate and maintain the waterway.
+"@
+
+$file60sb = Join-Path $OutputDir "benchmark-60s-b.wav"
+$synth.SetOutputToWaveFile($file60sb, $format)
+$synth.Speak($passage60sb)
+$synth.SetOutputToNull()
+
+$size60sb = (Get-Item $file60sb).Length
+Write-Host ("benchmark-60s-b.wav -> {0} bytes  ({1:F1}s expected at 16kHz/16bit/mono)" -f $size60sb, ($size60sb / (16000 * 2)))
+
+# -----------------------------------------------------------------------
+# 60-second clip variant C — human immune system
+# -----------------------------------------------------------------------
+$passage60sc = @"
+The human immune system consists of two complementary defence mechanisms working in coordination.
+Innate immunity provides immediate but non specific protection through physical barriers and white blood cells.
+Neutrophils are the first responders arriving at infection sites within minutes of tissue damage.
+The adaptive immune system develops targeted responses through B cells and T cells over several days.
+B cells produce antibodies that bind to specific molecular patterns on the surface of pathogens.
+Helper T cells coordinate the overall immune response by releasing chemical signalling molecules called cytokines.
+Memory cells persist for decades allowing the body to mount rapid responses to previously encountered threats.
+Vaccination works by introducing harmless fragments of a pathogen to train the adaptive immune system.
+Autoimmune disorders occur when the immune system mistakenly attacks the body's own healthy tissue.
+Allergic reactions represent an exaggerated immune response to normally harmless environmental substances.
+Immunosuppressive drugs are prescribed after organ transplants to prevent rejection of donor tissue.
+The thymus gland plays a critical role in T cell maturation during childhood and adolescence.
+Researchers continue developing immunotherapy treatments that harness the immune system to fight cancer cells.
+The gut microbiome influences immune function through constant interaction with intestinal immune tissue.
+Regular moderate exercise has been shown to enhance immune surveillance and reduce inflammation markers.
+"@
+
+$file60sc = Join-Path $OutputDir "benchmark-60s-c.wav"
+$synth.SetOutputToWaveFile($file60sc, $format)
+$synth.Speak($passage60sc)
+$synth.SetOutputToNull()
+
+$size60sc = (Get-Item $file60sc).Length
+Write-Host ("benchmark-60s-c.wav -> {0} bytes  ({1:F1}s expected at 16kHz/16bit/mono)" -f $size60sc, ($size60sc / (16000 * 2)))
+
 $synth.Dispose()
-Write-Host "Done. Files written to: $OutputDir"
+Write-Host "Done. 9 WAV files written to: $OutputDir"
