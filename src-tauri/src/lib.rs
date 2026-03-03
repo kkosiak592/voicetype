@@ -1513,6 +1513,11 @@ pub fn run() {
         builder = builder.manage(HookHandleState(std::sync::Mutex::new(None)));
     }
 
+    // HookAvailable MUST be registered on Builder (same reason as CachedGpuMode):
+    // webview2 COM init pumps Win32 messages, allowing frontend IPC (get_hook_status)
+    // before setup() runs. Starts false; setup() updates via the shared Arc.
+    builder = builder.manage(HookAvailable(std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))));
+
     // ParakeetStateMutex starts as None — model is loaded on demand (engine switch)
     // or at startup if saved engine is Parakeet.
     #[cfg(feature = "parakeet")]
@@ -1701,8 +1706,9 @@ pub fn run() {
                 app.manage(corrections::CorrectionsState(std::sync::Mutex::new(engine)));
             }
 
-            // Hook-availability flag — set based on startup hook-install result.
-            let hook_available = Arc::new(AtomicBool::new(false));
+            // Hook-availability flag — already registered on Builder (before webview creation).
+            // Grab the shared Arc so setup() can update it after hook installation.
+            let hook_available = app.state::<HookAvailable>().0.clone();
 
             // Startup hotkey routing — routes based on is_modifier_only predicate:
             // - Modifier-only combo (e.g. "ctrl+win"): attempt WH_KEYBOARD_LL hook installation
@@ -1781,8 +1787,8 @@ pub fn run() {
                 }
             }
 
-            // Register HookAvailable managed state (always, after routing)
-            app.manage(HookAvailable(hook_available));
+            // HookAvailable registered on Builder — hook_available Arc was cloned
+            // from managed state; .store() calls above are visible via app.state().
 
             // Start persistent audio capture stream.
             // Prefer saved mic device if found; fall back to system default silently (RESEARCH.md Pitfall 6).
