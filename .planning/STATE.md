@@ -42,7 +42,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 [##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
 
-Last activity: 2026-03-03 - Completed quick task 32: Add 2 more phrase variants per clip duration + markdown report output
+Last activity: 2026-03-03 - Completed quick task 33: Add Moonshine v2 streaming models to benchmark with GPU support
 
 ## Performance Metrics
 
