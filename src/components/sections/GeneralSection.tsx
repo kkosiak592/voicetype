@@ -11,6 +11,7 @@ interface GeneralSectionProps {
   onRecordingModeChange: (mode: 'hold' | 'toggle') => void;
   updaterState: UpdateState;
   onCheckForUpdates: () => Promise<void>;
+  hookAvailable: boolean;
 }
 
 export function GeneralSection({
@@ -20,6 +21,7 @@ export function GeneralSection({
   onRecordingModeChange,
   updaterState,
   onCheckForUpdates,
+  hookAvailable,
 }: GeneralSectionProps) {
   const [appVersion, setAppVersion] = useState<string>('');
 
@@ -78,6 +80,11 @@ export function GeneralSection({
             Click the box below then press your desired key combination.
           </p>
           <HotkeyCapture value={hotkey} onChange={onHotkeyChange} />
+          {!hookAvailable && (
+            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+              Hook unavailable — using standard shortcut fallback
+            </p>
+          )}
         </section>
 
         <hr className="border-gray-200 dark:border-gray-700" />

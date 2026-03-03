@@ -30,6 +30,7 @@ function App() {
   const [selectedModel, setSelectedModel] = useState(DEFAULTS.selectedModel);
   const [loaded, setLoaded] = useState(false);
   const [firstRunStatus, setFirstRunStatus] = useState<FirstRunStatus | null>(null);
+  const [hookAvailable, setHookAvailable] = useState(true); // default true = no warning
 
   useEffect(() => {
     async function loadSettings() {
@@ -84,6 +85,15 @@ function App() {
         if (savedSelectedModel !== null && savedSelectedModel !== undefined) {
           setSelectedModel(savedSelectedModel);
         }
+      }
+
+      // Query hook availability for settings panel warning
+      try {
+        const hookOk = await invoke<boolean>('get_hook_status');
+        setHookAvailable(hookOk);
+      } catch {
+        // get_hook_status unavailable — assume hook is fine (pre-v1.2 builds)
+        setHookAvailable(true);
       }
 
       setLoaded(true);
@@ -150,6 +160,7 @@ function App() {
               onRecordingModeChange={setRecordingMode}
               updaterState={updater.state}
               onCheckForUpdates={updater.checkNow}
+              hookAvailable={hookAvailable}
             />
           )}
           {activeSection === 'profiles' && (
