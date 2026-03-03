@@ -16,6 +16,13 @@ use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextPar
 #[cfg(feature = "parakeet")]
 use parakeet_rs::{ExecutionConfig, ExecutionProvider, ParakeetTDT, TimestampMode};
 
+#[cfg(feature = "bench_extra")]
+use transcribe_rs::{
+    TranscriptionEngine,
+    engines::moonshine::{MoonshineEngine, MoonshineModelParams},
+    engines::sense_voice::{SenseVoiceEngine, SenseVoiceModelParams},
+};
+
 // ---------------------------------------------------------------------------
 // WAV reading
 // ---------------------------------------------------------------------------
@@ -333,6 +340,42 @@ fn main() {
     #[cfg(not(feature = "parakeet"))]
     println!("  (parakeet feature disabled — skipping parakeet model)");
 
+    #[cfg(feature = "bench_extra")]
+    let moonshine_tiny_path: Option<PathBuf> = {
+        let p = models_dir.join("moonshine-tiny-ONNX");
+        if p.exists() && p.is_dir() {
+            println!("  FOUND    moonshine-tiny");
+            Some(p)
+        } else {
+            println!("  MISSING  moonshine-tiny ({})", p.display());
+            None
+        }
+    };
+    #[cfg(feature = "bench_extra")]
+    let moonshine_base_path: Option<PathBuf> = {
+        let p = models_dir.join("moonshine-base-ONNX");
+        if p.exists() && p.is_dir() {
+            println!("  FOUND    moonshine-base");
+            Some(p)
+        } else {
+            println!("  MISSING  moonshine-base ({})", p.display());
+            None
+        }
+    };
+    #[cfg(feature = "bench_extra")]
+    let sensevoice_path: Option<PathBuf> = {
+        let p = models_dir.join("sensevoice-small");
+        if p.exists() && p.is_dir() {
+            println!("  FOUND    sensevoice-small");
+            Some(p)
+        } else {
+            println!("  MISSING  sensevoice-small ({})", p.display());
+            None
+        }
+    };
+    #[cfg(not(feature = "bench_extra"))]
+    println!("  (bench_extra feature disabled — skipping moonshine/sensevoice models)");
+
     // WAV files
     println!("\n-- WAV fixtures --");
     let clips: Vec<(&str, &str)> = vec![
@@ -575,6 +618,219 @@ fn main() {
                 wer,
                 first_text,
             });
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Moonshine + SenseVoice models (bench_extra feature)
+    // -----------------------------------------------------------------------
+    #[cfg(feature = "bench_extra")]
+    {
+        // --- Moonshine tiny ---
+        if let Some(ref mpath) = moonshine_tiny_path {
+            println!("\n=== moonshine-tiny ===");
+            let load_start = Instant::now();
+            let mut engine = MoonshineEngine::new();
+            match engine.load_model_with_params(mpath.as_path(), MoonshineModelParams::tiny()) {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("  ERROR loading moonshine-tiny: {}", e);
+                }
+            }
+            println!("  Load time: {}ms", load_start.elapsed().as_millis());
+
+            for (wav_path, clip_label) in &clip_paths {
+                println!("  Clip: {}", clip_label);
+                let audio = match read_wav_to_f32(wav_path) {
+                    Ok(a) => a,
+                    Err(e) => {
+                        eprintln!("  ERROR reading WAV: {}", e);
+                        continue;
+                    }
+                };
+
+                let mut latencies: Vec<u64> = Vec::with_capacity(ITERATIONS);
+                let mut first_text = String::new();
+
+                for i in 0..ITERATIONS {
+                    let t = Instant::now();
+                    match engine.transcribe_samples(audio.clone(), None) {
+                        Ok(result) => {
+                            let elapsed = t.elapsed().as_millis() as u64;
+                            latencies.push(elapsed);
+                            if i == 0 {
+                                first_text = result.text.trim().to_string();
+                                println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
+                            } else {
+                                println!("  [run {}] {}ms", i + 1, elapsed);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("  ERROR during inference run {}: {}", i + 1, e);
+                            break;
+                        }
+                    }
+                }
+
+                if latencies.is_empty() {
+                    continue;
+                }
+                let avg = latencies.iter().sum::<u64>() / latencies.len() as u64;
+                let min = *latencies.iter().min().unwrap();
+                let max = *latencies.iter().max().unwrap();
+
+                let reference = reference_for_clip(clip_label);
+                let (wer, subs, ins, dels, ref_n) = compute_wer(reference, &first_text);
+                println!("  -> avg={}ms  min={}ms  max={}ms  WER={:.1}% (S={} I={} D={} / {} words)", avg, min, max, wer, subs, ins, dels, ref_n);
+
+                results.push(BenchResult {
+                    model: "moonshine-tiny".to_string(),
+                    clip: clip_label.to_string(),
+                    avg_ms: avg,
+                    min_ms: min,
+                    max_ms: max,
+                    wer,
+                    first_text,
+                });
+            }
+        }
+
+        // --- Moonshine base ---
+        if let Some(ref mpath) = moonshine_base_path {
+            println!("\n=== moonshine-base ===");
+            let load_start = Instant::now();
+            let mut engine = MoonshineEngine::new();
+            match engine.load_model_with_params(mpath.as_path(), MoonshineModelParams::base()) {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("  ERROR loading moonshine-base: {}", e);
+                }
+            }
+            println!("  Load time: {}ms", load_start.elapsed().as_millis());
+
+            for (wav_path, clip_label) in &clip_paths {
+                println!("  Clip: {}", clip_label);
+                let audio = match read_wav_to_f32(wav_path) {
+                    Ok(a) => a,
+                    Err(e) => {
+                        eprintln!("  ERROR reading WAV: {}", e);
+                        continue;
+                    }
+                };
+
+                let mut latencies: Vec<u64> = Vec::with_capacity(ITERATIONS);
+                let mut first_text = String::new();
+
+                for i in 0..ITERATIONS {
+                    let t = Instant::now();
+                    match engine.transcribe_samples(audio.clone(), None) {
+                        Ok(result) => {
+                            let elapsed = t.elapsed().as_millis() as u64;
+                            latencies.push(elapsed);
+                            if i == 0 {
+                                first_text = result.text.trim().to_string();
+                                println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
+                            } else {
+                                println!("  [run {}] {}ms", i + 1, elapsed);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("  ERROR during inference run {}: {}", i + 1, e);
+                            break;
+                        }
+                    }
+                }
+
+                if latencies.is_empty() {
+                    continue;
+                }
+                let avg = latencies.iter().sum::<u64>() / latencies.len() as u64;
+                let min = *latencies.iter().min().unwrap();
+                let max = *latencies.iter().max().unwrap();
+
+                let reference = reference_for_clip(clip_label);
+                let (wer, subs, ins, dels, ref_n) = compute_wer(reference, &first_text);
+                println!("  -> avg={}ms  min={}ms  max={}ms  WER={:.1}% (S={} I={} D={} / {} words)", avg, min, max, wer, subs, ins, dels, ref_n);
+
+                results.push(BenchResult {
+                    model: "moonshine-base".to_string(),
+                    clip: clip_label.to_string(),
+                    avg_ms: avg,
+                    min_ms: min,
+                    max_ms: max,
+                    wer,
+                    first_text,
+                });
+            }
+        }
+
+        // --- SenseVoice small ---
+        if let Some(ref spath) = sensevoice_path {
+            println!("\n=== sensevoice-small ===");
+            let load_start = Instant::now();
+            let mut engine = SenseVoiceEngine::new();
+            match engine.load_model_with_params(spath.as_path(), SenseVoiceModelParams::default()) {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("  ERROR loading sensevoice-small: {}", e);
+                }
+            }
+            println!("  Load time: {}ms", load_start.elapsed().as_millis());
+
+            for (wav_path, clip_label) in &clip_paths {
+                println!("  Clip: {}", clip_label);
+                let audio = match read_wav_to_f32(wav_path) {
+                    Ok(a) => a,
+                    Err(e) => {
+                        eprintln!("  ERROR reading WAV: {}", e);
+                        continue;
+                    }
+                };
+
+                let mut latencies: Vec<u64> = Vec::with_capacity(ITERATIONS);
+                let mut first_text = String::new();
+
+                for i in 0..ITERATIONS {
+                    let t = Instant::now();
+                    match engine.transcribe_samples(audio.clone(), None) {
+                        Ok(result) => {
+                            let elapsed = t.elapsed().as_millis() as u64;
+                            latencies.push(elapsed);
+                            if i == 0 {
+                                first_text = result.text.trim().to_string();
+                                println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
+                            } else {
+                                println!("  [run {}] {}ms", i + 1, elapsed);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("  ERROR during inference run {}: {}", i + 1, e);
+                            break;
+                        }
+                    }
+                }
+
+                if latencies.is_empty() {
+                    continue;
+                }
+                let avg = latencies.iter().sum::<u64>() / latencies.len() as u64;
+                let min = *latencies.iter().min().unwrap();
+                let max = *latencies.iter().max().unwrap();
+
+                let reference = reference_for_clip(clip_label);
+                let (wer, subs, ins, dels, ref_n) = compute_wer(reference, &first_text);
+                println!("  -> avg={}ms  min={}ms  max={}ms  WER={:.1}% (S={} I={} D={} / {} words)", avg, min, max, wer, subs, ins, dels, ref_n);
+
+                results.push(BenchResult {
+                    model: "sensevoice-small".to_string(),
+                    clip: clip_label.to_string(),
+                    avg_ms: avg,
+                    min_ms: min,
+                    max_ms: max,
+                    wer,
+                    first_text,
+                });
+            }
         }
     }
 
