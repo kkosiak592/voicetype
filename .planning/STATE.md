@@ -42,7 +42,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 [##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
 
-Last activity: 2026-03-03 - Completed quick task 28: Add Moonshine tiny/base and SenseVoice to benchmark binary via transcribe-rs behind bench_extra feature flag
+Last activity: 2026-03-03 - Completed quick task 29: Patch transcribe-rs for GPU execution providers in Moonshine/SenseVoice benchmarks
 
 ## Performance Metrics
 
@@ -94,6 +94,7 @@ Last activity: 2026-03-03 - Completed quick task 28: Add Moonshine tiny/base and
 - [Quick 26]: q5_0 for distil-large-v3.5 — 513 MB vs 1.52 GB fp16; hosted on GitHub Releases v1.2-models
 - [Quick 26]: set_model() early-return requires is_some() guard on WhisperContext — settings.json model_id alone insufficient after first-run
 - [Quick 26]: default-run = voice-to-text in Cargo.toml required when multiple [[bin]] targets exist
+- [Quick 29]: ort added as direct optional dep for bench_extra — Rust 2021 edition requires explicit dep to use ort types in benchmark binary
 
 ### Research Flags (from SUMMARY.md)
 
@@ -123,9 +124,10 @@ None active.
 | 26 | Quantize distil-large-v3.5 from fp16 (1.52 GB) to q5_0 (513 MB); fix set_model() early-return bug and Cargo.toml default-run | 2026-03-03 | d46e7ec | Verified | [26-quantize-distil-large-v3-5-from-fp16-to-](./quick/26-quantize-distil-large-v3-5-from-fp16-to-/) |
 | 27 | Create standalone benchmark script with TTS test WAV generation and multi-model latency measurement | 2026-03-03 | 76669d4 | Verified | [27-create-standalone-benchmark-script-with-](./quick/27-create-standalone-benchmark-script-with-/) |
 | 28 | Add Moonshine tiny/base and SenseVoice to benchmark binary via transcribe-rs behind bench_extra feature flag | 2026-03-03 | bc32349 | Verified | [28-add-moonshine-and-sensevoice-to-benchmar](./quick/28-add-moonshine-and-sensevoice-to-benchmar/) |
+| 29 | Patch transcribe-rs locally for configurable CUDA/DirectML execution providers in Moonshine/SenseVoice benchmarks | 2026-03-03 | 222db00 | Verified | [29-patch-transcribe-rs-for-gpu-execution-pr](./quick/29-patch-transcribe-rs-for-gpu-execution-pr/) |
 
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Quick task 28 complete — Moonshine and SenseVoice benchmark sections added behind bench_extra feature
+Stopped at: Quick task 29 complete — transcribe-rs patched for GPU execution providers, benchmark binary uses CUDA for all models
 Resume file: None
