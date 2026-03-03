@@ -4,11 +4,11 @@ $OutputDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $OutputDir) { $OutputDir = "." }
 
 # 16kHz, 16-bit, mono PCM — the format whisper-rs and parakeet-rs expect
-$format = [System.Speech.AudioFormatInfo]::new(
-    [System.Speech.Synthesis.EncodingFormat]::Pcm,
+# SpeechAudioFormatInfo(samplesPerSecond, bitsPerSample, channel)
+$format = [System.Speech.AudioFormat.SpeechAudioFormatInfo]::new(
     16000,  # samples per second
-    16,     # bits per sample
-    1       # channels (mono)
+    [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen,
+    [System.Speech.AudioFormat.AudioChannel]::Mono
 )
 
 $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
