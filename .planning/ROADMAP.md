@@ -100,7 +100,7 @@ Phases execute in numeric order: 15 → 16 → 17 (parallelizable with 16 after 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 15. Hook Module | v1.2 | Complete    | 2026-03-03 | 2026-03-03 |
-| 16. Rebind and Coexistence | 2/2 | Complete   | 2026-03-03 | - |
+| 16. Rebind and Coexistence | 2/2 | Complete    | 2026-03-03 | - |
 | 17. Frontend Capture UI | v1.2 | 0/? | Not started | - |
 | 18. Integration and Distribution | v1.2 | 0/? | Not started | - |
 
