@@ -103,9 +103,8 @@ Last activity: 2026-03-03 - Completed quick task 29: Patch transcribe-rs for GPU
 
 ### Pending Todos
 
-1. Investigate microphone icon persisting in system tray (area: ui)
-2. Implement sub-500ms transcription latency improvements (area: backend)
-3. Simplify profiles to shared dictionary and editable prompts (area: ui)
+1. Implement sub-500ms transcription latency improvements (area: backend)
+2. Simplify profiles to shared dictionary and editable prompts (area: ui)
 
 ### Roadmap Evolution
 
@@ -125,9 +124,10 @@ None active.
 | 27 | Create standalone benchmark script with TTS test WAV generation and multi-model latency measurement | 2026-03-03 | 76669d4 | Verified | [27-create-standalone-benchmark-script-with-](./quick/27-create-standalone-benchmark-script-with-/) |
 | 28 | Add Moonshine tiny/base and SenseVoice to benchmark binary via transcribe-rs behind bench_extra feature flag | 2026-03-03 | bc32349 | Verified | [28-add-moonshine-and-sensevoice-to-benchmar](./quick/28-add-moonshine-and-sensevoice-to-benchmar/) |
 | 29 | Patch transcribe-rs locally for configurable CUDA/DirectML execution providers in Moonshine/SenseVoice benchmarks | 2026-03-03 | 222db00 | Verified | [29-patch-transcribe-rs-for-gpu-execution-pr](./quick/29-patch-transcribe-rs-for-gpu-execution-pr/) |
+| 30 | Switch audio capture from persistent stream to on-demand (open on record start, drop after pipeline) — removes Windows mic tray icon when idle | 2026-03-03 | db6fb28 | Verified | [30-switch-audio-capture-from-persistent-str](./quick/30-switch-audio-capture-from-persistent-str/) |
 
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Quick task 29 complete — transcribe-rs patched for GPU execution providers, benchmark binary uses CUDA for all models
+Stopped at: Quick task 30 complete — audio capture is now on-demand, Windows mic tray icon only appears during active recording
 Resume file: None
