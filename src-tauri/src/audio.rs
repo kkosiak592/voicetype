@@ -72,9 +72,10 @@ impl ResamplingState {
     }
 }
 
-/// Persistent microphone capture state.
+/// On-demand microphone capture state.
 ///
-/// `_stream` must stay alive for the duration of capture — dropping it stops the stream.
+/// `_stream` must stay alive for the duration of capture — dropping it stops the stream
+/// and releases the microphone (removes the Windows privacy indicator).
 /// `recording` is an atomic flag toggled by Tauri commands.
 /// `buffer` accumulates 16kHz mono samples while recording is active.
 /// `resampling` is the staging + resampler state, locked separately from `buffer`
@@ -111,8 +112,8 @@ unsafe impl Sync for AudioCaptureMutex {}
 
 /// Internal: build an input stream from a specific device.
 ///
-/// Extracted to share logic between `start_persistent_stream` and
-/// `start_persistent_stream_with_device`. Never call with a blocking lock held.
+/// Extracted to share logic between `open_stream` and
+/// `open_stream_with_device`. Never call with a blocking lock held.
 fn build_stream_from_device(
     device: cpal::Device,
 ) -> Result<AudioCapture, Box<dyn std::error::Error + Send + Sync>> {
@@ -172,7 +173,7 @@ fn build_stream_from_device(
     stream.play()?;
 
     log::info!(
-        "Audio stream started: {} Hz, {} ch -> 16kHz mono (persistent)",
+        "Audio stream started: {} Hz, {} ch -> 16kHz mono (on-demand)",
         native_rate,
         channels
     );
@@ -185,12 +186,13 @@ fn build_stream_from_device(
     })
 }
 
-/// Start a persistent microphone capture stream using the system default device.
+/// Open an on-demand microphone capture stream using the system default device.
 ///
-/// The stream runs continuously from app startup. Audio is discarded unless the
-/// `recording` flag is set to `true`. When recording, samples are downmixed to
-/// mono, resampled to 16kHz, and appended to `buffer`.
-pub fn start_persistent_stream(
+/// Stream is active immediately — caller is responsible for dropping the AudioCapture
+/// when done to release the microphone. Audio is discarded unless the `recording` flag
+/// is set to `true`. When recording, samples are downmixed to mono, resampled to 16kHz,
+/// and appended to `buffer`.
+pub fn open_stream(
 ) -> Result<AudioCapture, Box<dyn std::error::Error + Send + Sync>> {
     let host = cpal::default_host();
     let device = host
@@ -199,14 +201,35 @@ pub fn start_persistent_stream(
     build_stream_from_device(device)
 }
 
-/// Start a persistent microphone capture stream using a specific device.
+/// Open an on-demand microphone capture stream using a specific device.
 ///
-/// Same as `start_persistent_stream()` but accepts a `cpal::Device` directly.
-/// Used by `set_microphone` to restart the stream with a user-selected device.
-pub fn start_persistent_stream_with_device(
+/// Same as `open_stream()` but accepts a `cpal::Device` directly.
+/// Stream is active immediately — caller is responsible for dropping the AudioCapture
+/// when done to release the microphone.
+pub fn open_stream_with_device(
     device: cpal::Device,
 ) -> Result<AudioCapture, Box<dyn std::error::Error + Send + Sync>> {
     build_stream_from_device(device)
+}
+
+/// Resolve an audio input device by name.
+///
+/// If `name` is empty or "System Default", returns the default input device.
+/// Otherwise searches available devices by description name.
+pub fn resolve_device_by_name(name: &str) -> Result<cpal::Device, Box<dyn std::error::Error + Send + Sync>> {
+    let host = cpal::default_host();
+    if name.is_empty() || name == "System Default" {
+        host.default_input_device()
+            .ok_or_else(|| "No default input device found".into())
+    } else {
+        host.input_devices()?
+            .find(|d| {
+                d.description()
+                    .map(|desc| desc.name() == name)
+                    .unwrap_or(false)
+            })
+            .ok_or_else(|| format!("Input device '{}' not found", name).into())
+    }
 }
 
 /// Write a slice of 32-bit float samples to a WAV file at 16kHz mono.
