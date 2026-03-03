@@ -42,7 +42,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 [##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
 
-Last activity: 2026-03-03 - Completed quick task 27: Create standalone benchmark script with TTS test WAV generation and multi-model latency measurement
+Last activity: 2026-03-03 - Completed quick task 28: Add Moonshine tiny/base and SenseVoice to benchmark binary via transcribe-rs behind bench_extra feature flag
 
 ## Performance Metrics
 
@@ -122,9 +122,10 @@ None active.
 |---|-------------|------|--------|--------|-----------|
 | 26 | Quantize distil-large-v3.5 from fp16 (1.52 GB) to q5_0 (513 MB); fix set_model() early-return bug and Cargo.toml default-run | 2026-03-03 | d46e7ec | Verified | [26-quantize-distil-large-v3-5-from-fp16-to-](./quick/26-quantize-distil-large-v3-5-from-fp16-to-/) |
 | 27 | Create standalone benchmark script with TTS test WAV generation and multi-model latency measurement | 2026-03-03 | 76669d4 | Verified | [27-create-standalone-benchmark-script-with-](./quick/27-create-standalone-benchmark-script-with-/) |
+| 28 | Add Moonshine tiny/base and SenseVoice to benchmark binary via transcribe-rs behind bench_extra feature flag | 2026-03-03 | bc32349 | Verified | [28-add-moonshine-and-sensevoice-to-benchmar](./quick/28-add-moonshine-and-sensevoice-to-benchmar/) |
 
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Quick task 26 complete — distil-large-v3.5 q5_0 quantization, set_model bug fix, Cargo.toml default-run
+Stopped at: Quick task 28 complete — Moonshine and SenseVoice benchmark sections added behind bench_extra feature
 Resume file: None
