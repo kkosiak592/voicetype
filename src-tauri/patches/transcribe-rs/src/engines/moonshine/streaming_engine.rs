@@ -13,6 +13,8 @@ pub struct StreamingModelParams {
     pub max_tokens_per_second: f32,
     /// Number of intra-op threads for ONNX Runtime. 0 = let ORT decide (typically num cores).
     pub num_threads: usize,
+    /// Execution providers to use (e.g. CUDA). None = fallback to CPU.
+    pub execution_providers: Option<Vec<ort::execution_providers::ExecutionProviderDispatch>>,
 }
 
 impl Default for StreamingModelParams {
@@ -20,6 +22,7 @@ impl Default for StreamingModelParams {
         Self {
             max_tokens_per_second: 6.5,
             num_threads: 0,
+            execution_providers: None,
         }
     }
 }
@@ -78,7 +81,7 @@ impl TranscriptionEngine for MoonshineStreamingEngine {
         self.unload_model();
 
         self.max_tokens_per_second = params.max_tokens_per_second;
-        self.model = Some(StreamingModel::new(model_path, params.num_threads)?);
+        self.model = Some(StreamingModel::new(model_path, params.num_threads, params.execution_providers)?);
         self.loaded_model_path = Some(model_path.to_path_buf());
 
         log::info!(

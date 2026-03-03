@@ -29,14 +29,19 @@ impl StreamingModel {
     /// Load all 5 ONNX sessions and the binary tokenizer from the model directory.
     ///
     /// `num_threads` controls intra-op parallelism. 0 = let ORT decide (typically num cores).
-    pub fn new(model_dir: &Path, num_threads: usize) -> Result<Self, MoonshineError> {
+    /// `providers` specifies execution providers (e.g. CUDA). None = fallback to CPU.
+    pub fn new(
+        model_dir: &Path,
+        num_threads: usize,
+        providers: Option<Vec<ort::execution_providers::ExecutionProviderDispatch>>,
+    ) -> Result<Self, MoonshineError> {
         let config = StreamingConfig::load(model_dir)?;
 
-        let frontend = Self::load_session(model_dir, "frontend", num_threads)?;
-        let encoder = Self::load_session(model_dir, "encoder", num_threads)?;
-        let adapter = Self::load_session(model_dir, "adapter", num_threads)?;
-        let cross_kv = Self::load_session(model_dir, "cross_kv", num_threads)?;
-        let decoder_kv = Self::load_session(model_dir, "decoder_kv", num_threads)?;
+        let frontend  = Self::load_session(model_dir, "frontend",   num_threads, providers.as_deref())?;
+        let encoder   = Self::load_session(model_dir, "encoder",    num_threads, providers.as_deref())?;
+        let adapter   = Self::load_session(model_dir, "adapter",    num_threads, providers.as_deref())?;
+        let cross_kv  = Self::load_session(model_dir, "cross_kv",   num_threads, providers.as_deref())?;
+        let decoder_kv = Self::load_session(model_dir, "decoder_kv", num_threads, providers.as_deref())?;
 
         let tokenizer = BinTokenizer::new(model_dir)?;
 
@@ -53,7 +58,12 @@ impl StreamingModel {
         })
     }
 
-    fn load_session(model_dir: &Path, name: &str, num_threads: usize) -> Result<Session, MoonshineError> {
+    fn load_session(
+        model_dir: &Path,
+        name: &str,
+        num_threads: usize,
+        providers: Option<&[ort::execution_providers::ExecutionProviderDispatch]>,
+    ) -> Result<Session, MoonshineError> {
         // Try .ort first, fall back to .onnx
         let ort_path = model_dir.join(format!("{}.ort", name));
         let onnx_path = model_dir.join(format!("{}.onnx", name));
@@ -80,8 +90,14 @@ impl StreamingModel {
             builder = builder.with_intra_threads(num_threads)?;
         }
 
+        let default_providers = vec![CPUExecutionProvider::default().build()];
+        let ep_list = match providers {
+            Some(p) => p.to_vec(),
+            None => default_providers,
+        };
+
         let session = builder
-            .with_execution_providers([CPUExecutionProvider::default().build()])?
+            .with_execution_providers(ep_list)?
             .commit_from_file(&path)?;
 
         Ok(session)
