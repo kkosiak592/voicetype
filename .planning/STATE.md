@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Keyboard Hook
 status: planning
-last_updated: "2026-03-03T13:52:31.265Z"
+last_updated: "2026-03-03T14:00:00Z"
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Session State
@@ -23,13 +23,13 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Position
 
 **Milestone:** v1.2 Keyboard Hook
-**Phase:** 15 — Hook Module
-**Plan:** 03 complete (human verification approved 2026-03-03)
-**Status:** Ready to plan
+**Phase:** 16 — Rebind and Coexistence
+**Plan:** 01 complete (2026-03-03)
+**Status:** In progress
 
 [##########------------------------------------------] 0% (0/4 phases)
 
-Last activity: 2026-03-03 — Phase 15 Plan 03 complete (human verification approved — all 7 hold-to-talk tests passed)
+Last activity: 2026-03-03 — Phase 16 Plan 01 complete (backend routing: is_modifier_only, HookAvailable, get_hook_status, routed IPC commands)
 
 ## Performance Metrics
 
@@ -41,6 +41,7 @@ Last activity: 2026-03-03 — Phase 15 Plan 03 complete (human verification appr
 | Blockers | 0 |
 | Phase 15-hook-module P02 | 2 | 2 tasks | 1 files |
 | Phase 15-hook-module P03 | 9 | 1 tasks | 3 files |
+| Phase 16-rebind-and-coexistence P01 | 5 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -60,6 +61,10 @@ Last activity: 2026-03-03 — Phase 15 Plan 03 complete (human verification appr
 - [Phase 15-hook-module]: handle_hotkey_event(pressed: bool) avoids constructing private ShortcutEvent — both code paths converge on bool
 - [Phase 15-hook-module]: 15-03: Tauri v2 Builder.run() takes only Context — hook cleanup moved to tray quit handler; HookHandle::Drop is safety net
 - [Phase 15-hook-module]: 15-03: Default hotkey changed to ctrl+win for fresh installs; existing users keep saved hotkey
+- 16-01: is_modifier_only predicate replaces hardcoded is_hook_hotkey — handles any modifier-only combo, not just ctrl+win
+- 16-01: Global-shortcut plugin always registered (with or without shortcuts) for runtime rebind support
+- 16-01: rebind_hotkey checks PipelineState::current() before switching backends
+- 16-01: Hook-failure fallback persists ctrl+shift+space to settings.json; frontend reads from settings.json for displayed hotkey
 
 ### Research Flags (from SUMMARY.md)
 
@@ -79,5 +84,5 @@ None active.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Phase 15 complete — ready to begin Phase 16 (16-01-PLAN.md)
+Stopped at: Phase 16 Plan 01 complete — ready for next plan in Phase 16
 Resume file: None

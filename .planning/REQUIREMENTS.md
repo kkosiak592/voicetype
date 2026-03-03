@@ -25,8 +25,8 @@ Requirements for Ctrl+Win modifier-only hotkey activation. Each maps to roadmap 
 ### Integration
 
 - [x] **INT-01**: Hold-to-talk works end-to-end with Ctrl+Win (hold to record, release to transcribe)
-- [ ] **INT-02**: rebind_hotkey routes modifier-only combos through hook and standard combos through tauri-plugin-global-shortcut
-- [ ] **INT-03**: If WH_KEYBOARD_LL installation fails, app falls back to RegisterHotKey and surfaces failure in settings
+- [x] **INT-02**: rebind_hotkey routes modifier-only combos through hook and standard combos through tauri-plugin-global-shortcut
+- [x] **INT-03**: If WH_KEYBOARD_LL installation fails, app falls back to RegisterHotKey and surfaces failure in settings
 
 ### Frontend
 
@@ -88,8 +88,8 @@ Deferred to future release. Tracked but not in current roadmap.
 | MOD-04 | Phase 15 | Complete |
 | MOD-05 | Phase 15 | Complete |
 | INT-01 | Phase 15 | Complete |
-| INT-02 | Phase 16 | Pending |
-| INT-03 | Phase 16 | Pending |
+| INT-02 | Phase 16 | Complete |
+| INT-03 | Phase 16 | Complete |
 | UI-01 | Phase 17 | Pending |
 | UI-02 | Phase 17 | Pending |
 | DIST-01 | Phase 18 | Pending |
