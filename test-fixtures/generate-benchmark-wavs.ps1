@@ -25,6 +25,26 @@ $size5s = (Get-Item $file5s).Length
 Write-Host ("benchmark-5s.wav  -> {0} bytes  ({1:F1}s expected at 16kHz/16bit/mono)" -f $size5s, ($size5s / (16000 * 2)))
 
 # -----------------------------------------------------------------------
+# 30-second clip — medium passage for mid-length testing
+# -----------------------------------------------------------------------
+$passage30s = @"
+Speech recognition technology has advanced significantly in recent years.
+Modern deep learning models can transcribe audio with remarkable accuracy.
+The key factors that affect performance include microphone quality and background noise.
+Models trained on large datasets tend to generalize better across different speakers.
+Quantized models offer a good balance between speed and accuracy for real time use.
+This thirty second clip tests how models handle medium length audio segments.
+"@
+
+$file30s = Join-Path $OutputDir "benchmark-30s.wav"
+$synth.SetOutputToWaveFile($file30s, $format)
+$synth.Speak($passage30s)
+$synth.SetOutputToNull()
+
+$size30s = (Get-Item $file30s).Length
+Write-Host ("benchmark-30s.wav -> {0} bytes  ({1:F1}s expected at 16kHz/16bit/mono)" -f $size30s, ($size30s / (16000 * 2)))
+
+# -----------------------------------------------------------------------
 # 60-second clip — longer passage for sustained-load testing
 # -----------------------------------------------------------------------
 $passage = @"

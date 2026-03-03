@@ -135,6 +135,107 @@ fn detect_gpu() -> (bool, String) {
 }
 
 // ---------------------------------------------------------------------------
+// Reference transcripts (must match generate-benchmark-wavs.ps1 exactly)
+// ---------------------------------------------------------------------------
+
+const REF_5S: &str = "The quick brown fox jumps over the lazy dog. Pack my box with five dozen liquor jugs.";
+
+const REF_30S: &str = "Speech recognition technology has advanced significantly in recent years. \
+Modern deep learning models can transcribe audio with remarkable accuracy. \
+The key factors that affect performance include microphone quality and background noise. \
+Models trained on large datasets tend to generalize better across different speakers. \
+Quantized models offer a good balance between speed and accuracy for real time use. \
+This thirty second clip tests how models handle medium length audio segments.";
+
+const REF_60S: &str = "Voice dictation software converts spoken words into written text in real time. \
+Modern systems use deep learning models trained on thousands of hours of audio data. \
+Accuracy depends on microphone quality, background noise, and speaking pace. \
+The whisper model was released by OpenAI and is widely used for offline transcription. \
+Parakeet is an NVIDIA model optimised for real-time inference on CUDA hardware. \
+To benchmark these models fairly, we measure wall-clock latency across multiple runs. \
+We test both a short five-second clip and a longer sixty-second passage. \
+Results include the average, minimum, and maximum inference time in milliseconds. \
+Lower latency means faster transcription and a better user experience. \
+Sub five hundred millisecond latency is generally imperceptible to the user. \
+English language models tend to be smaller and faster than multilingual alternatives. \
+Quantised models use reduced precision weights to run faster with minimal accuracy loss. \
+The Q5 underscore 1 format stores each weight in approximately five bits. \
+GPU acceleration can reduce inference time by ten times compared to CPU-only execution. \
+This benchmark helps select the best model for a given hardware configuration.";
+
+/// Normalise text for WER comparison: lowercase, strip punctuation, collapse whitespace.
+fn normalise_for_wer(s: &str) -> Vec<String> {
+    s.to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c.is_whitespace() { c } else { ' ' })
+        .collect::<String>()
+        .split_whitespace()
+        .map(|w| w.to_string())
+        .collect()
+}
+
+/// Word Error Rate via word-level Levenshtein distance.
+/// Returns (wer_percent, substitutions, insertions, deletions, ref_word_count).
+fn compute_wer(reference: &str, hypothesis: &str) -> (f64, usize, usize, usize, usize) {
+    let ref_words = normalise_for_wer(reference);
+    let hyp_words = normalise_for_wer(hypothesis);
+    let n = ref_words.len();
+    let m = hyp_words.len();
+
+    if n == 0 {
+        return (if m == 0 { 0.0 } else { 100.0 }, 0, m, 0, 0);
+    }
+
+    // DP matrix: d[i][j] = edit distance between ref[..i] and hyp[..j]
+    let mut d = vec![vec![0usize; m + 1]; n + 1];
+    for i in 0..=n { d[i][0] = i; }
+    for j in 0..=m { d[0][j] = j; }
+
+    for i in 1..=n {
+        for j in 1..=m {
+            let cost = if ref_words[i - 1] == hyp_words[j - 1] { 0 } else { 1 };
+            d[i][j] = (d[i - 1][j] + 1)          // deletion
+                .min(d[i][j - 1] + 1)             // insertion
+                .min(d[i - 1][j - 1] + cost);     // substitution
+        }
+    }
+
+    // Backtrace to count S, I, D
+    let (mut i, mut j) = (n, m);
+    let (mut subs, mut ins, mut dels) = (0, 0, 0);
+    while i > 0 || j > 0 {
+        if i > 0 && j > 0 {
+            let cost = if ref_words[i - 1] == hyp_words[j - 1] { 0 } else { 1 };
+            if d[i][j] == d[i - 1][j - 1] + cost {
+                if cost == 1 { subs += 1; }
+                i -= 1;
+                j -= 1;
+                continue;
+            }
+        }
+        if i > 0 && d[i][j] == d[i - 1][j] + 1 {
+            dels += 1;
+            i -= 1;
+        } else {
+            ins += 1;
+            j -= 1;
+        }
+    }
+
+    let wer = (subs + ins + dels) as f64 / n as f64 * 100.0;
+    (wer, subs, ins, dels, n)
+}
+
+fn reference_for_clip(clip_label: &str) -> &'static str {
+    match clip_label {
+        "5s" => REF_5S,
+        "30s" => REF_30S,
+        "60s" => REF_60S,
+        _ => "",
+    }
+}
+
+// ---------------------------------------------------------------------------
 // WAV path discovery
 // ---------------------------------------------------------------------------
 
@@ -162,6 +263,7 @@ struct BenchResult {
     avg_ms: u64,
     min_ms: u64,
     max_ms: u64,
+    wer: f64,
     first_text: String,
 }
 
@@ -196,6 +298,7 @@ fn main() {
     // Model discovery
     let whisper_models: Vec<(&str, &str)> = vec![
         ("ggml-small.en-q5_1.bin",        "whisper-small-en"),
+        ("ggml-medium.en-q5_0.bin",       "whisper-medium-en"),
         ("ggml-large-v3-turbo-q5_0.bin",  "whisper-large-v3-turbo"),
         ("ggml-distil-large-v3.5.bin",    "whisper-distil-large-v3.5"),
     ];
@@ -234,6 +337,7 @@ fn main() {
     println!("\n-- WAV fixtures --");
     let clips: Vec<(&str, &str)> = vec![
         ("benchmark-5s.wav",  "5s"),
+        ("benchmark-30s.wav", "30s"),
         ("benchmark-60s.wav", "60s"),
     ];
 
@@ -356,7 +460,10 @@ fn main() {
             let avg = latencies.iter().sum::<u64>() / latencies.len() as u64;
             let min = *latencies.iter().min().unwrap();
             let max = *latencies.iter().max().unwrap();
-            println!("  -> avg={}ms  min={}ms  max={}ms", avg, min, max);
+
+            let reference = reference_for_clip(clip_label);
+            let (wer, subs, ins, dels, ref_n) = compute_wer(reference, &first_text);
+            println!("  -> avg={}ms  min={}ms  max={}ms  WER={:.1}% (S={} I={} D={} / {} words)", avg, min, max, wer, subs, ins, dels, ref_n);
 
             results.push(BenchResult {
                 model: model_label.to_string(),
@@ -364,6 +471,7 @@ fn main() {
                 avg_ms: avg,
                 min_ms: min,
                 max_ms: max,
+                wer,
                 first_text,
             });
         }
@@ -453,7 +561,10 @@ fn main() {
             let avg = latencies.iter().sum::<u64>() / latencies.len() as u64;
             let min = *latencies.iter().min().unwrap();
             let max = *latencies.iter().max().unwrap();
-            println!("  -> avg={}ms  min={}ms  max={}ms", avg, min, max);
+
+            let reference = reference_for_clip(clip_label);
+            let (wer, subs, ins, dels, ref_n) = compute_wer(reference, &first_text);
+            println!("  -> avg={}ms  min={}ms  max={}ms  WER={:.1}% (S={} I={} D={} / {} words)", avg, min, max, wer, subs, ins, dels, ref_n);
 
             results.push(BenchResult {
                 model: "parakeet-tdt-v2".to_string(),
@@ -461,6 +572,7 @@ fn main() {
                 avg_ms: avg,
                 min_ms: min,
                 max_ms: max,
+                wer,
                 first_text,
             });
         }
@@ -483,23 +595,121 @@ fn print_summary(results: &[BenchResult]) {
         return;
     }
     println!(
-        "{:<30} | {:<4} | {:>8} | {:>8} | {:>8}",
-        "Model", "Clip", "Avg (ms)", "Min (ms)", "Max (ms)"
+        "{:<30} | {:<4} | {:>8} | {:>8} | {:>8} | {:>7}",
+        "Model", "Clip", "Avg (ms)", "Min (ms)", "Max (ms)", "WER %"
     );
-    println!("{}", "-".repeat(70));
+    println!("{}", "-".repeat(80));
     for r in results {
         println!(
-            "{:<30} | {:<4} | {:>8} | {:>8} | {:>8}",
-            r.model, r.clip, r.avg_ms, r.min_ms, r.max_ms
+            "{:<30} | {:<4} | {:>8} | {:>8} | {:>8} | {:>6.1}%",
+            r.model, r.clip, r.avg_ms, r.min_ms, r.max_ms, r.wer
         );
     }
-    println!("{}", "=".repeat(70));
+    println!("{}", "=".repeat(80));
     println!("Transcription samples (first run of each model/clip):");
     for r in results {
         if !r.first_text.is_empty() {
             println!("  [{} / {}] {}", r.model, r.clip, truncate(&r.first_text, 100));
         }
     }
+
+    // -----------------------------------------------------------------------
+    // Model summary — averages across all clips + speed/accuracy score
+    // -----------------------------------------------------------------------
+    // Collect unique model names in order
+    let mut model_names: Vec<String> = Vec::new();
+    for r in results {
+        if !model_names.contains(&r.model) {
+            model_names.push(r.model.clone());
+        }
+    }
+
+    struct ModelSummary {
+        name: String,
+        avg_latency_ms: f64,
+        avg_wer: f64,
+        accuracy: f64,      // 100 - WER (clamped to 0)
+    }
+
+    let mut summaries: Vec<ModelSummary> = Vec::new();
+    for name in &model_names {
+        let model_results: Vec<&BenchResult> = results.iter().filter(|r| &r.model == name).collect();
+        if model_results.is_empty() { continue; }
+        let count = model_results.len();
+        let avg_latency = model_results.iter().map(|r| r.avg_ms as f64).sum::<f64>() / count as f64;
+        let avg_wer = model_results.iter().map(|r| r.wer).sum::<f64>() / count as f64;
+        let accuracy = (100.0 - avg_wer).max(0.0);
+        summaries.push(ModelSummary {
+            name: name.clone(),
+            avg_latency_ms: avg_latency,
+            avg_wer,
+            accuracy,
+        });
+    }
+
+    if summaries.is_empty() { return; }
+
+    // Find best (lowest) latency and best (highest) accuracy for normalization
+    let best_latency = summaries.iter().map(|s| s.avg_latency_ms).fold(f64::MAX, f64::min);
+    let best_accuracy = summaries.iter().map(|s| s.accuracy).fold(0.0f64, f64::max);
+
+    println!("\n");
+    println!("================================================================================");
+    println!("MODEL RANKINGS");
+    println!("================================================================================");
+    println!(
+        "{:<30} | {:>10} | {:>7} | {:>8} | {:>8} | {:>6}",
+        "Model", "Avg Lat.", "Avg WER", "Accuracy", "Speed", "Score"
+    );
+    println!("{}", "-".repeat(88));
+
+    // Compute scores and collect for sorting
+    struct ScoredModel {
+        name: String,
+        avg_latency_ms: f64,
+        avg_wer: f64,
+        accuracy: f64,
+        speed_score: f64,
+        overall_score: f64,
+    }
+
+    let mut scored: Vec<ScoredModel> = summaries.iter().map(|s| {
+        // Speed score: best_latency / this_latency * 100 (best model = 100)
+        let speed_score = if s.avg_latency_ms > 0.0 {
+            (best_latency / s.avg_latency_ms) * 100.0
+        } else {
+            100.0
+        };
+        // Accuracy score: this_accuracy / best_accuracy * 100 (best model = 100)
+        let accuracy_score = if best_accuracy > 0.0 {
+            (s.accuracy / best_accuracy) * 100.0
+        } else {
+            100.0
+        };
+        // Overall score: geometric mean of speed and accuracy (balances both)
+        let overall_score = (speed_score * accuracy_score).sqrt();
+        ScoredModel {
+            name: s.name.clone(),
+            avg_latency_ms: s.avg_latency_ms,
+            avg_wer: s.avg_wer,
+            accuracy: s.accuracy,
+            speed_score,
+            overall_score,
+        }
+    }).collect();
+
+    // Sort by overall score descending
+    scored.sort_by(|a, b| b.overall_score.partial_cmp(&a.overall_score).unwrap_or(std::cmp::Ordering::Equal));
+
+    for s in &scored {
+        println!(
+            "{:<30} | {:>8.0}ms | {:>5.1}%  | {:>6.1}%  | {:>6.1}/100 | {:>4.1}/100",
+            s.name, s.avg_latency_ms, s.avg_wer, s.accuracy, s.speed_score, s.overall_score
+        );
+    }
+    println!("{}", "=".repeat(88));
+    println!("Speed:  100 = fastest model, scaled relative to best avg latency ({:.0}ms)", best_latency);
+    println!("Score:  geometric mean of speed and accuracy (balanced ranking)");
 }
 
 fn truncate(s: &str, max: usize) -> String {
