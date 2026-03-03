@@ -26,6 +26,9 @@ use transcribe_rs::{
 #[cfg(feature = "bench_extra")]
 use ort::execution_providers::{CUDAExecutionProvider, CPUExecutionProvider};
 
+#[cfg(feature = "bench_extra")]
+use voice_activity_detector::VoiceActivityDetector;
+
 // ---------------------------------------------------------------------------
 // WAV reading
 // ---------------------------------------------------------------------------
@@ -106,6 +109,112 @@ fn read_wav_to_f32(path: &str) -> Result<Vec<f32>, String> {
         audio.len() as f32 / 16000.0
     );
     Ok(audio)
+}
+
+// ---------------------------------------------------------------------------
+// VAD-based audio chunking (bench_extra only)
+// ---------------------------------------------------------------------------
+
+/// Split audio into VAD-based chunks for models with short context windows.
+/// Only called for clips > 30s. Returns Vec of audio segments split at silence boundaries.
+///
+/// Algorithm:
+/// 1. Run Silero VAD over entire audio in 512-sample chunks
+/// 2. Track speech/silence state -- silence starts when prob < 0.5
+/// 3. When silence exceeds SILENCE_SPLIT_CHUNKS (~320ms), end current segment
+/// 4. Cap segments at MAX_SEGMENT_SAMPLES (30s = 480000 samples)
+/// 5. Discard segments shorter than MIN_SEGMENT_SAMPLES (0.5s = 8000 samples)
+#[cfg(feature = "bench_extra")]
+fn vad_chunk_audio(samples: &[f32]) -> Vec<Vec<f32>> {
+    const CHUNK_SIZE: usize = 512;
+    const SPEECH_THRESHOLD: f32 = 0.5;
+    // 300ms at 16kHz = 4800 samples. At 512 samples/chunk = ~9.4 chunks. Round to 10.
+    const SILENCE_SPLIT_CHUNKS: usize = 10; // ~320ms of silence triggers a split
+    const MAX_SEGMENT_SAMPLES: usize = 30 * 16000; // 30 seconds
+    const MIN_SEGMENT_SAMPLES: usize = 8000; // 0.5 seconds
+
+    let mut vad = match VoiceActivityDetector::builder()
+        .sample_rate(16000u32)
+        .chunk_size(CHUNK_SIZE)
+        .build()
+    {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("  VAD chunking failed to init: {} -- returning single segment", e);
+            return vec![samples.to_vec()];
+        }
+    };
+
+    // Classify each chunk as speech or silence
+    let num_chunks = samples.len() / CHUNK_SIZE;
+    let mut is_speech: Vec<bool> = Vec::with_capacity(num_chunks);
+    for i in 0..num_chunks {
+        let start = i * CHUNK_SIZE;
+        let chunk = &samples[start..start + CHUNK_SIZE];
+        let prob = vad.predict(chunk.to_vec());
+        is_speech.push(prob >= SPEECH_THRESHOLD);
+    }
+
+    // Find split points: runs of >= SILENCE_SPLIT_CHUNKS consecutive silence chunks
+    let mut segments: Vec<Vec<f32>> = Vec::new();
+    let mut seg_start_chunk: usize = 0;
+    let mut silence_run: usize = 0;
+
+    for (i, &speech) in is_speech.iter().enumerate() {
+        if !speech {
+            silence_run += 1;
+        } else {
+            silence_run = 0;
+        }
+
+        let seg_len_samples = (i + 1 - seg_start_chunk) * CHUNK_SIZE;
+
+        // Split if: silence gap reached OR segment exceeds max duration
+        let should_split = (silence_run >= SILENCE_SPLIT_CHUNKS && seg_len_samples > MIN_SEGMENT_SAMPLES)
+            || seg_len_samples >= MAX_SEGMENT_SAMPLES;
+
+        if should_split && i + 1 < num_chunks {
+            // End segment at the start of the silence run (keep speech, trim trailing silence)
+            let split_chunk = if silence_run >= SILENCE_SPLIT_CHUNKS {
+                i + 1 - silence_run // start of silence run
+            } else {
+                i + 1 // max length reached -- split here
+            };
+
+            let start_sample = seg_start_chunk * CHUNK_SIZE;
+            let end_sample = std::cmp::min(split_chunk * CHUNK_SIZE, samples.len());
+
+            if end_sample > start_sample && (end_sample - start_sample) >= MIN_SEGMENT_SAMPLES {
+                segments.push(samples[start_sample..end_sample].to_vec());
+            }
+
+            seg_start_chunk = i + 1; // next chunk starts new segment
+            silence_run = 0;
+        }
+    }
+
+    // Final segment
+    let start_sample = seg_start_chunk * CHUNK_SIZE;
+    if start_sample < samples.len() {
+        let remaining = &samples[start_sample..];
+        if remaining.len() >= MIN_SEGMENT_SAMPLES {
+            segments.push(remaining.to_vec());
+        }
+    }
+
+    // Fallback: if chunking produced nothing, return the whole audio
+    if segments.is_empty() {
+        segments.push(samples.to_vec());
+    }
+
+    println!("  VAD chunking: {} segments from {:.1}s audio",
+        segments.len(),
+        samples.len() as f32 / 16000.0);
+    for (i, seg) in segments.iter().enumerate() {
+        println!("    segment {}: {:.1}s ({} samples)", i, seg.len() as f32 / 16000.0, seg.len());
+    }
+
+    segments
 }
 
 // ---------------------------------------------------------------------------
@@ -665,26 +774,51 @@ fn main() {
                     }
                 };
 
+                let needs_chunking = audio.len() > 30 * 16000; // > 30 seconds
+                let vad_start = Instant::now();
+                let chunks: Vec<Vec<f32>> = if needs_chunking {
+                    vad_chunk_audio(&audio)
+                } else {
+                    vec![audio]
+                };
+                let vad_ms = if needs_chunking { vad_start.elapsed().as_millis() as u64 } else { 0 };
+                if needs_chunking {
+                    println!("  VAD chunking: {}ms -> {} segments", vad_ms, chunks.len());
+                }
+
                 let mut latencies: Vec<u64> = Vec::with_capacity(ITERATIONS);
                 let mut first_text = String::new();
 
                 for i in 0..ITERATIONS {
                     let t = Instant::now();
-                    match engine.transcribe_samples(audio.clone(), None) {
-                        Ok(result) => {
-                            let elapsed = t.elapsed().as_millis() as u64;
-                            latencies.push(elapsed);
-                            if i == 0 {
-                                first_text = result.text.trim().to_string();
-                                println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
-                            } else {
-                                println!("  [run {}] {}ms", i + 1, elapsed);
+                    let mut combined_text = String::new();
+                    let mut had_error = false;
+
+                    for (seg_idx, seg) in chunks.iter().enumerate() {
+                        match engine.transcribe_samples(seg.clone(), None) {
+                            Ok(result) => {
+                                if !combined_text.is_empty() && !result.text.trim().is_empty() {
+                                    combined_text.push(' ');
+                                }
+                                combined_text.push_str(result.text.trim());
+                            }
+                            Err(e) => {
+                                eprintln!("  ERROR during inference run {} seg {}: {}", i + 1, seg_idx, e);
+                                had_error = true;
+                                break;
                             }
                         }
-                        Err(e) => {
-                            eprintln!("  ERROR during inference run {}: {}", i + 1, e);
-                            break;
-                        }
+                    }
+
+                    if had_error { break; }
+
+                    let elapsed = t.elapsed().as_millis() as u64;
+                    latencies.push(elapsed);
+                    if i == 0 {
+                        first_text = combined_text.trim().to_string();
+                        println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
+                    } else {
+                        println!("  [run {}] {}ms", i + 1, elapsed);
                     }
                 }
 
@@ -698,6 +832,9 @@ fn main() {
                 let reference = reference_for_clip(clip_label);
                 let (wer, subs, ins, dels, ref_n) = compute_wer(reference, &first_text);
                 println!("  -> avg={}ms  min={}ms  max={}ms  WER={:.1}% (S={} I={} D={} / {} words)", avg, min, max, wer, subs, ins, dels, ref_n);
+                if needs_chunking {
+                    println!("  (total incl. VAD: avg={}ms)", avg + vad_ms);
+                }
 
                 results.push(BenchResult {
                     model: "moonshine-tiny".to_string(),
@@ -736,26 +873,51 @@ fn main() {
                     }
                 };
 
+                let needs_chunking = audio.len() > 30 * 16000; // > 30 seconds
+                let vad_start = Instant::now();
+                let chunks: Vec<Vec<f32>> = if needs_chunking {
+                    vad_chunk_audio(&audio)
+                } else {
+                    vec![audio]
+                };
+                let vad_ms = if needs_chunking { vad_start.elapsed().as_millis() as u64 } else { 0 };
+                if needs_chunking {
+                    println!("  VAD chunking: {}ms -> {} segments", vad_ms, chunks.len());
+                }
+
                 let mut latencies: Vec<u64> = Vec::with_capacity(ITERATIONS);
                 let mut first_text = String::new();
 
                 for i in 0..ITERATIONS {
                     let t = Instant::now();
-                    match engine.transcribe_samples(audio.clone(), None) {
-                        Ok(result) => {
-                            let elapsed = t.elapsed().as_millis() as u64;
-                            latencies.push(elapsed);
-                            if i == 0 {
-                                first_text = result.text.trim().to_string();
-                                println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
-                            } else {
-                                println!("  [run {}] {}ms", i + 1, elapsed);
+                    let mut combined_text = String::new();
+                    let mut had_error = false;
+
+                    for (seg_idx, seg) in chunks.iter().enumerate() {
+                        match engine.transcribe_samples(seg.clone(), None) {
+                            Ok(result) => {
+                                if !combined_text.is_empty() && !result.text.trim().is_empty() {
+                                    combined_text.push(' ');
+                                }
+                                combined_text.push_str(result.text.trim());
+                            }
+                            Err(e) => {
+                                eprintln!("  ERROR during inference run {} seg {}: {}", i + 1, seg_idx, e);
+                                had_error = true;
+                                break;
                             }
                         }
-                        Err(e) => {
-                            eprintln!("  ERROR during inference run {}: {}", i + 1, e);
-                            break;
-                        }
+                    }
+
+                    if had_error { break; }
+
+                    let elapsed = t.elapsed().as_millis() as u64;
+                    latencies.push(elapsed);
+                    if i == 0 {
+                        first_text = combined_text.trim().to_string();
+                        println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
+                    } else {
+                        println!("  [run {}] {}ms", i + 1, elapsed);
                     }
                 }
 
@@ -769,6 +931,9 @@ fn main() {
                 let reference = reference_for_clip(clip_label);
                 let (wer, subs, ins, dels, ref_n) = compute_wer(reference, &first_text);
                 println!("  -> avg={}ms  min={}ms  max={}ms  WER={:.1}% (S={} I={} D={} / {} words)", avg, min, max, wer, subs, ins, dels, ref_n);
+                if needs_chunking {
+                    println!("  (total incl. VAD: avg={}ms)", avg + vad_ms);
+                }
 
                 results.push(BenchResult {
                     model: "moonshine-base".to_string(),
@@ -807,26 +972,51 @@ fn main() {
                     }
                 };
 
+                let needs_chunking = audio.len() > 30 * 16000; // > 30 seconds
+                let vad_start = Instant::now();
+                let chunks: Vec<Vec<f32>> = if needs_chunking {
+                    vad_chunk_audio(&audio)
+                } else {
+                    vec![audio]
+                };
+                let vad_ms = if needs_chunking { vad_start.elapsed().as_millis() as u64 } else { 0 };
+                if needs_chunking {
+                    println!("  VAD chunking: {}ms -> {} segments", vad_ms, chunks.len());
+                }
+
                 let mut latencies: Vec<u64> = Vec::with_capacity(ITERATIONS);
                 let mut first_text = String::new();
 
                 for i in 0..ITERATIONS {
                     let t = Instant::now();
-                    match engine.transcribe_samples(audio.clone(), None) {
-                        Ok(result) => {
-                            let elapsed = t.elapsed().as_millis() as u64;
-                            latencies.push(elapsed);
-                            if i == 0 {
-                                first_text = result.text.trim().to_string();
-                                println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
-                            } else {
-                                println!("  [run {}] {}ms", i + 1, elapsed);
+                    let mut combined_text = String::new();
+                    let mut had_error = false;
+
+                    for (seg_idx, seg) in chunks.iter().enumerate() {
+                        match engine.transcribe_samples(seg.clone(), None) {
+                            Ok(result) => {
+                                if !combined_text.is_empty() && !result.text.trim().is_empty() {
+                                    combined_text.push(' ');
+                                }
+                                combined_text.push_str(result.text.trim());
+                            }
+                            Err(e) => {
+                                eprintln!("  ERROR during inference run {} seg {}: {}", i + 1, seg_idx, e);
+                                had_error = true;
+                                break;
                             }
                         }
-                        Err(e) => {
-                            eprintln!("  ERROR during inference run {}: {}", i + 1, e);
-                            break;
-                        }
+                    }
+
+                    if had_error { break; }
+
+                    let elapsed = t.elapsed().as_millis() as u64;
+                    latencies.push(elapsed);
+                    if i == 0 {
+                        first_text = combined_text.trim().to_string();
+                        println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
+                    } else {
+                        println!("  [run {}] {}ms", i + 1, elapsed);
                     }
                 }
 
@@ -840,6 +1030,9 @@ fn main() {
                 let reference = reference_for_clip(clip_label);
                 let (wer, subs, ins, dels, ref_n) = compute_wer(reference, &first_text);
                 println!("  -> avg={}ms  min={}ms  max={}ms  WER={:.1}% (S={} I={} D={} / {} words)", avg, min, max, wer, subs, ins, dels, ref_n);
+                if needs_chunking {
+                    println!("  (total incl. VAD: avg={}ms)", avg + vad_ms);
+                }
 
                 results.push(BenchResult {
                     model: "sensevoice-small".to_string(),
