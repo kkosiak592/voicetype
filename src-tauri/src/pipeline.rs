@@ -69,14 +69,16 @@ impl PipelineState {
 /// Every early-return path calls reset_to_idle() — no stuck states.
 pub async fn run_pipeline(app: tauri::AppHandle) {
     // 1. Stop recording and get audio buffer
-    // Lock AudioCaptureMutex, flush+get buffer, then drop guard before any async work.
+    // Lock AudioCaptureMutex, flush+get buffer, drop the stream (releases mic), then drop guard.
     let (sample_count, samples) = {
         let audio_mutex = app.state::<crate::audio::AudioCaptureMutex>();
-        let guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
         match guard.as_ref() {
             Some(audio) => {
                 let count = audio.flush_and_stop();
                 let buf = audio.get_buffer();
+                // Drop the stream to release the microphone (removes Windows tray icon)
+                *guard = None;
                 (count, buf)
             }
             None => {

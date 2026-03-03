@@ -398,6 +398,46 @@ fn set_engine(app: tauri::AppHandle, engine: String, parakeet_model: Option<Stri
     Ok(())
 }
 
+/// Open an on-demand audio stream using the saved microphone preference.
+///
+/// Resolves the device from settings.json, opens a capture stream, clears the buffer,
+/// sets recording=true, stores the AudioCapture in managed state, and returns the
+/// buffer Arc for level streaming. Returns None if the stream could not be opened.
+fn open_recording_stream(app: &tauri::AppHandle) -> Option<Arc<std::sync::Mutex<Vec<f32>>>> {
+    let device_name = read_settings(app)
+        .ok()
+        .and_then(|json| json.get("microphone_device")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty() && *s != "System Default")
+            .map(|s| s.to_owned()));
+
+    let device = match audio::resolve_device_by_name(device_name.as_deref().unwrap_or("")) {
+        Ok(d) => d,
+        Err(e) => {
+            log::error!("Cannot resolve microphone: {}", e);
+            return None;
+        }
+    };
+
+    let capture = match audio::open_stream_with_device(device) {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("Cannot open audio stream: {}", e);
+            return None;
+        }
+    };
+
+    capture.clear_buffer();
+    capture.recording.store(true, std::sync::atomic::Ordering::Relaxed);
+    let buffer_clone = capture.buffer.clone();
+
+    let audio_mutex = app.state::<audio::AudioCaptureMutex>();
+    let mut guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = Some(capture);
+
+    Some(buffer_clone)
+}
+
 /// Hotkey handler body — called from both handle_shortcut() (global-shortcut path)
 /// and dispatch_hook_event in keyboard_hook.rs (WH_KEYBOARD_LL path).
 ///
@@ -414,20 +454,14 @@ pub(crate) fn handle_hotkey_event(app: &tauri::AppHandle, pressed: bool) {
         match mode {
             Mode::HoldToTalk => {
                 if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
-                    let audio_mutex = app.state::<audio::AudioCaptureMutex>();
-                    let guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
-                    let audio = match guard.as_ref() {
-                        Some(a) => a,
+                    let buffer_clone = match open_recording_stream(app) {
+                        Some(b) => b,
                         None => {
                             log::error!("No microphone — cannot record");
                             pipeline.reset_to_idle();
                             return;
                         }
                     };
-                    audio.clear_buffer();
-                    audio.recording.store(true, Ordering::Relaxed);
-                    let buffer_clone = audio.buffer.clone();
-                    drop(guard);
                     tray::set_tray_state(app, tray::TrayState::Recording);
                     pill::show_pill(app);
                     app.emit_to("pill", "pill-state", "recording").ok();
@@ -445,20 +479,14 @@ pub(crate) fn handle_hotkey_event(app: &tauri::AppHandle, pressed: bool) {
             }
             Mode::Toggle => {
                 if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
-                    let audio_mutex = app.state::<audio::AudioCaptureMutex>();
-                    let guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
-                    let audio = match guard.as_ref() {
-                        Some(a) => a,
+                    let buffer_clone = match open_recording_stream(app) {
+                        Some(b) => b,
                         None => {
                             log::error!("No microphone — cannot record (toggle)");
                             pipeline.reset_to_idle();
                             return;
                         }
                     };
-                    audio.clear_buffer();
-                    audio.recording.store(true, Ordering::Relaxed);
-                    let buffer_clone = audio.buffer.clone();
-                    drop(guard);
                     tray::set_tray_state(app, tray::TrayState::Recording);
                     pill::show_pill(app);
                     app.emit_to("pill", "pill-state", "recording").ok();
@@ -729,13 +757,28 @@ fn notify_frontend_ready(app: tauri::AppHandle) {
     }
 }
 
-/// Start recording: clears the audio buffer and sets the recording flag.
+/// Start recording: opens an on-demand audio stream if none exists, then clears
+/// the buffer and sets the recording flag.
 ///
 /// Audio captured after this call is accumulated in memory at 16kHz mono.
 #[tauri::command]
-fn start_recording(state: tauri::State<'_, audio::AudioCaptureMutex>) -> Result<(), String> {
-    let guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
-    let audio = guard.as_ref().ok_or("No microphone available")?;
+fn start_recording(app: tauri::AppHandle, state: tauri::State<'_, audio::AudioCaptureMutex>) -> Result<(), String> {
+    let mut guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+    if guard.is_none() {
+        // Open stream on demand using saved microphone preference
+        let device_name = read_settings(&app)
+            .ok()
+            .and_then(|json| json.get("microphone_device")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty() && *s != "System Default")
+                .map(|s| s.to_owned()));
+        let device = audio::resolve_device_by_name(device_name.as_deref().unwrap_or(""))
+            .map_err(|e| e.to_string())?;
+        let capture = audio::open_stream_with_device(device)
+            .map_err(|e| e.to_string())?;
+        *guard = Some(capture);
+    }
+    let audio = guard.as_ref().unwrap();
     audio.clear_buffer();
     audio.recording.store(true, std::sync::atomic::Ordering::Relaxed);
     log::info!("Recording started");
@@ -999,19 +1042,6 @@ fn set_all_caps(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     Ok(())
 }
 
-/// Read the saved microphone device name from settings.json.
-/// Returns None on first launch, file missing, or no saved mic (system default).
-fn read_saved_mic(app: &tauri::App) -> Option<String> {
-    let data_dir = app.path().app_data_dir().ok()?;
-    let settings_path = data_dir.join("settings.json");
-    let contents = std::fs::read_to_string(&settings_path).ok()?;
-    let json: serde_json::Value = serde_json::from_str(&contents).ok()?;
-    json.get("microphone_device")
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty() && *s != "System Default")
-        .map(|s| s.to_owned())
-}
-
 /// List available audio input device names.
 ///
 /// The first entry is always "System Default" so the UI has a way to revert.
@@ -1029,45 +1059,25 @@ fn list_input_devices() -> Result<Vec<String>, String> {
     Ok(names)
 }
 
-/// Switch the active microphone device. Restarts the audio stream with the new device.
+/// Save the microphone device preference. No stream is opened — the preference
+/// will be used on the next recording start.
 ///
-/// Passing "System Default" or an empty string uses `host.default_input_device()`.
-/// Persists the selection to settings.json so it is restored at next startup.
+/// Validates that the device exists before saving (unless "System Default").
+/// Persists the selection to settings.json.
 #[tauri::command]
 fn set_microphone(app: tauri::AppHandle, device_name: String) -> Result<(), String> {
-    use cpal::traits::{DeviceTrait, HostTrait};
-
-    let host = cpal::default_host();
-    let device = if device_name.is_empty() || device_name == "System Default" {
-        host.default_input_device()
-            .ok_or_else(|| "No default input device found".to_string())?
-    } else {
-        host.input_devices()
-            .map_err(|e| e.to_string())?
-            .find(|d| {
-                d.description()
-                    .map(|desc: cpal::DeviceDescription| desc.name() == device_name.as_str())
-                    .unwrap_or(false)
-            })
-            .ok_or_else(|| format!("Input device '{}' not found", device_name))?
-    };
-
-    let new_capture = audio::start_persistent_stream_with_device(device)
-        .map_err(|e| e.to_string())?;
-
-    // Replace the inner AudioCapture — old stream drops, new one starts
-    {
-        let audio_mutex = app.state::<audio::AudioCaptureMutex>();
-        let mut guard = audio_mutex.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
-        *guard = Some(new_capture);
+    // Validate device exists before saving (unless System Default)
+    if !device_name.is_empty() && device_name != "System Default" {
+        audio::resolve_device_by_name(&device_name)
+            .map_err(|e| e.to_string())?;
     }
 
-    // Persist to settings.json
+    // Persist to settings.json — stream will use this on next recording start
     let mut json = read_settings(&app)?;
     json["microphone_device"] = serde_json::Value::String(device_name.clone());
     write_settings(&app, &json)?;
 
-    log::info!("Microphone switched to: '{}'", device_name);
+    log::info!("Microphone preference saved: '{}' (will take effect on next recording)", device_name);
     Ok(())
 }
 
@@ -1891,41 +1901,10 @@ pub fn run() {
             // HookAvailable registered on Builder — hook_available Arc was cloned
             // from managed state; .store() calls above are visible via app.state().
 
-            // Start persistent audio capture stream.
-            // Prefer saved mic device if found; fall back to system default silently (RESEARCH.md Pitfall 6).
-            // App continues even if microphone is unavailable.
-            let saved_mic_name = read_saved_mic(app);
-            let capture_result = if let Some(ref name) = saved_mic_name {
-                use cpal::traits::{DeviceTrait, HostTrait};
-                let host = cpal::default_host();
-                let found = host.input_devices().ok().and_then(|mut devs| {
-                    devs.find(|d| {
-                        d.description()
-                            .map(|desc: cpal::DeviceDescription| desc.name() == name.as_str())
-                            .unwrap_or(false)
-                    })
-                });
-                if let Some(device) = found {
-                    log::info!("Restoring saved microphone: '{}'", name);
-                    audio::start_persistent_stream_with_device(device)
-                } else {
-                    log::warn!("Saved microphone '{}' not found — falling back to system default", name);
-                    audio::start_persistent_stream()
-                }
-            } else {
-                audio::start_persistent_stream()
-            };
-            match capture_result {
-                Ok(capture) => {
-                    log::info!("Audio capture initialized successfully");
-                    app.manage(audio::AudioCaptureMutex(std::sync::Mutex::new(Some(capture))));
-                }
-                Err(e) => {
-                    log::error!("Audio capture failed to initialize: {} — recording commands will not function", e);
-                    app.manage(audio::AudioCaptureMutex(std::sync::Mutex::new(None)));
-                    log::warn!("Audio state registered as None — start_recording/stop_recording will return errors");
-                }
-            }
+            // No audio stream at startup — streams are opened on-demand when recording starts.
+            // This avoids the Windows microphone privacy indicator appearing when idle.
+            app.manage(audio::AudioCaptureMutex(std::sync::Mutex::new(None)));
+            log::info!("Audio capture state initialized (on-demand — no stream at startup)");
 
             // Load whisper model (only when compiled with "whisper" feature).
             #[cfg(feature = "whisper")]
