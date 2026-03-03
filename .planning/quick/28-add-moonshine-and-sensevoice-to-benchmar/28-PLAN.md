@@ -67,7 +67,7 @@ bench_extra = ["dep:transcribe-rs"]
 ```toml
 # Moonshine + SenseVoice inference via transcribe-rs (optional — benchmark only).
 # Uses ort = "2.0.0-rc.10" (same version as parakeet-rs and voice_activity_detector — no conflict).
-transcribe-rs = { version = "0.1.5", features = ["moonshine", "sense_voice"], optional = true }
+transcribe-rs = { version = "0.2.8", features = ["moonshine", "sense_voice"], optional = true }
 ```
 
 3. Do NOT add `bench_extra` to the `default` feature list.
@@ -91,9 +91,9 @@ Add Moonshine (tiny + base) and SenseVoice benchmark sections to `benchmark.rs`,
 ```rust
 #[cfg(feature = "bench_extra")]
 use transcribe_rs::{
-    engine::TranscriptionEngine,
-    moonshine::{MoonshineModelParams, ModelVariant as MoonshineVariant},
-    sense_voice::{SenseVoiceModelParams, SenseVoiceLanguage},
+    TranscriptionEngine,
+    engines::moonshine::{MoonshineEngine, MoonshineModelParams, ModelVariant as MoonshineVariant},
+    engines::sense_voice::{SenseVoiceEngine, SenseVoiceModelParams},
 };
 ```
 
@@ -120,14 +120,14 @@ Wrap in `#[cfg(feature = "bench_extra")]` block. For EACH Moonshine variant (tin
         println!("\n=== moonshine-tiny ===");
         let load_start = Instant::now();
         let params = MoonshineModelParams::new(MoonshineVariant::Tiny);
-        let mut engine = match TranscriptionEngine::new() {
+        let mut engine = match MoonshineEngine::new() {
             Ok(e) => e,
             Err(e) => {
                 eprintln!("  ERROR creating engine: {}", e);
                 // skip to next model
             }
         };
-        match engine.load_model_with_params(&mpath.to_string_lossy(), params) {
+        match engine.load_model_with_params(mpath.as_path(), params) {
             Ok(_) => {},
             Err(e) => {
                 eprintln!("  ERROR loading moonshine-tiny: {}", e);
@@ -140,25 +140,25 @@ Wrap in `#[cfg(feature = "bench_extra")]` block. For EACH Moonshine variant (tin
             // Same iteration pattern as whisper/parakeet:
             // - Read wav via read_wav_to_f32()
             // - 5 iterations
-            // - engine.transcribe_audio(&audio, 16000) for each iteration
+            // - engine.transcribe_samples(audio.clone(), None) for each iteration
             // - Collect latencies, first_text from run 1
             // - compute_wer against reference_for_clip()
             // - Push BenchResult with model="moonshine-tiny"
         }
     }
 
-    // --- Moonshine base --- (same pattern, MoonshineVariant::Base, model="moonshine-base")
+    // --- Moonshine base --- (same pattern, MoonshineEngine::new(), MoonshineVariant::Base, model="moonshine-base")
 
     // --- SenseVoice ---
     if let Some(ref spath) = sensevoice_path {
         println!("\n=== sensevoice-small ===");
         let load_start = Instant::now();
-        let params = SenseVoiceModelParams::new(SenseVoiceLanguage::English);
-        let mut engine = match TranscriptionEngine::new() {
+        let params = SenseVoiceModelParams::default();
+        let mut engine = match SenseVoiceEngine::new() {
             Ok(e) => e,
             Err(e) => { eprintln!("  ERROR creating engine: {}", e); /* skip */ }
         };
-        match engine.load_model_with_params(&spath.to_string_lossy(), params) {
+        match engine.load_model_with_params(spath.as_path(), params) {
             Ok(_) => {},
             Err(e) => { eprintln!("  ERROR loading sensevoice: {}", e); /* skip */ }
         }
@@ -167,7 +167,7 @@ Wrap in `#[cfg(feature = "bench_extra")]` block. For EACH Moonshine variant (tin
         for (wav_path, clip_label) in &clip_paths {
             // Same iteration pattern:
             // - Read wav, 5 iterations
-            // - engine.transcribe_audio(&audio, 16000)
+            // - engine.transcribe_samples(audio.clone(), None)
             // - Collect latencies, first_text, compute_wer
             // - Push BenchResult with model="sensevoice-small"
         }
@@ -177,10 +177,11 @@ Wrap in `#[cfg(feature = "bench_extra")]` block. For EACH Moonshine variant (tin
 
 **Key implementation details:**
 
-- The transcribe-rs `TranscriptionEngine::new()` returns `Result<Self>`. Handle errors with `eprintln!` + `continue`/skip, matching existing error handling style.
-- `engine.transcribe_audio(samples: &[f32], sample_rate: u32)` returns `Result<TranscriptionResult>` where `TranscriptionResult` has a `.text` field (String).
-- Use `engine.transcribe_audio(&audio, 16000)` for each iteration — the audio is borrowed, not cloned (unlike parakeet).
-- Create a NEW `TranscriptionEngine` for each model variant (Moonshine tiny, Moonshine base, SenseVoice). The engine holds the loaded model state.
+- `TranscriptionEngine` is a **trait** (from `transcribe_rs::TranscriptionEngine`). Use concrete engine types: `MoonshineEngine::new()` for Moonshine, `SenseVoiceEngine::new()` for SenseVoice. Each returns `Result<Self>`.
+- `engine.transcribe_samples(samples: Vec<f32>, params: Option<Self::InferenceParams>)` returns `Result<TranscriptionResult>` where `TranscriptionResult` has a `.text` field (String). Takes an **owned `Vec<f32>`** (not a reference), so clone audio for each iteration: `engine.transcribe_samples(audio.clone(), None)`.
+- `engine.load_model_with_params(path: &Path, params)` takes a `&Path`, not `&str`. Use `mpath.as_path()` or `spath.as_path()`.
+- `SenseVoiceModelParams::default()` is sufficient for English. There is no `SenseVoiceLanguage` type — language is set via `SenseVoiceInferenceParams`, not model params. Pass `None` as inference params for default (English) behavior.
+- Create a NEW engine instance for each model variant (Moonshine tiny, Moonshine base, SenseVoice). The engine holds the loaded model state.
 - Model directory names on disk should match HuggingFace repo names: `moonshine-tiny-ONNX`, `moonshine-base-ONNX` for Moonshine; `sensevoice-small` for SenseVoice.
 - For error handling on engine/model load failures, use the `continue`-to-next-model pattern. Since these are inside a `#[cfg]` block (not a `for` loop), use an early-return pattern with a nested scope or restructure with `if let Ok(...)` chains to skip to the next model on failure.
 - The existing `print_summary(&results)` call at the end of main already handles all models — no changes needed there.
