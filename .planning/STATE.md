@@ -18,18 +18,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** Phase 16 — Rebind and Coexistence (Phase 15 complete — all 3 plans done)
+**Current focus:** Phase 17 — Frontend Capture UI (modifier-only hotkey capture in settings panel)
 
 ## Position
 
 **Milestone:** v1.2 Keyboard Hook
-**Phase:** 16 — Rebind and Coexistence
-**Plan:** 02 complete (2026-03-03)
-**Status:** Milestone complete
+**Phase:** 17 — Frontend Capture UI
+**Plan:** 01 complete (2026-03-03)
+**Status:** Phase 17 execution complete, pending verification
 
 [##########------------------------------------------] 0% (0/4 phases)
 
-Last activity: 2026-03-03 — Phase 16 Plan 02 complete (hook status UI warning: hookAvailable IPC query, amber inline warning in GeneralSection)
+Last activity: 2026-03-03 — Phase 17 Plan 01 complete (modifier-only capture, comboRef fix, HookAvailable builder registration, hook warning condition)
 
 ## Performance Metrics
 
@@ -43,6 +43,7 @@ Last activity: 2026-03-03 — Phase 16 Plan 02 complete (hook status UI warning:
 | Phase 15-hook-module P03 | 9 | 1 tasks | 3 files |
 | Phase 16-rebind-and-coexistence P01 | 5 | 2 tasks | 2 files |
 | Phase 16-rebind-and-coexistence P02 | 8 | 2 tasks | 2 files |
+| Phase 17-frontend-capture-ui P01 | 5 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -69,10 +70,11 @@ Last activity: 2026-03-03 — Phase 16 Plan 02 complete (hook status UI warning:
 - 16-02: hookAvailable defaults to true — silent-catch IPC pattern prevents warning flicker and maintains pre-v1.2 compatibility
 - 16-02: Tasks 1+2 committed atomically — splitting would create intermediate TypeScript type error
 - 16-02: Amber color for hook warning (not red) — app still functions with fallback shortcut, warning severity not error severity
-- [Phase 17-01]: 17-01: modifierToken uses e.code (not e.ctrlKey/e.metaKey flags) on keyup — flags already false for released key
-- [Phase 17-01]: 17-01: read heldRef tokens BEFORE deleting on keyup — pre-delete state is the combo
-- [Phase 17-01]: 17-01: MODIFIER_ORDER sorts tokens deterministically (ctrl < alt < shift < meta) regardless of press order
-- [Phase 17-01]: 17-01: heldRef cleared on all cancel paths (Escape, click-away, useEffect cleanup) to prevent stale modifier state
+- 17-01: modifierToken uses e.code (not e.ctrlKey/e.metaKey flags) on keyup — flags already false for released key
+- 17-01: comboRef tracks full modifier set (not depleted heldRef) for combo on all-released
+- 17-01: MODIFIER_ORDER sorts tokens deterministically (ctrl < alt < shift < meta) regardless of press order
+- 17-01: HookAvailable registered on Builder (not setup closure) — webview2 COM pumps messages before setup() runs
+- 17-01: Hook warning gated on modifier-only hotkey; status refreshed after rebind
 
 ### Research Flags (from SUMMARY.md)
 

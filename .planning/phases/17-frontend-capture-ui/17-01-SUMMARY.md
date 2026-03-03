@@ -38,9 +38,10 @@ patterns-established:
   - "Progressive display: heldDisplay state driven from sorted heldRef on each keydown"
 
 requirements-completed: [UI-01, UI-02]
+status: complete
 
 # Metrics
-duration: 2min
+duration: 30min
 completed: 2026-03-03
 ---
 
@@ -53,8 +54,8 @@ completed: 2026-03-03
 - **Duration:** ~2 min
 - **Started:** 2026-03-03T14:29:42Z
 - **Completed:** 2026-03-03T14:31:34Z
-- **Tasks:** 1/2 (Task 2 is checkpoint:human-verify — awaiting user verification)
-- **Files modified:** 1
+- **Tasks:** 2/2 (Task 2 checkpoint verified)
+- **Files modified:** 4
 
 ## Accomplishments
 - Added `modifierToken()` helper that maps `e.code` to canonical modifier tokens (`ctrl`, `alt`, `shift`, `meta`) — correctly uses `e.code` not `e.ctrlKey`/`e.metaKey` which are post-release false on `keyup`
@@ -70,11 +71,16 @@ completed: 2026-03-03
 Each task was committed atomically:
 
 1. **Task 1: Add modifier-only capture via keyup listener with progressive display** - `fd62885` (feat)
-
-**Plan metadata:** pending (Task 2 checkpoint not yet verified)
+2. **Task 2: Human verification** - approved
+3. **Fix: HookAvailable builder registration** - `510fd66` (fix)
+4. **Fix: comboRef for multi-key release** - `b0dc56b` (fix)
+5. **Fix: Hook warning condition + status refresh** - `bef1625` (fix)
 
 ## Files Created/Modified
-- `src/components/HotkeyCapture.tsx` - Dual keydown+keyup capture, modifierToken helper, MODIFIER_ORDER, heldRef, heldDisplay, progressive display render
+- `src/components/HotkeyCapture.tsx` - Dual keydown+keyup capture, modifierToken helper, MODIFIER_ORDER, heldRef/comboRef, heldDisplay, progressive display render
+- `src-tauri/src/lib.rs` - HookAvailable registered on Builder (before webview creation) instead of in setup()
+- `src/components/sections/GeneralSection.tsx` - Hook warning only shows for modifier-only hotkeys
+- `src/App.tsx` - Re-queries get_hook_status after hotkey rebind
 
 ## Decisions Made
 - Used `e.code` not `e.ctrlKey`/`e.metaKey` in `modifierToken` — flags reflect post-release state on `keyup`, so `e.code` is the only reliable way to identify which modifier was released
@@ -84,17 +90,16 @@ Each task was committed atomically:
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
-
-## Issues Encountered
-None.
+1. **HookAvailable panic at startup** — webview2 COM init pumps Win32 messages before setup() runs, triggering get_hook_status IPC before manage(). Fixed by registering on Builder, matching CachedGpuMode pattern.
+2. **comboRef needed** — heldRef is depleted as keys release one at a time; last keyup only saw the last modifier. Added comboRef to track full session set.
+3. **Hook warning false positive** — Warning showed for standard combos. Added modifier-only check + post-rebind status refresh.
 
 ## User Setup Required
 None - no external service configuration required.
 
 ## Next Phase Readiness
-- Task 2 (checkpoint:human-verify) requires user to run the app and test Ctrl+Win capture, standard combo backward compatibility, cancel paths, and progressive display
-- Once verified, phase 17 plan 01 is complete and phase 17 is complete (only 1 plan)
+- All tasks complete, human verification passed
+- Phase 17 complete (only 1 plan)
 - Phase 18 (release/packaging) is unblocked
 
 ## Self-Check: PASSED
