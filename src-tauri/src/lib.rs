@@ -1052,6 +1052,7 @@ fn model_id_to_path(model_id: &str) -> Result<std::path::PathBuf, String> {
     let filename = match model_id {
         "large-v3-turbo" => "ggml-large-v3-turbo-q5_0.bin",
         "small-en" => "ggml-small.en-q5_1.bin",
+        "distil-large-v3.5" => "ggml-distil-large-v3.5.bin",
         _ => return Err(format!("Unknown model id: {}", model_id)),
     };
     Ok(models_dir().join(filename))
@@ -1096,6 +1097,15 @@ fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
             downloaded: dir.join("ggml-small.en-q5_1.bin").exists(),
         },
     ];
+
+    // Distil Large v3.5 — high accuracy fp16, works on CPU and GPU
+    models.push(ModelInfo {
+        id: "distil-large-v3.5".to_string(),
+        name: "Distil Large v3.5".to_string(),
+        description: "High accuracy — 1.52 GB — GPU accelerated when available".to_string(),
+        recommended: false,
+        downloaded: dir.join("ggml-distil-large-v3.5.bin").exists(),
+    });
 
     // Parakeet TDT fp32 — fast and accurate, supports CUDA, DirectML, and CPU
     models.push(ModelInfo {
@@ -1197,11 +1207,13 @@ fn check_first_run(app: tauri::AppHandle) -> FirstRunStatus {
     let small_exists = dir.join("ggml-small.en-q5_1.bin").exists();
     // Parakeet fp32 is also a valid installed model — skip first-run if it is present
     let parakeet_fp32_exists = crate::download::parakeet_fp32_model_exists();
+    // Distil Large v3.5 is also a valid installed model — skip first-run if it is present
+    let distil_v35_exists = dir.join("ggml-distil-large-v3.5.bin").exists();
     // directml_available: only true when a discrete non-NVIDIA GPU exists (AMD RX, Intel Arc).
     // Integrated-only GPUs (Intel UHD, AMD APU) cannot run Parakeet at useful speed via DirectML.
     let directml_available = detection.0.has_discrete_gpu && !detection.0.is_nvidia;
     FirstRunStatus {
-        needs_setup: !large_exists && !small_exists && !parakeet_fp32_exists,
+        needs_setup: !large_exists && !small_exists && !parakeet_fp32_exists && !distil_v35_exists,
         gpu_detected: gpu_mode,
         gpu_name: detection.0.gpu_name.clone(),
         directml_available,

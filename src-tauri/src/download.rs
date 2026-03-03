@@ -46,30 +46,34 @@ fn models_dir() -> PathBuf {
     PathBuf::from(appdata).join("VoiceType").join("models")
 }
 
-/// Returns (filename, expected_sha256_hex, expected_size_bytes) for a known model_id,
+/// Returns (filename, url, expected_sha256_hex, expected_size_bytes) for a known model_id,
 /// or None if the model_id is not recognised.
-fn model_info(model_id: &str) -> Option<(&'static str, &'static str, u64)> {
+///
+/// Each model embeds its own HuggingFace URL so that models from different repos
+/// (e.g. ggerganov/whisper.cpp vs distil-whisper/distil-large-v3.5-ggml) are handled
+/// uniformly without a separate URL routing function.
+fn model_info(model_id: &str) -> Option<(&'static str, &'static str, &'static str, u64)> {
     match model_id {
         "large-v3-turbo" => Some((
             "ggml-large-v3-turbo-q5_0.bin",
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
             "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
             601_882_624,
         )),
         "small-en" => Some((
             "ggml-small.en-q5_1.bin",
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q5_1.bin",
             "bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30",
             199_229_440,
         )),
+        "distil-large-v3.5" => Some((
+            "ggml-distil-large-v3.5.bin",
+            "https://huggingface.co/distil-whisper/distil-large-v3.5-ggml/resolve/main/ggml-model.bin",
+            "ec2498919b498c5f6b00041adb45650124b3cd9f26f545fffa8f5d11c28dcf26",
+            1_519_521_155,
+        )),
         _ => None,
     }
-}
-
-/// Constructs the HuggingFace resolve URL for a given model filename.
-fn download_url(filename: &str) -> String {
-    format!(
-        "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}",
-        filename
-    )
 }
 
 /// Download a whisper model file with streaming progress events and SHA256 validation.
@@ -84,11 +88,10 @@ pub async fn download_model(
     model_id: String,
     on_event: Channel<DownloadEvent>,
 ) -> Result<(), String> {
-    // Resolve model metadata
-    let (filename, expected_sha256, expected_size_bytes) =
+    // Resolve model metadata — URL is embedded in model_info to support models from different repos
+    let (filename, url, expected_sha256, expected_size_bytes) =
         model_info(&model_id).ok_or_else(|| format!("Unknown model id: {}", model_id))?;
 
-    let url = download_url(filename);
     let dir = models_dir();
     let dest = dir.join(filename);
     let tmp_path = dest.with_extension("tmp");
@@ -100,13 +103,13 @@ pub async fn download_model(
 
     // Notify frontend that download is starting
     let _ = on_event.send(DownloadEvent::Started {
-        url: url.clone(),
+        url: url.to_string(),
         total_bytes: expected_size_bytes,
     });
 
     // Issue HTTP GET request
     let response = reqwest::Client::new()
-        .get(&url)
+        .get(url)
         .send()
         .await
         .map_err(|e| {
