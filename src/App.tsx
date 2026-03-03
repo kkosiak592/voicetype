@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { getStore, DEFAULTS } from './lib/store';
 import { Sidebar, SectionId } from './components/Sidebar';
 import { GeneralSection } from './components/sections/GeneralSection';
@@ -31,6 +32,36 @@ function App() {
   const [loaded, setLoaded] = useState(false);
   const [firstRunStatus, setFirstRunStatus] = useState<FirstRunStatus | null>(null);
   const [hookAvailable, setHookAvailable] = useState(true); // default true = no warning
+
+  // Hook status uses a two-flag handshake to avoid the Tauri startup event-loss race.
+  //
+  // Problem: Tauri events are fire-and-forget with no queue. setup() emits
+  // "hook-status-changed" once, but if the JS listener hasn't registered yet
+  // (listen() round-trip not complete, or webview JS not yet loaded), the event
+  // is silently dropped (Tauri issue #3484).
+  //
+  // Solution: After registering the listener, call notify_frontend_ready().
+  // The backend coordinates via SetupComplete + FrontendReady flags:
+  //   - If setup() has already finished: notify_frontend_ready emits immediately.
+  //   - If setup() is still running: setup() emits when it completes (sees FrontendReady=true).
+  // Either way, the emit happens after the listener is guaranteed to be registered.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    listen<boolean>('hook-status-changed', (event) => {
+      if (!cancelled) setHookAvailable(event.payload);
+    }).then((fn) => {
+      unlisten = fn;
+      // Listener is now registered — signal the backend it can safely emit.
+      if (!cancelled) {
+        invoke('notify_frontend_ready').catch(() => {});
+      }
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
 
   useEffect(() => {
     async function loadSettings() {
@@ -87,14 +118,10 @@ function App() {
         }
       }
 
-      // Query hook availability for settings panel warning
-      try {
-        const hookOk = await invoke<boolean>('get_hook_status');
-        setHookAvailable(hookOk);
-      } catch {
-        // get_hook_status unavailable — assume hook is fine (pre-v1.2 builds)
-        setHookAvailable(true);
-      }
+      // Hook status is not queried here to avoid reading during the startup race window
+      // (webview2 COM init allows IPC before setup() has installed the hook, so any
+      // query here may return a stale false). Instead, the listen effect above registers
+      // a listener and re-queries after registration, which is race-safe.
 
       setLoaded(true);
     }

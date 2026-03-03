@@ -107,6 +107,15 @@ pub struct HookHandleState(pub std::sync::Mutex<Option<keyboard_hook::HookHandle
 /// Set at startup, queried by get_hook_status IPC and rebind_hotkey.
 pub struct HookAvailable(pub std::sync::Arc<std::sync::atomic::AtomicBool>);
 
+/// Set to true at the END of setup() after hook routing is resolved.
+/// The notify_frontend_ready command checks this to decide whether to emit
+/// hook-status-changed immediately or let setup() emit when it finishes.
+pub struct SetupComplete(pub std::sync::atomic::AtomicBool);
+
+/// Set to true when the frontend calls notify_frontend_ready (listener registered).
+/// setup() checks this at completion to decide whether to emit hook-status-changed.
+pub struct FrontendReady(pub std::sync::atomic::AtomicBool);
+
 /// Returns true if the hotkey string contains only modifier tokens and no base key.
 /// Used as the single routing predicate for hook vs global-shortcut backend.
 ///
@@ -685,6 +694,39 @@ fn register_hotkey(app: tauri::AppHandle, key: String) -> Result<(), String> {
 #[tauri::command]
 fn get_hook_status(app: tauri::AppHandle) -> bool {
     app.state::<HookAvailable>().0.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Called by the frontend after it has registered all event listeners (listen() resolved).
+///
+/// Solves the startup race: setup() emits "hook-status-changed" but the webview may not
+/// have loaded JS (or the listen() round-trip may not be complete) when setup() fires.
+/// Tauri events have no queue — if nobody is listening when the event fires, it is lost.
+///
+/// Protocol:
+///   - Frontend registers listen("hook-status-changed") then calls notify_frontend_ready().
+///   - If setup() has already completed: this handler emits the current hook status immediately.
+///   - If setup() is still running: this handler sets FrontendReady=true; setup() will emit
+///     when it finishes (it checks FrontendReady at completion).
+///
+/// Either way, the emit happens only after BOTH sides are ready, eliminating the race.
+#[tauri::command]
+fn notify_frontend_ready(app: tauri::AppHandle) {
+    use std::sync::atomic::Ordering::Relaxed;
+    app.state::<FrontendReady>().0.store(true, Relaxed);
+
+    // If setup() has already completed, emit the current hook status now.
+    // (setup() will not emit again — it only emits if FrontendReady was true at that moment.)
+    if app.state::<SetupComplete>().0.load(Relaxed) {
+        #[cfg(desktop)]
+        {
+            use tauri::Emitter;
+            let hook_ok = app.state::<HookAvailable>().0.load(Relaxed);
+            log::debug!("notify_frontend_ready: setup already complete, emitting hook-status-changed={}", hook_ok);
+            if let Some(w) = app.get_webview_window("settings") {
+                w.emit("hook-status-changed", hook_ok).ok();
+            }
+        }
+    }
 }
 
 /// Start recording: clears the audio buffer and sets the recording flag.
@@ -1535,6 +1577,15 @@ pub fn run() {
     // before setup() runs. Starts false; setup() updates via the shared Arc.
     builder = builder.manage(HookAvailable(std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))));
 
+    // SetupComplete and FrontendReady solve the startup event-emission race:
+    // Tauri events are not queued — if the frontend isn't listening when setup() emits,
+    // the event is lost. The notify_frontend_ready command coordinates both sides:
+    //   - SetupComplete: set at END of setup() after hook routing resolves.
+    //   - FrontendReady: set when frontend calls notify_frontend_ready() (listener registered).
+    // The emit fires exactly once, whichever side completes last.
+    builder = builder.manage(SetupComplete(std::sync::atomic::AtomicBool::new(false)));
+    builder = builder.manage(FrontendReady(std::sync::atomic::AtomicBool::new(false)));
+
     // ParakeetStateMutex starts as None — model is loaded on demand (engine switch)
     // or at startup if saved engine is Parakeet.
     #[cfg(feature = "parakeet")]
@@ -1547,6 +1598,7 @@ pub fn run() {
             unregister_hotkey,
             register_hotkey,
             get_hook_status,
+            notify_frontend_ready,
             set_recording_mode,
             get_recording_mode,
             get_engine,
@@ -1801,6 +1853,38 @@ pub fn run() {
                                 .build(),
                         )?;
                     }
+                }
+            }
+
+            // Coordinate hook-status emission with the frontend using a two-flag handshake.
+            //
+            // Problem: Tauri events are not queued. If setup() emits "hook-status-changed"
+            // before the webview's JS listener is registered (listen() round-trip complete),
+            // the event is silently dropped (known Tauri limitation, issue #3484).
+            //
+            // Solution: SetupComplete + FrontendReady flags.
+            //   - setup() marks SetupComplete=true here. If frontend already called
+            //     notify_frontend_ready (FrontendReady=true), setup() emits immediately.
+            //   - If frontend hasn't called notify_frontend_ready yet, setup() does NOT emit;
+            //     the notify_frontend_ready command handler will emit when it fires.
+            //
+            // This guarantees the emit happens exactly once, after BOTH sides are ready.
+            {
+                use std::sync::atomic::Ordering::Relaxed;
+                app.state::<SetupComplete>().0.store(true, Relaxed);
+                let frontend_ready = app.state::<FrontendReady>().0.load(Relaxed);
+                if frontend_ready {
+                    #[cfg(desktop)]
+                    {
+                        use tauri::Emitter;
+                        let hook_ok = hook_available.load(Relaxed);
+                        log::debug!("setup: frontend already ready, emitting hook-status-changed={}", hook_ok);
+                        if let Some(w) = app.get_webview_window("settings") {
+                            w.emit("hook-status-changed", hook_ok).ok();
+                        }
+                    }
+                } else {
+                    log::debug!("setup: frontend not yet ready — will emit when notify_frontend_ready fires");
                 }
             }
 
