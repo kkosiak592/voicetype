@@ -4,9 +4,10 @@
 //!   cargo run --bin benchmark --features whisper,parakeet --release
 //!
 //! Models must be downloaded to %APPDATA%/VoiceType/models/ before benchmarking.
-//! WAV fixtures must exist at test-fixtures/benchmark-5s.wav and benchmark-60s.wav.
+//! WAV fixtures: 9 files expected (3 durations x 3 variants: benchmark-{5s,30s,60s}{,-b,-c}.wav).
 //! Generate them with: powershell -ExecutionPolicy Bypass -File test-fixtures/generate-benchmark-wavs.ps1
 
+use std::io::Write;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -282,6 +283,56 @@ The Q5 underscore 1 format stores each weight in approximately five bits. \
 GPU acceleration can reduce inference time by ten times compared to CPU-only execution. \
 This benchmark helps select the best model for a given hardware configuration.";
 
+const REF_5S_B: &str = "A copper wire carries electrical current through the circuit board with minimal resistance.";
+
+const REF_5S_C: &str = "The satellite orbits Earth every ninety minutes, capturing high resolution photographs.";
+
+const REF_30S_B: &str = "The process of steel manufacturing begins with iron ore extraction from open pit mines. \
+Workers transport the raw material to blast furnaces where temperatures exceed fifteen hundred degrees. \
+Carbon is introduced to create an alloy stronger than pure iron alone. \
+Rolling mills then shape the molten steel into beams, sheets, and coiled wire. \
+Quality control inspectors test samples for tensile strength and corrosion resistance. \
+Modern foundries produce over two billion tonnes of steel worldwide each year.";
+
+const REF_30S_C: &str = "Mediterranean cooking relies heavily on olive oil, fresh herbs, and seasonal vegetables. \
+Tomatoes were introduced to European cuisine after Spanish explorers returned from the Americas. \
+A traditional risotto requires constant stirring to release starch from Arborio rice grains. \
+Fermentation transforms grape juice into wine through the action of natural yeasts on sugar. \
+Sourdough bread uses a live culture of bacteria and wild yeast instead of commercial packets. \
+The Maillard reaction between amino acids and sugars creates the brown crust on grilled meat.";
+
+const REF_60S_B: &str = "The Panama Canal connects the Atlantic and Pacific oceans through a series of concrete locks. \
+Construction began in nineteen oh four and took ten years to complete at enormous human cost. \
+Ships entering from the Atlantic side are raised twenty six metres above sea level by three lock chambers. \
+Gatun Lake was created by damming the Chagres River and flooding an entire valley. \
+Each lock chamber uses gravity fed water from the lake rather than mechanical pumps. \
+A single transit moves approximately two hundred million litres of fresh water into the ocean. \
+The canal was expanded in twenty sixteen with larger locks to accommodate modern container ships. \
+These new Neopanamax locks use water saving basins that recycle sixty percent of each fill. \
+Over fourteen thousand vessels pass through the canal annually carrying five percent of world trade. \
+Drought conditions in recent years have forced authorities to limit daily transits and vessel draft. \
+Tolls range from a few hundred dollars for small sailboats to nearly a million for the largest tankers. \
+The canal remains one of the most significant engineering achievements of the twentieth century. \
+Ongoing maintenance requires continuous dredging of the navigational channel to prevent silting. \
+Tropical rainfall patterns directly influence water levels in Gatun and Alajuela lakes. \
+The Panama Canal Authority employs over nine thousand workers to operate and maintain the waterway.";
+
+const REF_60S_C: &str = "The human immune system consists of two complementary defence mechanisms working in coordination. \
+Innate immunity provides immediate but non specific protection through physical barriers and white blood cells. \
+Neutrophils are the first responders arriving at infection sites within minutes of tissue damage. \
+The adaptive immune system develops targeted responses through B cells and T cells over several days. \
+B cells produce antibodies that bind to specific molecular patterns on the surface of pathogens. \
+Helper T cells coordinate the overall immune response by releasing chemical signalling molecules called cytokines. \
+Memory cells persist for decades allowing the body to mount rapid responses to previously encountered threats. \
+Vaccination works by introducing harmless fragments of a pathogen to train the adaptive immune system. \
+Autoimmune disorders occur when the immune system mistakenly attacks the body's own healthy tissue. \
+Allergic reactions represent an exaggerated immune response to normally harmless environmental substances. \
+Immunosuppressive drugs are prescribed after organ transplants to prevent rejection of donor tissue. \
+The thymus gland plays a critical role in T cell maturation during childhood and adolescence. \
+Researchers continue developing immunotherapy treatments that harness the immune system to fight cancer cells. \
+The gut microbiome influences immune function through constant interaction with intestinal immune tissue. \
+Regular moderate exercise has been shown to enhance immune surveillance and reduce inflammation markers.";
+
 /// Normalise text for WER comparison: lowercase, strip punctuation, collapse whitespace.
 fn normalise_for_wer(s: &str) -> Vec<String> {
     s.to_lowercase()
@@ -348,8 +399,14 @@ fn compute_wer(reference: &str, hypothesis: &str) -> (f64, usize, usize, usize, 
 fn reference_for_clip(clip_label: &str) -> &'static str {
     match clip_label {
         "5s" => REF_5S,
+        "5s-b" => REF_5S_B,
+        "5s-c" => REF_5S_C,
         "30s" => REF_30S,
+        "30s-b" => REF_30S_B,
+        "30s-c" => REF_30S_C,
         "60s" => REF_60S,
+        "60s-b" => REF_60S_B,
+        "60s-c" => REF_60S_C,
         _ => "",
     }
 }
@@ -491,9 +548,15 @@ fn main() {
     // WAV files
     println!("\n-- WAV fixtures --");
     let clips: Vec<(&str, &str)> = vec![
-        ("benchmark-5s.wav",  "5s"),
-        ("benchmark-30s.wav", "30s"),
-        ("benchmark-60s.wav", "60s"),
+        ("benchmark-5s.wav",    "5s"),
+        ("benchmark-5s-b.wav",  "5s-b"),
+        ("benchmark-5s-c.wav",  "5s-c"),
+        ("benchmark-30s.wav",   "30s"),
+        ("benchmark-30s-b.wav", "30s-b"),
+        ("benchmark-30s-c.wav", "30s-c"),
+        ("benchmark-60s.wav",   "60s"),
+        ("benchmark-60s-b.wav", "60s-b"),
+        ("benchmark-60s-c.wav", "60s-c"),
     ];
 
     let mut clip_paths: Vec<(String, &str)> = Vec::new();
@@ -1048,6 +1111,7 @@ fn main() {
     }
 
     print_summary(&results);
+    write_markdown_report(&results);
 }
 
 // ---------------------------------------------------------------------------
@@ -1179,6 +1243,148 @@ fn print_summary(results: &[BenchResult]) {
     println!("{}", "=".repeat(88));
     println!("Speed:  100 = fastest model, scaled relative to best avg latency ({:.0}ms)", best_latency);
     println!("Score:  geometric mean of speed and accuracy (balanced ranking)");
+}
+
+// ---------------------------------------------------------------------------
+// Markdown report writer
+// ---------------------------------------------------------------------------
+
+fn write_markdown_report(results: &[BenchResult]) {
+    if results.is_empty() {
+        return;
+    }
+
+    let path = "benchmark-results.md";
+    let mut file = match std::fs::File::create(path) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("ERROR: could not create {}: {}", path, e);
+            return;
+        }
+    };
+
+    // Timestamp (Unix epoch seconds — no chrono dependency)
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    let _ = writeln!(file, "# VoiceType Benchmark Results\n");
+    let _ = writeln!(file, "Generated: epoch {} (run `date -d @{}` to convert)\n", timestamp, timestamp);
+
+    // --- Results table ---
+    let _ = writeln!(file, "## Results\n");
+    let _ = writeln!(file, "| Model | Clip | Avg (ms) | Min (ms) | Max (ms) | WER % |");
+    let _ = writeln!(file, "|-------|------|----------|----------|----------|-------|");
+    for r in results {
+        let _ = writeln!(file, "| {} | {} | {} | {} | {} | {:.1}% |",
+            r.model, r.clip, r.avg_ms, r.min_ms, r.max_ms, r.wer);
+    }
+
+    // --- Model Rankings ---
+    // Collect unique model names in order
+    let mut model_names: Vec<String> = Vec::new();
+    for r in results {
+        if !model_names.contains(&r.model) {
+            model_names.push(r.model.clone());
+        }
+    }
+
+    struct MdModelSummary {
+        name: String,
+        avg_latency_ms: f64,
+        avg_wer: f64,
+        accuracy: f64,
+    }
+
+    let mut summaries: Vec<MdModelSummary> = Vec::new();
+    for name in &model_names {
+        let model_results: Vec<&BenchResult> = results.iter().filter(|r| &r.model == name).collect();
+        if model_results.is_empty() { continue; }
+        let count = model_results.len();
+        let avg_latency = model_results.iter().map(|r| r.avg_ms as f64).sum::<f64>() / count as f64;
+        let avg_wer = model_results.iter().map(|r| r.wer).sum::<f64>() / count as f64;
+        let accuracy = (100.0 - avg_wer).max(0.0);
+        summaries.push(MdModelSummary {
+            name: name.clone(),
+            avg_latency_ms: avg_latency,
+            avg_wer,
+            accuracy,
+        });
+    }
+
+    if !summaries.is_empty() {
+        let best_latency = summaries.iter().map(|s| s.avg_latency_ms).fold(f64::MAX, f64::min);
+        let best_accuracy = summaries.iter().map(|s| s.accuracy).fold(0.0f64, f64::max);
+
+        struct ScoredMd {
+            name: String,
+            avg_latency_ms: f64,
+            avg_wer: f64,
+            accuracy: f64,
+            speed_score: f64,
+            overall_score: f64,
+        }
+
+        let mut scored: Vec<ScoredMd> = summaries.iter().map(|s| {
+            let speed_score = if s.avg_latency_ms > 0.0 {
+                (best_latency / s.avg_latency_ms) * 100.0
+            } else {
+                100.0
+            };
+            let accuracy_score = if best_accuracy > 0.0 {
+                (s.accuracy / best_accuracy) * 100.0
+            } else {
+                100.0
+            };
+            let overall_score = (speed_score * accuracy_score).sqrt();
+            ScoredMd {
+                name: s.name.clone(),
+                avg_latency_ms: s.avg_latency_ms,
+                avg_wer: s.avg_wer,
+                accuracy: s.accuracy,
+                speed_score,
+                overall_score,
+            }
+        }).collect();
+
+        scored.sort_by(|a, b| b.overall_score.partial_cmp(&a.overall_score).unwrap_or(std::cmp::Ordering::Equal));
+
+        let _ = writeln!(file, "\n## Model Rankings\n");
+        let _ = writeln!(file, "| Model | Avg Lat. | Avg WER | Accuracy | Speed | Score |");
+        let _ = writeln!(file, "|-------|----------|---------|----------|-------|-------|");
+        for s in &scored {
+            let _ = writeln!(file, "| {} | {:.0}ms | {:.1}% | {:.1}% | {:.1}/100 | {:.1}/100 |",
+                s.name, s.avg_latency_ms, s.avg_wer, s.accuracy, s.speed_score, s.overall_score);
+        }
+        let _ = writeln!(file, "\nSpeed: 100 = fastest model, scaled relative to best avg latency ({:.0}ms)", best_latency);
+        let _ = writeln!(file, "Score: geometric mean of speed and accuracy (balanced ranking)");
+    }
+
+    // --- Reference Transcriptions ---
+    let _ = writeln!(file, "\n## Reference Transcriptions\n");
+    let clip_labels = ["5s", "5s-b", "5s-c", "30s", "30s-b", "30s-c", "60s", "60s-b", "60s-c"];
+    for label in &clip_labels {
+        let ref_text = reference_for_clip(label);
+        if !ref_text.is_empty() {
+            let _ = writeln!(file, "### {}\n", label);
+            let _ = writeln!(file, "> {}\n", ref_text);
+        }
+    }
+
+    // --- Transcription Samples ---
+    let _ = writeln!(file, "## Transcription Samples\n");
+    for name in &model_names {
+        let _ = writeln!(file, "### {}\n", name);
+        for r in results {
+            if r.model == *name && !r.first_text.is_empty() {
+                let _ = writeln!(file, "- **{}**: \"{}\"", r.clip, r.first_text);
+            }
+        }
+        let _ = writeln!(file);
+    }
+
+    println!("Wrote benchmark-results.md");
 }
 
 fn truncate(s: &str, max: usize) -> String {
