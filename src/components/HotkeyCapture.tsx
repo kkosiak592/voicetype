@@ -94,6 +94,9 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
   // Tracks currently held modifier tokens across keydown/keyup events.
   // useRef (not useState) because mutations should not trigger re-renders.
   const heldRef = useRef<Set<string>>(new Set());
+  // Tracks ALL modifiers pressed during this capture session (not depleted by keyup).
+  // Used to build the final combo when all keys are released.
+  const comboRef = useRef<Set<string>>(new Set());
 
   // Unregister the global hotkey when entering capture mode so that
   // pressing the current key combo gets captured as input rather than
@@ -117,6 +120,7 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
 
       if (e.code === 'Escape') {
         heldRef.current.clear();
+        comboRef.current.clear();
         setHeldDisplay('');
         setListening(false);
         // Re-register the original hotkey since the user cancelled.
@@ -128,8 +132,9 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
 
       const token = modifierToken(e.code);
       if (token) {
-        // Modifier key pressed — add to held set and update progressive display.
+        // Modifier key pressed — add to held set and combo set, update progressive display.
         heldRef.current.add(token);
+        comboRef.current.add(token);
         const sortedTokens = [...heldRef.current].sort(
           (a, b) => (MODIFIER_ORDER[a] ?? 99) - (MODIFIER_ORDER[b] ?? 99)
         );
@@ -137,8 +142,9 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
         return; // Wait for more keys or keyup
       }
 
-      // Non-modifier key pressed — clear held set and proceed with standard combo path.
+      // Non-modifier key pressed — clear held/combo sets and proceed with standard combo path.
       heldRef.current.clear();
+      comboRef.current.clear();
       setHeldDisplay('');
 
       const combo = normalizeKey(e);
@@ -180,15 +186,16 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
         return;
       }
 
-      // A modifier was released. Read the pre-release state BEFORE deleting.
-      const tokens = [...heldRef.current].sort(
-        (a, b) => (MODIFIER_ORDER[a] ?? 99) - (MODIFIER_ORDER[b] ?? 99)
-      );
+      // A modifier was released. Remove from held set (tracks what's currently down).
       heldRef.current.delete(token);
 
-      if (heldRef.current.size === 0 && tokens.length > 0) {
-        // All modifiers released — this is a modifier-only combo.
+      if (heldRef.current.size === 0 && comboRef.current.size > 0) {
+        // All modifiers released — use comboRef (full session set, not depleted by keyup).
+        const tokens = [...comboRef.current].sort(
+          (a, b) => (MODIFIER_ORDER[a] ?? 99) - (MODIFIER_ORDER[b] ?? 99)
+        );
         const combo = tokens.join('+');
+        comboRef.current.clear();
         setListening(false);
         setError(null);
         setHeldDisplay('');
@@ -225,6 +232,7 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
     const handleClickOutside = (e: MouseEvent) => {
       if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
         heldRef.current.clear();
+        comboRef.current.clear();
         setHeldDisplay('');
         setListening(false);
         if (value) {
@@ -241,6 +249,7 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
       window.removeEventListener('keyup', handleKeyUp, true);
       document.removeEventListener('mousedown', handleClickOutside, true);
       heldRef.current.clear();
+      comboRef.current.clear();
       setHeldDisplay('');
     };
   }, [listening, value, onChange]);
