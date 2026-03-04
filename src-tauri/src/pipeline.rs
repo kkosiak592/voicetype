@@ -157,15 +157,6 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
         *guard
     };
 
-    // Read initial_prompt for Whisper (Parakeet doesn't support it).
-    // Done outside spawn_blocking because AppHandle is not Send.
-    #[cfg(feature = "whisper")]
-    let initial_prompt: String = {
-        let profile = app.state::<crate::profiles::ActiveProfile>();
-        let guard = profile.0.lock().unwrap_or_else(|e| e.into_inner());
-        guard.initial_prompt.clone()
-    };
-
     // 3. Engine dispatch: Whisper or Parakeet
     //
     // `samples` is moved into whichever spawn_blocking closure executes.
@@ -191,7 +182,7 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
                     }
                 };
                 match tauri::async_runtime::spawn_blocking(move || {
-                    crate::transcribe::transcribe_audio(&ctx, &samples, &initial_prompt)
+                    crate::transcribe::transcribe_audio(&ctx, &samples)
                 })
                 .await
                 {

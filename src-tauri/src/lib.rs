@@ -889,30 +889,6 @@ fn save_test_wav(app: tauri::AppHandle, state: tauri::State<'_, audio::AudioCapt
     Ok(path_str)
 }
 
-/// Get the vocabulary prompt (initial_prompt) from the active profile.
-#[tauri::command]
-fn get_vocabulary_prompt(app: tauri::AppHandle) -> Result<String, String> {
-    let state = app.state::<profiles::ActiveProfile>();
-    let guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
-    Ok(guard.initial_prompt.clone())
-}
-
-/// Set the vocabulary prompt (initial_prompt) in the active profile and persist to settings.json.
-#[tauri::command]
-fn set_vocabulary_prompt(app: tauri::AppHandle, prompt: String) -> Result<(), String> {
-    // Update in-memory ActiveProfile
-    {
-        let state = app.state::<profiles::ActiveProfile>();
-        let mut guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
-        guard.initial_prompt = prompt.clone();
-    }
-    // Persist to settings.json
-    let mut json = read_settings(&app)?;
-    json["vocabulary_prompt"] = serde_json::Value::String(prompt);
-    write_settings(&app, &json)?;
-    Ok(())
-}
-
 /// Get the ALL CAPS flag from the active profile.
 #[tauri::command]
 fn get_all_caps(app: tauri::AppHandle) -> Result<bool, String> {
@@ -1435,7 +1411,7 @@ async fn transcribe_test_file(
     // Run inference on a blocking thread to avoid stalling the Tauri async runtime
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let _ = tx.send(transcribe::transcribe_audio(&ctx, &audio_f32, ""));
+        let _ = tx.send(transcribe::transcribe_audio(&ctx, &audio_f32));
     });
     let result = rx.recv()
         .map_err(|e| format!("Inference thread failed: {}", e))?
@@ -1476,7 +1452,7 @@ async fn force_cpu_transcribe(path: String) -> Result<String, String> {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let ctx_result = transcribe::load_whisper_context(&model_str, &cpu_mode);
-        let result = ctx_result.and_then(|ctx| transcribe::transcribe_audio(&ctx, &audio_f32, ""));
+        let result = ctx_result.and_then(|ctx| transcribe::transcribe_audio(&ctx, &audio_f32));
         let _ = tx.send(result);
     });
 
@@ -1604,8 +1580,6 @@ pub fn run() {
             save_test_wav,
             list_input_devices,
             set_microphone,
-            get_vocabulary_prompt,
-            set_vocabulary_prompt,
             get_all_caps,
             get_corrections,
             save_corrections,
@@ -1864,11 +1838,6 @@ pub fn run() {
                     }
                 }
 
-                // Load vocabulary_prompt from settings
-                if let Some(prompt) = json.get("vocabulary_prompt").and_then(|v| v.as_str()) {
-                    active_profile.initial_prompt = prompt.to_owned();
-                }
-
                 // Load corrections from corrections.default key
                 if let Some(obj) = json.get("corrections.default").and_then(|v| v.as_object()) {
                     for (k, v) in obj {
@@ -1890,9 +1859,8 @@ pub fn run() {
                         corrections::CorrectionsEngine::from_map(&std::collections::HashMap::new()).unwrap()
                     });
 
-                log::info!("Vocabulary profile loaded (all_caps={}, prompt_len={}, corrections={})",
+                log::info!("Vocabulary profile loaded (all_caps={}, corrections={})",
                     active_profile.all_caps,
-                    active_profile.initial_prompt.len(),
                     active_profile.corrections.len()
                 );
                 app.manage(profiles::ActiveProfile(std::sync::Mutex::new(active_profile)));
