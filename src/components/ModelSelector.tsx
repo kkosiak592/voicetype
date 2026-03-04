@@ -129,7 +129,7 @@ export function ModelSelector({
         const isMoonshineDownloading = isMoonshine && thisDownloading;
         const isDownloading = isParakeet ? isParakeetDownloading
           : isMoonshine ? isMoonshineDownloading
-          : downloadingId === model.id;
+            : downloadingId === model.id;
         const hasWhisperError =
           !isParakeet &&
           !isMoonshine &&
@@ -140,9 +140,6 @@ export function ModelSelector({
         const hasMoonshineError = isMoonshine && !model.downloaded && thisError !== null;
         const disabled = !model.downloaded || loadingId !== null || downloadingId !== null || fp32Downloading || moonshineDownloading;
 
-        // Determine border style for undownloaded cards
-        const undownloadedBorder = 'border-dashed border-gray-300 dark:border-gray-600';
-
         return (
           <div key={model.id}>
             <div
@@ -151,41 +148,41 @@ export function ModelSelector({
               tabIndex={model.downloaded && !disabled ? 0 : undefined}
               onKeyDown={model.downloaded && !disabled ? (e) => { if (e.key === 'Enter' || e.key === ' ') handleSelect(model); } : undefined}
               className={[
-                'w-full rounded-lg border-2 px-4 py-3 text-left transition-colors duration-150',
+                'w-full rounded-xl px-4 py-3 text-left transition-all duration-200',
                 !model.downloaded
-                  ? `cursor-default bg-white dark:bg-gray-800 ${undownloadedBorder}`
+                  ? 'cursor-default bg-gray-50/50 dark:bg-gray-800/30 border border-dashed border-gray-300 dark:border-gray-600'
                   : isSelected
-                    ? 'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-950 cursor-pointer focus:outline-none'
+                    ? 'ring-2 ring-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 dark:ring-emerald-500/80 shadow-sm cursor-pointer focus:outline-none'
                     : disabled
-                      ? 'border-gray-200 bg-white opacity-50 dark:border-gray-700 dark:bg-gray-800'
-                      : 'border-gray-200 bg-white hover:border-gray-300 cursor-pointer dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600 focus:outline-none',
+                      ? 'ring-1 ring-gray-200 bg-white opacity-50 dark:ring-gray-700 dark:bg-gray-800'
+                      : 'ring-1 ring-gray-200 bg-white hover:ring-gray-300 hover:bg-gray-50 shadow-sm cursor-pointer dark:ring-gray-700 dark:bg-gray-800 hover:dark:ring-gray-600 focus:outline-none',
               ].join(' ')}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <span
                     className={[
-                      'text-sm font-medium',
+                      'text-sm font-semibold',
                       isSelected && model.downloaded
-                        ? 'text-indigo-700 dark:text-indigo-300'
+                        ? 'text-emerald-700 dark:text-emerald-300'
                         : 'text-gray-900 dark:text-gray-100',
                     ].join(' ')}
                   >
                     {model.name}
                   </span>
                   {model.recommended && (
-                    <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
+                    <span className="rounded-full bg-emerald-100/80 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50">
                       Recommended
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   {/* Parakeet download button */}
                   {isParakeet && !model.downloaded && thisOnDownload && !isParakeetDownloading && (
                     <button
                       onClick={(e) => { e.stopPropagation(); thisOnDownload(); }}
                       disabled={fp32Downloading || downloadingId !== null || moonshineDownloading}
-                      className="rounded-md bg-indigo-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold tracking-wide text-white hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                     >
                       Download
                     </button>
@@ -195,7 +192,7 @@ export function ModelSelector({
                     <button
                       onClick={(e) => { e.stopPropagation(); thisOnDownload(); }}
                       disabled={moonshineDownloading || fp32Downloading || downloadingId !== null}
-                      className="rounded-md bg-indigo-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold tracking-wide text-white hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                     >
                       Download
                     </button>
@@ -205,17 +202,17 @@ export function ModelSelector({
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDownload(model.id); }}
                       disabled={downloadingId !== null || fp32Downloading || moonshineDownloading}
-                      className="rounded-md bg-indigo-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold tracking-wide text-white hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                     >
                       Download
                     </button>
                   )}
                   {isLoading && (
-                    <span className="text-xs text-indigo-500 dark:text-indigo-400">Loading...</span>
+                    <span className="text-xs font-medium tracking-wide text-emerald-500 dark:text-emerald-400">Loading...</span>
                   )}
                 </div>
               </div>
-              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{model.description}</p>
+              <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400 max-w-[90%]">{model.description}</p>
             </div>
 
             {/* Progress bar for Parakeet download */}
@@ -223,7 +220,7 @@ export function ModelSelector({
               <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-gray-700 dark:bg-gray-800/50">
                 <div className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-indigo-500 transition-all duration-200"
+                    className="h-full rounded-full bg-emerald-500 transition-all duration-200"
                     style={{ width: `${thisPercent}%` }}
                   />
                 </div>
@@ -253,7 +250,7 @@ export function ModelSelector({
               <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-gray-700 dark:bg-gray-800/50">
                 <div className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-indigo-500 transition-all duration-200"
+                    className="h-full rounded-full bg-emerald-500 transition-all duration-200"
                     style={{ width: `${thisPercent}%` }}
                   />
                 </div>
@@ -283,7 +280,7 @@ export function ModelSelector({
               <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-gray-700 dark:bg-gray-800/50">
                 <div className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-indigo-500 transition-all duration-200"
+                    className="h-full rounded-full bg-emerald-500 transition-all duration-200"
                     style={{ width: percent !== null ? `${percent}%` : '40%' }}
                   />
                 </div>
