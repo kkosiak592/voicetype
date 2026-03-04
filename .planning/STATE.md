@@ -152,7 +152,7 @@ Last activity: 2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny fronten
 ### Pending Todos
 
 1. Implement sub-500ms transcription latency improvements (area: backend)
-2. Simplify profiles to shared dictionary and editable prompts (area: ui)
+2. Remove structural profile and simplify to single profile with editable prompt (area: ui)
 
 ### Roadmap Evolution
 

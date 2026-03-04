@@ -1,25 +1,27 @@
 ---
 created: 2026-03-01T23:28:07.496Z
-title: Simplify profiles to shared dictionary and editable prompts
+title: Remove structural profile and simplify to single profile with editable prompt
 area: ui
 files:
   - src/ (profile and settings components)
+  - src-tauri/src/profiles.rs
+  - src-tauri/src/transcribe.rs
 ---
 
 ## Problem
 
-The current profile system (general vs structural) maintains separate correction dictionaries per profile, but in practice the word dictionaries will never differ between them. The only meaningful difference between profiles is the initial system prompt that guides transcription behavior.
+The "structural" profile option adds complexity with little value. The only real difference between general/structural is the Whisper `initial_prompt` — and the user no longer wants the structural option at all. Additionally, non-Whisper engines (Parakeet, Moonshine) don't use `initial_prompt`, making the profile concept even less useful.
 
-Additionally, the profile's system prompt is not editable from the UI, and there's no handling for disabling the profile selector when the Parakeet model is chosen (since Parakeet doesn't use prompt-based correction).
-
-Three issues to address:
-1. **Shared dictionary**: Merge correction dictionaries into a single shared dictionary across all profiles instead of per-profile dictionaries
-2. **Editable prompt in UI**: Allow users to edit the system prompt per profile directly in the settings UI
-3. **Parakeet profile lock**: When Parakeet TDT model is selected, auto-set profile to "general" and disable the profile selector (Parakeet doesn't use prompt-based profiles)
+Current state:
+- Profile selector in UI with general/structural options
+- Per-profile correction dictionaries (but dictionaries never actually differ)
+- Per-profile `initial_prompt` for Whisper (the only meaningful difference)
+- Profile selector should be disabled for Parakeet/Moonshine but isn't always
 
 ## Solution
 
-1. Refactor profile storage so dictionaries are stored at the top level (not nested per profile)
-2. Profiles only store: name + system prompt text
-3. Add a prompt editor textarea in the settings UI that appears based on selected profile
-4. Add conditional logic to disable profile selector when engine is Parakeet TDT
+1. Remove the structural profile entirely — no profile selector in UI
+2. Merge correction dictionaries into a single shared dictionary (not per-profile)
+3. Keep `initial_prompt` as a single editable text field in settings (not tied to a profile)
+4. When engine is Parakeet or Moonshine, hide or disable the prompt field (they don't use it)
+5. Clean up backend: simplify `ActiveProfile` to just hold the shared dictionary + prompt string
