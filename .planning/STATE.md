@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Keyboard Hook
 status: planning
-stopped_at: Completed 19.3-01-PLAN.md
-last_updated: "2026-03-04T21:27:11.857Z"
+stopped_at: Completed 19.3-02-PLAN.md
+last_updated: "2026-03-04T21:38:29.779Z"
 last_activity: "2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny frontend integration verified end-to-end"
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 16
-  completed_plans: 11
+  completed_plans: 12
 ---
 
 ---
@@ -129,6 +129,7 @@ Last activity: 2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny fronten
 | Phase 19.1 P02 | 0 | 2 tasks | 3 files |
 | Phase 19.2 P01 | 4 | 2 tasks | 3 files |
 | Phase 19.3 P01 | 8 | 2 tasks | 3 files |
+| Phase 19.3 P02 | 7 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -179,6 +180,8 @@ Last activity: 2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny fronten
 - [Phase 19.3]: set_visible(false) used for destroy_tray — TrayIcon type in Tauri v2 does not expose public destroy(); set_visible(false) removes icon from Windows tray
 - [Phase 19.3]: MouseButton::Left guard on DoubleClick handler prevents right-double-click from opening settings unintentionally
 - [Phase 19.3]: try/catch around invoke('destroy_tray') in updater.ts ensures relaunch proceeds even if IPC fails (non-critical cleanup)
+- [Phase 19.3]: corrections.default flat key replaces corrections.{profile_id} scoping — single profile needs no per-profile scoping
+- [Phase 19.3]: history SectionId added to Sidebar in Plan 02 (not 03) — prevents file conflict between wave 2 and wave 3 plans
 
 ### Research Flags (from SUMMARY.md)
 
@@ -224,6 +227,6 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-04T21:27:11.851Z
-Stopped at: Completed 19.3-01-PLAN.md
+Last session: 2026-03-04T21:38:29.771Z
+Stopped at: Completed 19.3-02-PLAN.md
 Resume file: None
