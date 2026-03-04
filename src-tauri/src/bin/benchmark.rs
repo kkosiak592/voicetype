@@ -27,7 +27,7 @@ use transcribe_rs::{
 #[cfg(feature = "bench_extra")]
 use ort::execution_providers::{CUDAExecutionProvider, CPUExecutionProvider};
 
-#[cfg(any(feature = "bench_extra", feature = "parakeet"))]
+#[cfg(any(feature = "bench_extra", feature = "parakeet", feature = "whisper"))]
 use voice_activity_detector::VoiceActivityDetector;
 
 // ---------------------------------------------------------------------------
@@ -125,7 +125,7 @@ fn read_wav_to_f32(path: &str) -> Result<Vec<f32>, String> {
 /// 3. When silence exceeds SILENCE_SPLIT_CHUNKS (~320ms), end current segment
 /// 4. Cap segments at MAX_SEGMENT_SAMPLES (30s = 480000 samples)
 /// 5. Discard segments shorter than MIN_SEGMENT_SAMPLES (0.5s = 8000 samples)
-#[cfg(any(feature = "bench_extra", feature = "parakeet"))]
+#[cfg(any(feature = "bench_extra", feature = "parakeet", feature = "whisper"))]
 fn vad_chunk_audio(samples: &[f32]) -> Vec<Vec<f32>> {
     const CHUNK_SIZE: usize = 512;
     const SPEECH_THRESHOLD: f32 = 0.5;
@@ -684,53 +684,80 @@ fn main() {
                 }
             };
 
+            let needs_chunking = audio.len() > 30 * 16000;
+            let vad_start = Instant::now();
+            let chunks: Vec<Vec<f32>> = if needs_chunking {
+                vad_chunk_audio(&audio)
+            } else {
+                vec![audio]
+            };
+            let vad_ms = if needs_chunking { vad_start.elapsed().as_millis() as u64 } else { 0 };
+            if needs_chunking {
+                println!("  VAD chunking: {}ms -> {} segments", vad_ms, chunks.len());
+            }
+
             let mut latencies: Vec<u64> = Vec::with_capacity(ITERATIONS);
             let mut first_text = String::new();
 
             for i in 0..ITERATIONS {
-                let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-                params.set_language(Some("en"));
-                params.set_temperature(0.0);
-                params.set_temperature_inc(0.0);
-                params.set_single_segment(false);
-                params.set_no_context(true);
-                params.set_print_special(false);
-                params.set_print_progress(false);
-                params.set_print_realtime(false);
-                params.set_print_timestamps(false);
-
-                let mut state = match ctx.create_state() {
-                    Ok(s) => s,
-                    Err(e) => {
-                        eprintln!("  ERROR creating whisper state: {}", e);
-                        break;
-                    }
-                };
-
                 let t = Instant::now();
-                match state.full(params, &audio) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        eprintln!("  ERROR during inference run {}: {}", i + 1, e);
-                        break;
+                let mut combined_text = String::new();
+                let mut had_error = false;
+
+                for (seg_idx, seg) in chunks.iter().enumerate() {
+                    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+                    params.set_language(Some("en"));
+                    params.set_temperature(0.0);
+                    params.set_temperature_inc(0.0);
+                    params.set_single_segment(false);
+                    params.set_no_context(true);
+                    params.set_print_special(false);
+                    params.set_print_progress(false);
+                    params.set_print_realtime(false);
+                    params.set_print_timestamps(false);
+
+                    let mut state = match ctx.create_state() {
+                        Ok(s) => s,
+                        Err(e) => {
+                            eprintln!("  ERROR creating whisper state seg {}: {}", seg_idx, e);
+                            had_error = true;
+                            break;
+                        }
+                    };
+
+                    match state.full(params, seg) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            eprintln!("  ERROR during inference run {} seg {}: {}", i + 1, seg_idx, e);
+                            had_error = true;
+                            break;
+                        }
+                    }
+
+                    // Collect segment text
+                    let n_seg = state.full_n_segments();
+                    for s in 0..n_seg {
+                        if let Some(segment) = state.get_segment(s) {
+                            if let Ok(s_str) = segment.to_str() {
+                                let trimmed = s_str.trim();
+                                if !trimmed.is_empty() {
+                                    if !combined_text.is_empty() {
+                                        combined_text.push(' ');
+                                    }
+                                    combined_text.push_str(trimmed);
+                                }
+                            }
+                        }
                     }
                 }
+
+                if had_error { break; }
+
                 let elapsed = t.elapsed().as_millis() as u64;
                 latencies.push(elapsed);
 
                 if i == 0 {
-                    // Collect transcription text from first run
-                    let n_seg = state.full_n_segments();
-                    let mut text = String::new();
-                    for s in 0..n_seg {
-                        if let Some(segment) = state.get_segment(s) {
-                            if let Ok(s_str) = segment.to_str() {
-                                text.push_str(s_str.trim());
-                                text.push(' ');
-                            }
-                        }
-                    }
-                    first_text = text.trim().to_string();
+                    first_text = combined_text.trim().to_string();
                     println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
                 } else {
                     println!("  [run {}] {}ms", i + 1, elapsed);
@@ -747,6 +774,9 @@ fn main() {
             let reference = reference_for_clip(clip_label);
             let (wer, subs, ins, dels, ref_n) = compute_wer(reference, &first_text);
             println!("  -> avg={}ms  min={}ms  max={}ms  WER={:.1}% (S={} I={} D={} / {} words)", avg, min, max, wer, subs, ins, dels, ref_n);
+            if needs_chunking {
+                println!("  (total incl. VAD: avg={}ms)", avg + vad_ms);
+            }
 
             results.push(BenchResult {
                 model: model_label.to_string(),
