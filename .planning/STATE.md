@@ -195,6 +195,7 @@ Last activity: 2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny fronten
 
 1. Re-integrate Caps Lock toggle feature (area: ui)
 2. Remove stale Parakeet vocabulary prompting warning from model page (area: ui)
+3. Add filler word removal to transcription output (area: general)
 
 ### Roadmap Evolution
 
