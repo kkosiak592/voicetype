@@ -89,7 +89,7 @@ Moved to Phase 21 to allow phases 19-20 to complete first.
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 15 → 16 → 17 → 19 → 20 → 21
+Phases execute in numeric order: 15 → 16 → 17 → 19 → 19.1 → 20 → 21
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -98,6 +98,7 @@ Phases execute in numeric order: 15 → 16 → 17 → 19 → 20 → 21
 | 17. Frontend Capture UI | v1.2 | 1/1 | Complete | 2026-03-03 |
 | 18. Integration and Distribution | v1.2 | — | Voided | 2026-03-03 |
 | 19. Distil-large-v3.5 | 1/1 | Complete   | 2026-03-03 | - |
+| 19.1. Moonshine Tiny | v1.2 | 0/2 | Planning | - |
 | 20. Dual CPU/GPU Installers | v1.2 | 0/3 | Not started | - |
 | 21. Integration and Distribution | v1.2 | 0/1 | Not started | - |
 
@@ -112,7 +113,18 @@ Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
 **Plans:** 1/1 plans complete
 
 Plans:
-- [x] TBD (run /gsd:plan-phase 19 to break down) (completed 2026-03-03)
+- [x] TBD (run /gsd:plan-phase 19 to break down) (completed 2026-03-03)
+
+### Phase 19.1: Integrate Moonshine Tiny model into main app with VAD chunking and GPU support (INSERTED)
+
+**Goal:** Moonshine Tiny works as a selectable transcription engine in VoiceType — users can download it, select it, and dictate with it, including on recordings longer than 30 seconds via VAD chunking, with GPU acceleration when available
+**Requirements**: MOON-01, MOON-02, MOON-03, MOON-04, MOON-05, MOON-06, MOON-07
+**Depends on:** Phase 19
+**Plans:** 2 plans
+
+Plans:
+- [ ] 19.1-01-PLAN.md — Backend engine core, VAD chunking, pipeline dispatch, download command, IPC wiring, startup loading
+- [ ] 19.1-02-PLAN.md — Frontend model selection, first-run card, download handling, human verification
 
 ### Phase 20: Implement dual CPU/GPU installers with variant-specific auto-updates
 
