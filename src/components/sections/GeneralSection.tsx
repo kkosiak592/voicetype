@@ -1,5 +1,6 @@
 import { HotkeyCapture } from '../HotkeyCapture';
 import { RecordingModeToggle } from '../RecordingModeToggle';
+import { AllCapsToggle } from '../AllCapsToggle';
 
 interface GeneralSectionProps {
   hotkey: string;
@@ -56,6 +57,23 @@ export function GeneralSection({
               Choose how the hotkey controls your recording session.
             </p>
             <RecordingModeToggle value={recordingMode} onChange={onRecordingModeChange} />
+          </section>
+        </div>
+        {/* Card 2: Output */}
+        <div className="bg-white dark:bg-gray-900 ring-1 ring-gray-200 dark:ring-gray-800 rounded-2xl p-4 shadow-sm">
+          <section>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+              Output
+            </h2>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">ALL CAPS</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Convert all transcribed text to uppercase
+                </p>
+              </div>
+              <AllCapsToggle />
+            </div>
           </section>
         </div>
       </div>
