@@ -129,9 +129,10 @@ None active.
 | 32 | Add 2 more phrase variants per clip duration (9 total WAVs) + markdown report output | 2026-03-03 | 220b0bf | Complete | [32-add-2-more-phrase-variants-per-clip-dura](./quick/32-add-2-more-phrase-variants-per-clip-dura/) |
 | 33 | Add GPU execution_providers to streaming Moonshine engine; wire moonshine-streaming-tiny/small/medium into benchmark | 2026-03-03 | 61171c7 | Complete | [33-add-moonshine-v2-streaming-models-to-ben](./quick/33-add-moonshine-v2-streaming-models-to-ben/) |
 | 34 | Add VAD-based chunking to parakeet benchmark section for clips >30s | 2026-03-04 | 21d4441 | Complete | [34-add-vad-based-chunking-to-parakeet-model](./quick/34-add-vad-based-chunking-to-parakeet-model/) |
+| 35 | Fix benchmark fairness: add VAD chunking to Whisper and switch streaming Moonshine to incremental frame feeding | 2026-03-04 | bdb3c14 | Complete | [35-fix-benchmark-fairness-add-vad-chunking-](./quick/35-fix-benchmark-fairness-add-vad-chunking-/) |
 
 ## Session Continuity
 
 Last session: 2026-03-04
-Stopped at: Quick task 34 complete — VAD chunking added to parakeet benchmark section
+Stopped at: Quick task 35 complete — Whisper VAD chunking and streaming Moonshine incremental frame feeding
 Resume file: None
