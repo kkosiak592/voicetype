@@ -8,6 +8,7 @@ import { VocabularySection } from './components/sections/VocabularySection';
 import { ModelSection } from './components/sections/ModelSection';
 import { MicrophoneSection } from './components/sections/MicrophoneSection';
 import { AppearanceSection } from './components/sections/AppearanceSection';
+import { HistorySection } from './components/sections/HistorySection';
 import { FirstRun } from './components/FirstRun';
 import { useUpdater } from './lib/updater';
 import { UpdateBanner } from './components/UpdateBanner';
@@ -192,9 +193,7 @@ function App() {
             />
           )}
           {activeSection === 'vocabulary' && <VocabularySection />}
-          {activeSection === 'history' && (
-            <div className="text-sm text-gray-500">History coming soon</div>
-          )}
+          {activeSection === 'history' && <HistorySection />}
           {activeSection === 'model' && (
             <ModelSection
               selectedModel={selectedModel}
