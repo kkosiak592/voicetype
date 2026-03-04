@@ -158,8 +158,9 @@ export function FirstRun({ gpuDetected, gpuName, directmlAvailable, recommendedM
         await invoke('download_model', { modelId, onEvent });
       }
     } catch (e) {
-      if (!cancelledRef.current) {
-        setErrorMsg(String(e));
+      const msg = String(e);
+      if (!cancelledRef.current && msg !== 'Download cancelled') {
+        setErrorMsg(msg);
         setDownloadState('error');
         setDownloadingId(null);
       }
@@ -168,6 +169,8 @@ export function FirstRun({ gpuDetected, gpuName, directmlAvailable, recommendedM
 
   function handleCancel() {
     cancelledRef.current = true;
+    // Signal the Rust download task to stop streaming and clean up partial files
+    invoke('cancel_download').catch(() => {});
     setDownloadState('idle');
     setDownloadingId(null);
     setDownloadedBytes(0);

@@ -80,6 +80,11 @@ pub struct MoonshineStateMutex(
     pub std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<transcribe_rs::engines::moonshine::MoonshineEngine>>>>,
 );
 
+/// Centralized settings store. All reads/writes go through this Mutex,
+/// eliminating the race condition between the frontend (tauri-plugin-store)
+/// and backend (raw fs). Flushed to disk after every mutation.
+pub struct SettingsState(pub std::sync::Mutex<serde_json::Value>);
+
 /// Control flag for the RMS level streaming loop. Stored as managed state
 /// so both the setup() and rebind_hotkey() hotkey handlers can access it.
 pub struct LevelStreamActive(pub Arc<AtomicBool>);
@@ -172,86 +177,84 @@ pub struct CachedGpuMode(pub transcribe::ModelMode);
 #[cfg(feature = "whisper")]
 pub struct CachedGpuDetection(pub transcribe::GpuDetection);
 
-/// Read settings.json from the app data directory. Returns empty object on missing/corrupt file.
-fn read_settings(app_handle: &tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let data_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
+/// Load settings.json from disk. Returns empty object on missing/corrupt file.
+/// Only used once at startup to seed SettingsState.
+fn load_settings_from_disk(app_handle: &tauri::AppHandle) -> serde_json::Value {
+    let data_dir = match app_handle.path().app_data_dir() {
+        Ok(d) => d,
+        Err(_) => return serde_json::json!({}),
+    };
     let settings_path = data_dir.join("settings.json");
-    Ok(std::fs::read_to_string(&settings_path)
+    std::fs::read_to_string(&settings_path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| serde_json::json!({})))
+        .unwrap_or_else(|| serde_json::json!({}))
 }
 
-/// Write settings.json to the app data directory (pretty-printed).
-fn write_settings(app_handle: &tauri::AppHandle, json: &serde_json::Value) -> Result<(), String> {
+/// Flush the in-memory settings to disk (pretty-printed).
+/// Called after every mutation under the SettingsState lock.
+fn flush_settings(app_handle: &tauri::AppHandle, json: &serde_json::Value) -> Result<(), String> {
     let data_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
     let settings_path = data_dir.join("settings.json");
     std::fs::write(&settings_path, serde_json::to_string_pretty(json).unwrap())
         .map_err(|e| e.to_string())
 }
 
-/// Read the saved hotkey from settings.json in the app data directory.
-/// Returns None on first launch, file missing, or parse error — callers fall back to default.
+/// Read a clone of the current in-memory settings (lock + clone).
+fn read_settings(app_handle: &tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let state = app_handle.state::<SettingsState>();
+    let guard = state.0.lock().map_err(|e| format!("settings lock failed: {}", e))?;
+    Ok(guard.clone())
+}
+
+/// Replace the in-memory settings and flush to disk.
+fn write_settings(app_handle: &tauri::AppHandle, json: &serde_json::Value) -> Result<(), String> {
+    let state = app_handle.state::<SettingsState>();
+    let mut guard = state.0.lock().map_err(|e| format!("settings lock failed: {}", e))?;
+    *guard = json.clone();
+    flush_settings(app_handle, &guard)
+}
+
+/// Read the saved hotkey from the in-memory settings.
+/// Returns None on first launch or if not set — callers fall back to default.
 fn read_saved_hotkey(app: &tauri::App) -> Option<String> {
-    let data_dir = app.path().app_data_dir().ok()?;
-    let settings_path = data_dir.join("settings.json");
-
-    let contents = std::fs::read_to_string(&settings_path).ok()?;
-    let json: serde_json::Value = serde_json::from_str(&contents).ok()?;
-
-    json.get("hotkey")
+    let state = app.state::<SettingsState>();
+    let guard = state.0.lock().ok()?;
+    guard.get("hotkey")
         .and_then(|v| v.as_str())
         .filter(|s| !s.is_empty())
         .map(|s| s.to_owned())
 }
 
-/// Read the saved recording mode from settings.json.
-/// Returns Mode::HoldToTalk on first launch, file missing, or parse error (hold-to-talk is default).
+/// Read the saved recording mode from in-memory settings.
+/// Returns Mode::HoldToTalk if not set (hold-to-talk is default).
 fn read_saved_mode(app: &tauri::App) -> Mode {
-    let data_dir = match app.path().app_data_dir() {
-        Ok(d) => d,
+    let state = app.state::<SettingsState>();
+    let guard = match state.0.lock() {
+        Ok(g) => g,
         Err(_) => return Mode::HoldToTalk,
     };
-    let settings_path = data_dir.join("settings.json");
-
-    let contents = match std::fs::read_to_string(&settings_path) {
-        Ok(c) => c,
-        Err(_) => return Mode::HoldToTalk,
-    };
-    let json: serde_json::Value = match serde_json::from_str(&contents) {
-        Ok(j) => j,
-        Err(_) => return Mode::HoldToTalk,
-    };
-
-    match json.get("recording_mode").and_then(|v| v.as_str()) {
+    match guard.get("recording_mode").and_then(|v| v.as_str()) {
         Some("toggle") => Mode::Toggle,
         _ => Mode::HoldToTalk,
     }
 }
 
-/// Read the saved transcription engine from settings.json.
+/// Read the saved transcription engine from in-memory settings.
 /// Defaults to Parakeet when `gpu_mode` is true, Whisper otherwise.
-/// Falls back to the GPU-aware default on first launch, file missing, or parse error.
 fn read_saved_engine(app: &tauri::App, gpu_mode: bool) -> TranscriptionEngine {
     let default_engine = if gpu_mode {
         TranscriptionEngine::Parakeet
     } else {
         TranscriptionEngine::Whisper
     };
-    let data_dir = match app.path().app_data_dir() {
-        Ok(d) => d,
+    let state = app.state::<SettingsState>();
+    let guard = match state.0.lock() {
+        Ok(g) => g,
         Err(_) => return default_engine,
     };
-    let settings_path = data_dir.join("settings.json");
-    let contents = match std::fs::read_to_string(&settings_path) {
-        Ok(c) => c,
-        Err(_) => return default_engine,
-    };
-    let json: serde_json::Value = match serde_json::from_str(&contents) {
-        Ok(j) => j,
-        Err(_) => return default_engine,
-    };
-    match json.get("active_engine").and_then(|v| v.as_str()) {
+    match guard.get("active_engine").and_then(|v| v.as_str()) {
         Some("parakeet") => TranscriptionEngine::Parakeet,
         Some("whisper") => TranscriptionEngine::Whisper,
         Some("moonshine") => TranscriptionEngine::Moonshine,
@@ -270,23 +273,15 @@ fn read_saved_parakeet_model(app_handle: &tauri::AppHandle) -> String {
         .to_string()
 }
 
-/// Read the saved Parakeet model variant from settings.json at startup.
+/// Read the saved Parakeet model variant from in-memory settings at startup.
 /// Returns "parakeet-tdt-v2-fp32" by default.
 fn read_saved_parakeet_model_startup(app: &tauri::App) -> String {
-    let data_dir = match app.path().app_data_dir() {
-        Ok(d) => d,
+    let state = app.state::<SettingsState>();
+    let guard = match state.0.lock() {
+        Ok(g) => g,
         Err(_) => return "parakeet-tdt-v2-fp32".to_string(),
     };
-    let settings_path = data_dir.join("settings.json");
-    let contents = match std::fs::read_to_string(&settings_path) {
-        Ok(c) => c,
-        Err(_) => return "parakeet-tdt-v2-fp32".to_string(),
-    };
-    let json: serde_json::Value = match serde_json::from_str(&contents) {
-        Ok(j) => j,
-        Err(_) => return "parakeet-tdt-v2-fp32".to_string(),
-    };
-    json.get("parakeet_model")
+    guard.get("parakeet_model")
         .and_then(|v| v.as_str())
         .filter(|s| !s.is_empty())
         .unwrap_or("parakeet-tdt-v2-fp32")
@@ -294,7 +289,7 @@ fn read_saved_parakeet_model_startup(app: &tauri::App) -> String {
 }
 
 /// Resolve the model directory for a Parakeet variant.
-fn resolve_parakeet_dir(_model_id: &str) -> std::path::PathBuf {
+fn resolve_parakeet_dir() -> std::path::PathBuf {
     download::parakeet_fp32_model_dir()
 }
 
@@ -363,7 +358,7 @@ fn set_engine(app: tauri::AppHandle, engine: String, parakeet_model: Option<Stri
         let parakeet_model_id = parakeet_model
             .clone()
             .unwrap_or_else(|| read_saved_parakeet_model(&app));
-        let model_dir = resolve_parakeet_dir(&parakeet_model_id);
+        let model_dir = resolve_parakeet_dir();
         if model_dir.exists() {
             let dir_str = model_dir.to_string_lossy().to_string();
             #[cfg(feature = "whisper")]
@@ -893,47 +888,31 @@ fn save_test_wav(app: tauri::AppHandle, state: tauri::State<'_, audio::AudioCapt
     Ok(path_str)
 }
 
-/// Read the saved active profile ID from settings.json.
-/// Returns "general" on first launch, file missing, or parse error.
+/// Read the saved active profile ID from in-memory settings.
+/// Returns "general" if not set.
 fn read_saved_profile_id(app: &tauri::App) -> String {
-    let data_dir = match app.path().app_data_dir() {
-        Ok(d) => d,
+    let state = app.state::<SettingsState>();
+    let guard = match state.0.lock() {
+        Ok(g) => g,
         Err(_) => return "general".to_string(),
     };
-    let settings_path = data_dir.join("settings.json");
-    let contents = match std::fs::read_to_string(&settings_path) {
-        Ok(c) => c,
-        Err(_) => return "general".to_string(),
-    };
-    let json: serde_json::Value = match serde_json::from_str(&contents) {
-        Ok(j) => j,
-        Err(_) => return "general".to_string(),
-    };
-    json.get("active_profile_id")
+    guard.get("active_profile_id")
         .and_then(|v| v.as_str())
         .filter(|s| !s.is_empty())
         .map(|s| s.to_owned())
         .unwrap_or_else(|| "general".to_string())
 }
 
-/// Read the saved user corrections for a specific profile from settings.json.
-/// Returns an empty HashMap on first launch, file missing, or parse error.
+/// Read the saved user corrections for a specific profile from in-memory settings.
+/// Returns an empty HashMap if not set.
 fn read_saved_corrections(app: &tauri::App, profile_id: &str) -> std::collections::HashMap<String, String> {
-    let data_dir = match app.path().app_data_dir() {
-        Ok(d) => d,
-        Err(_) => return std::collections::HashMap::new(),
-    };
-    let settings_path = data_dir.join("settings.json");
-    let contents = match std::fs::read_to_string(&settings_path) {
-        Ok(c) => c,
-        Err(_) => return std::collections::HashMap::new(),
-    };
-    let json: serde_json::Value = match serde_json::from_str(&contents) {
-        Ok(j) => j,
+    let state = app.state::<SettingsState>();
+    let guard = match state.0.lock() {
+        Ok(g) => g,
         Err(_) => return std::collections::HashMap::new(),
     };
     let key = format!("corrections.{}", profile_id);
-    json.get(&key)
+    guard.get(&key)
         .and_then(|v| v.as_object())
         .map(|obj| {
             obj.iter()
@@ -943,24 +922,16 @@ fn read_saved_corrections(app: &tauri::App, profile_id: &str) -> std::collection
         .unwrap_or_default()
 }
 
-/// Read the saved ALL CAPS flag for a specific profile from settings.json.
-/// Returns false on first launch, file missing, or parse error.
+/// Read the saved ALL CAPS flag for a specific profile from in-memory settings.
+/// Returns false if not set.
 fn read_saved_all_caps(app: &tauri::App, profile_id: &str) -> bool {
-    let data_dir = match app.path().app_data_dir() {
-        Ok(d) => d,
-        Err(_) => return false,
-    };
-    let settings_path = data_dir.join("settings.json");
-    let contents = match std::fs::read_to_string(&settings_path) {
-        Ok(c) => c,
-        Err(_) => return false,
-    };
-    let json: serde_json::Value = match serde_json::from_str(&contents) {
-        Ok(j) => j,
+    let state = app.state::<SettingsState>();
+    let guard = match state.0.lock() {
+        Ok(g) => g,
         Err(_) => return false,
     };
     let key = format!("profiles.{}.all_caps", profile_id);
-    json.get(&key)
+    guard.get(&key)
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
 }
@@ -1112,6 +1083,23 @@ fn set_all_caps(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Get a single setting by key. Returns null if the key does not exist.
+#[tauri::command]
+fn get_setting(app: tauri::AppHandle, key: String) -> Result<serde_json::Value, String> {
+    let state = app.state::<SettingsState>();
+    let guard = state.0.lock().map_err(|e| format!("settings lock failed: {}", e))?;
+    Ok(guard.get(&key).cloned().unwrap_or(serde_json::Value::Null))
+}
+
+/// Set a single setting by key and flush to disk.
+#[tauri::command]
+fn set_setting(app: tauri::AppHandle, key: String, value: serde_json::Value) -> Result<(), String> {
+    let state = app.state::<SettingsState>();
+    let mut guard = state.0.lock().map_err(|e| format!("settings lock failed: {}", e))?;
+    guard[&key] = value;
+    flush_settings(&app, &guard)
+}
+
 /// List available audio input device names.
 ///
 /// The first entry is always "System Default" so the UI has a way to revert.
@@ -1151,15 +1139,13 @@ fn set_microphone(app: tauri::AppHandle, device_name: String) -> Result<(), Stri
     Ok(())
 }
 
-/// Read the saved whisper model ID from settings.json.
+/// Read the saved whisper model ID from in-memory settings.
 /// Returns None if not set (auto-detect will be used).
 #[cfg(feature = "whisper")]
 fn read_saved_model_id(app: &tauri::App) -> Option<String> {
-    let data_dir = app.path().app_data_dir().ok()?;
-    let settings_path = data_dir.join("settings.json");
-    let contents = std::fs::read_to_string(&settings_path).ok()?;
-    let json: serde_json::Value = serde_json::from_str(&contents).ok()?;
-    json.get("whisper_model_id")
+    let state = app.state::<SettingsState>();
+    let guard = state.0.lock().ok()?;
+    guard.get("whisper_model_id")
         .and_then(|v| v.as_str())
         .filter(|s| !s.is_empty())
         .map(|s| s.to_owned())
@@ -1196,7 +1182,7 @@ struct ModelInfo {
 /// List available transcription models (Whisper + Parakeet) with download status.
 #[cfg(feature = "whisper")]
 #[tauri::command]
-fn list_models() -> Result<Vec<ModelInfo>, String> {
+fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
     use crate::transcribe::models_dir;
     let dir = models_dir();
 
@@ -1620,7 +1606,6 @@ pub fn run() {
                 let _ = w.set_focus();
             }
         }))
-        .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_process::init());
 
@@ -1631,6 +1616,11 @@ pub fn run() {
         builder = builder.manage(CachedGpuMode(cached_gpu));
         builder = builder.manage(CachedGpuDetection(cached_gpu_detection));
     }
+
+    // SettingsState MUST be registered on Builder (before .run()) so that
+    // IPC commands can access it even before setup() fires (webview2 COM
+    // init pumps Win32 messages). Starts empty; setup() loads from disk.
+    builder = builder.manage(SettingsState(std::sync::Mutex::new(serde_json::json!({}))));
 
     // ActiveEngine MUST be registered on Builder (same reason as CachedGpuMode).
     // setup() will overwrite with the saved value from settings.json.
@@ -1671,6 +1661,10 @@ pub fn run() {
         builder = builder.manage(MoonshineStateMutex(std::sync::Mutex::new(None)));
     }
 
+    // DownloadCancelFlag — shared AtomicBool so cancel_download IPC can stop
+    // an in-progress download from the Rust side (not just a JS-only flag).
+    builder = builder.manage(download::DownloadCancelFlag(Arc::new(AtomicBool::new(false))));
+
     builder.invoke_handler(tauri::generate_handler![
             rebind_hotkey,
             unregister_hotkey,
@@ -1691,9 +1685,12 @@ pub fn run() {
             get_corrections,
             save_corrections,
             set_all_caps,
+            get_setting,
+            set_setting,
             download::download_model,
             download::download_parakeet_fp32_model,
             download::download_moonshine_tiny_model,
+            download::cancel_download,
             enable_autostart,
             updater::check_for_update,
             set_update_available,
@@ -1712,6 +1709,15 @@ pub fn run() {
             force_cpu_transcribe,
         ])
         .setup(|app| {
+            // Load settings from disk into SettingsState (registered empty on Builder).
+            // Must happen before any read_saved_* call.
+            {
+                let disk_settings = load_settings_from_disk(app.handle());
+                let state = app.state::<SettingsState>();
+                let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+                *guard = disk_settings;
+            }
+
             build_tray(app)?;
 
             // Auto-updater plugin — checks GitHub Releases endpoint configured in tauri.conf.json.
@@ -1775,7 +1781,7 @@ pub fn run() {
                 };
                 if saved_engine == TranscriptionEngine::Parakeet {
                     let parakeet_model_id = read_saved_parakeet_model_startup(app);
-                    let model_dir = resolve_parakeet_dir(&parakeet_model_id);
+                    let model_dir = resolve_parakeet_dir();
                     if model_dir.exists() {
                         let dir_str = model_dir.to_string_lossy().to_string();
                         let provider = {

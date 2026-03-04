@@ -2,8 +2,29 @@ use futures_util::StreamExt;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tauri::ipc::Channel;
 use tokio::io::AsyncWriteExt;
+
+/// Managed state: shared cancellation flag for all download commands.
+///
+/// Set to `true` by the `cancel_download` IPC command. Each download function
+/// resets it to `false` on entry and checks it in the chunk-reading loop.
+pub struct DownloadCancelFlag(pub Arc<AtomicBool>);
+
+/// IPC command: signal the active download to stop.
+///
+/// Sets the shared `DownloadCancelFlag` to true. The running download function
+/// detects this on the next chunk iteration, deletes partial files, and returns
+/// `Err("Download cancelled")`.
+#[tauri::command]
+pub async fn cancel_download(
+    cancel_flag: tauri::State<'_, DownloadCancelFlag>,
+) -> Result<(), String> {
+    cancel_flag.0.store(true, Ordering::Relaxed);
+    Ok(())
+}
 
 /// Events streamed to the frontend during a model download.
 ///
@@ -80,7 +101,11 @@ fn model_info(model_id: &str) -> Option<(&'static str, &'static str, &'static st
 pub async fn download_model(
     model_id: String,
     on_event: Channel<DownloadEvent>,
+    cancel_flag: tauri::State<'_, DownloadCancelFlag>,
 ) -> Result<(), String> {
+    // Reset cancel flag at the start of each download
+    cancel_flag.0.store(false, Ordering::Relaxed);
+
     // Resolve model metadata — URL is embedded in model_info to support models from different repos
     let (filename, url, expected_sha256, expected_size_bytes) =
         model_info(&model_id).ok_or_else(|| format!("Unknown model id: {}", model_id))?;
@@ -124,9 +149,17 @@ pub async fn download_model(
     let mut hasher = Sha256::new();
     let mut downloaded_bytes: u64 = 0;
     let mut stream = response.bytes_stream();
+    let flag = cancel_flag.0.clone();
 
     // Stream chunks, write to disk, feed hasher, emit progress events
     while let Some(chunk_result) = stream.next().await {
+        // Check cancellation flag before processing each chunk
+        if flag.load(Ordering::Relaxed) {
+            drop(file);
+            let _ = tokio::fs::remove_file(&tmp_path).await;
+            return Err("Download cancelled".to_string());
+        }
+
         let chunk = chunk_result.map_err(|e| {
             let msg = format!("Download stream error: {}", e);
             let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
@@ -239,7 +272,13 @@ fn moonshine_download_url(filename: &str) -> String {
 /// Progress is cumulative across all 3 files (single progress bar).
 /// On any file error the entire moonshine-tiny-ONNX/ directory is removed.
 #[tauri::command]
-pub async fn download_moonshine_tiny_model(on_event: Channel<DownloadEvent>) -> Result<(), String> {
+pub async fn download_moonshine_tiny_model(
+    on_event: Channel<DownloadEvent>,
+    cancel_flag: tauri::State<'_, DownloadCancelFlag>,
+) -> Result<(), String> {
+    // Reset cancel flag at the start of each download
+    cancel_flag.0.store(false, Ordering::Relaxed);
+
     let dest_dir = moonshine_tiny_model_dir();
 
     // Ensure destination directory exists
@@ -257,8 +296,16 @@ pub async fn download_moonshine_tiny_model(on_event: Channel<DownloadEvent>) -> 
 
     let client = reqwest::Client::new();
     let mut cumulative_downloaded: u64 = 0;
+    let flag = cancel_flag.0.clone();
 
-    for (remote_name, local_name, expected_size) in MOONSHINE_TINY_FILES {
+    for (remote_name, local_name, _expected_size) in MOONSHINE_TINY_FILES {
+        // Check cancellation before starting each file
+        if flag.load(Ordering::Relaxed) {
+            let dir = dest_dir.clone();
+            let _ = tokio::fs::remove_dir_all(dir).await;
+            return Err("Download cancelled".to_string());
+        }
+
         let url = moonshine_download_url(remote_name);
         let dest = dest_dir.join(local_name);
         let tmp_path = dest.with_extension("tmp");
@@ -275,9 +322,8 @@ pub async fn download_moonshine_tiny_model(on_event: Channel<DownloadEvent>) -> 
             msg
         })?;
 
-        // Use content-length from response if available; otherwise fall back to expected size
-        let file_total = response.content_length().unwrap_or(*expected_size);
-        let _ = file_total; // used implicitly via cumulative progress
+        // Use content-length from response to validate file size after download
+        let content_length = response.content_length();
 
         let mut file = tokio::fs::File::create(&tmp_path).await.map_err(|e| {
             let msg = format!("Failed to create temp file for {}: {}", local_name, e);
@@ -290,8 +336,18 @@ pub async fn download_moonshine_tiny_model(on_event: Channel<DownloadEvent>) -> 
         })?;
 
         let mut stream = response.bytes_stream();
+        let mut file_downloaded: u64 = 0;
 
         while let Some(chunk_result) = stream.next().await {
+            // Check cancellation flag before processing each chunk
+            if flag.load(Ordering::Relaxed) {
+                drop(file);
+                let _ = tokio::fs::remove_file(&tmp_path).await;
+                let dir = dest_dir.clone();
+                let _ = tokio::fs::remove_dir_all(dir).await;
+                return Err("Download cancelled".to_string());
+            }
+
             let chunk = chunk_result.map_err(|e| {
                 let msg = format!("Download stream error for {}: {}", remote_name, e);
                 let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
@@ -316,7 +372,9 @@ pub async fn download_moonshine_tiny_model(on_event: Channel<DownloadEvent>) -> 
                 msg
             })?;
 
-            cumulative_downloaded += chunk.len() as u64;
+            let chunk_len = chunk.len() as u64;
+            file_downloaded += chunk_len;
+            cumulative_downloaded += chunk_len;
 
             let _ = on_event.send(DownloadEvent::Progress {
                 downloaded_bytes: cumulative_downloaded,
@@ -332,6 +390,23 @@ pub async fn download_moonshine_tiny_model(on_event: Channel<DownloadEvent>) -> 
         })?;
         drop(file);
 
+        // Validate downloaded file size against Content-Length header
+        if let Some(expected_len) = content_length {
+            if file_downloaded != expected_len {
+                let _ = tokio::fs::remove_file(&tmp_path).await;
+                let dir = dest_dir.clone();
+                tokio::spawn(async move {
+                    let _ = tokio::fs::remove_dir_all(dir).await;
+                });
+                let msg = format!(
+                    "Size mismatch for {}: expected {} bytes (Content-Length), got {} bytes",
+                    local_name, expected_len, file_downloaded
+                );
+                let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
+                return Err(msg);
+            }
+        }
+
         // Atomically move temp file to final destination
         tokio::fs::rename(&tmp_path, &dest).await.map_err(|e| {
             let msg = format!("Failed to rename temp file for {}: {}", local_name, e);
@@ -340,8 +415,9 @@ pub async fn download_moonshine_tiny_model(on_event: Channel<DownloadEvent>) -> 
         })?;
 
         log::info!(
-            "Moonshine Tiny file downloaded: {} ({} bytes cumulative)",
+            "Moonshine Tiny file downloaded and verified: {} ({} bytes, {} bytes cumulative)",
             local_name,
+            file_downloaded,
             cumulative_downloaded
         );
     }
@@ -405,7 +481,13 @@ fn parakeet_download_url(filename: &str) -> String {
 /// Progress is cumulative across all 6 files (single progress bar).
 /// On any file error the entire parakeet-tdt-v2-fp32/ directory is removed.
 #[tauri::command]
-pub async fn download_parakeet_fp32_model(on_event: Channel<DownloadEvent>) -> Result<(), String> {
+pub async fn download_parakeet_fp32_model(
+    on_event: Channel<DownloadEvent>,
+    cancel_flag: tauri::State<'_, DownloadCancelFlag>,
+) -> Result<(), String> {
+    // Reset cancel flag at the start of each download
+    cancel_flag.0.store(false, Ordering::Relaxed);
+
     let dest_dir = parakeet_fp32_model_dir();
 
     // Ensure destination directory exists
@@ -423,8 +505,16 @@ pub async fn download_parakeet_fp32_model(on_event: Channel<DownloadEvent>) -> R
 
     let client = reqwest::Client::new();
     let mut cumulative_downloaded: u64 = 0;
+    let flag = cancel_flag.0.clone();
 
-    for (remote_name, local_name, expected_size) in PARAKEET_FP32_FILES {
+    for (remote_name, local_name, _expected_size) in PARAKEET_FP32_FILES {
+        // Check cancellation before starting each file
+        if flag.load(Ordering::Relaxed) {
+            let dir = dest_dir.clone();
+            let _ = tokio::fs::remove_dir_all(dir).await;
+            return Err("Download cancelled".to_string());
+        }
+
         let url = parakeet_download_url(remote_name);
         let dest = dest_dir.join(local_name);
         let tmp_path = dest.with_extension("tmp");
@@ -441,9 +531,8 @@ pub async fn download_parakeet_fp32_model(on_event: Channel<DownloadEvent>) -> R
             msg
         })?;
 
-        // Use content-length from response if available; otherwise fall back to expected size
-        let file_total = response.content_length().unwrap_or(*expected_size);
-        let _ = file_total; // used implicitly via cumulative progress
+        // Use content-length from response to validate file size after download
+        let content_length = response.content_length();
 
         let mut file = tokio::fs::File::create(&tmp_path).await.map_err(|e| {
             let msg = format!("Failed to create temp file for {}: {}", local_name, e);
@@ -456,8 +545,18 @@ pub async fn download_parakeet_fp32_model(on_event: Channel<DownloadEvent>) -> R
         })?;
 
         let mut stream = response.bytes_stream();
+        let mut file_downloaded: u64 = 0;
 
         while let Some(chunk_result) = stream.next().await {
+            // Check cancellation flag before processing each chunk
+            if flag.load(Ordering::Relaxed) {
+                drop(file);
+                let _ = tokio::fs::remove_file(&tmp_path).await;
+                let dir = dest_dir.clone();
+                let _ = tokio::fs::remove_dir_all(dir).await;
+                return Err("Download cancelled".to_string());
+            }
+
             let chunk = chunk_result.map_err(|e| {
                 let msg = format!("Download stream error for {}: {}", remote_name, e);
                 let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
@@ -482,7 +581,9 @@ pub async fn download_parakeet_fp32_model(on_event: Channel<DownloadEvent>) -> R
                 msg
             })?;
 
-            cumulative_downloaded += chunk.len() as u64;
+            let chunk_len = chunk.len() as u64;
+            file_downloaded += chunk_len;
+            cumulative_downloaded += chunk_len;
 
             let _ = on_event.send(DownloadEvent::Progress {
                 downloaded_bytes: cumulative_downloaded,
@@ -498,6 +599,23 @@ pub async fn download_parakeet_fp32_model(on_event: Channel<DownloadEvent>) -> R
         })?;
         drop(file);
 
+        // Validate downloaded file size against Content-Length header
+        if let Some(expected_len) = content_length {
+            if file_downloaded != expected_len {
+                let _ = tokio::fs::remove_file(&tmp_path).await;
+                let dir = dest_dir.clone();
+                tokio::spawn(async move {
+                    let _ = tokio::fs::remove_dir_all(dir).await;
+                });
+                let msg = format!(
+                    "Size mismatch for {}: expected {} bytes (Content-Length), got {} bytes",
+                    local_name, expected_len, file_downloaded
+                );
+                let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
+                return Err(msg);
+            }
+        }
+
         // Atomically move temp file to final destination
         tokio::fs::rename(&tmp_path, &dest).await.map_err(|e| {
             let msg = format!("Failed to rename temp file for {}: {}", local_name, e);
@@ -506,8 +624,9 @@ pub async fn download_parakeet_fp32_model(on_event: Channel<DownloadEvent>) -> R
         })?;
 
         log::info!(
-            "Parakeet fp32 file downloaded: {} ({} bytes cumulative)",
+            "Parakeet fp32 file downloaded and verified: {} ({} bytes, {} bytes cumulative)",
             local_name,
+            file_downloaded,
             cumulative_downloaded
         );
     }
