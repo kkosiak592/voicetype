@@ -208,14 +208,14 @@ fn flush_settings(app_handle: &tauri::AppHandle, json: &serde_json::Value) -> Re
 }
 
 /// Read a clone of the current in-memory settings (lock + clone).
-fn read_settings(app_handle: &tauri::AppHandle) -> Result<serde_json::Value, String> {
+pub(crate) fn read_settings(app_handle: &tauri::AppHandle) -> Result<serde_json::Value, String> {
     let state = app_handle.state::<SettingsState>();
     let guard = state.0.lock().map_err(|e| format!("settings lock failed: {}", e))?;
     Ok(guard.clone())
 }
 
 /// Replace the in-memory settings and flush to disk.
-fn write_settings(app_handle: &tauri::AppHandle, json: &serde_json::Value) -> Result<(), String> {
+pub(crate) fn write_settings(app_handle: &tauri::AppHandle, json: &serde_json::Value) -> Result<(), String> {
     let state = app_handle.state::<SettingsState>();
     let mut guard = state.0.lock().map_err(|e| format!("settings lock failed: {}", e))?;
     *guard = json.clone();
@@ -1704,6 +1704,8 @@ pub fn run() {
             destroy_tray,
             is_pipeline_active,
             get_history,
+            pill::set_pill_position,
+            pill::reset_pill_position,
             #[cfg(feature = "whisper")]
             check_first_run,
             #[cfg(feature = "whisper")]

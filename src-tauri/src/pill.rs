@@ -28,62 +28,128 @@ pub fn start_level_stream(
     });
 }
 
+/// Compute the bottom-center position for the pill on the monitor the cursor is on.
+/// Returns None if monitors cannot be detected.
+fn compute_home_position(pill_window: &tauri::WebviewWindow) -> Option<(i32, i32)> {
+    // 1. Get cursor position
+    let cursor = match pill_window.cursor_position() {
+        Ok(pos) => pos,
+        Err(e) => {
+            log::warn!("Failed to get cursor position: {}, using primary monitor", e);
+            tauri::PhysicalPosition { x: 0.0, y: 0.0 }
+        }
+    };
+
+    // 2. Find which monitor the cursor is on
+    let monitors = pill_window.available_monitors().unwrap_or_default();
+    let target_monitor = monitors.iter().find(|m| {
+        let pos = m.position();
+        let size = m.size();
+        let (mx, my) = (pos.x as f64, pos.y as f64);
+        let (mw, mh) = (size.width as f64, size.height as f64);
+        cursor.x >= mx && cursor.x < mx + mw && cursor.y >= my && cursor.y < my + mh
+    });
+
+    // 3. Get the work area (excludes taskbar) of that monitor.
+    let work_area = if let Some(mon) = target_monitor {
+        mon.work_area().clone()
+    } else if let Some(primary) = monitors.first() {
+        primary.work_area().clone()
+    } else {
+        return None;
+    };
+
+    // 4. Calculate bottom-center position within work area.
+    // Pill dimensions: 178 x 46 (from tauri.conf.json)
+    let pill_width: i32 = 178;
+    let pill_height: i32 = 46;
+    let margin_bottom: i32 = 14; // pixels above bottom of work area
+    let wa_x = work_area.position.x;
+    let wa_y = work_area.position.y;
+    let wa_w = work_area.size.width as i32;
+    let wa_h = work_area.size.height as i32;
+
+    let x = wa_x + (wa_w - pill_width) / 2;
+    let y = wa_y + wa_h - pill_height - margin_bottom;
+    Some((x, y))
+}
+
 /// Position the pill at bottom-center of the monitor the cursor is on,
 /// then emit pill-show to make it visible.
+/// If a saved position exists in settings, use that instead of recomputing.
 pub fn show_pill(app: &tauri::AppHandle) {
     if let Some(pill_window) = app.get_webview_window("pill") {
-        // 1. Get cursor position
-        let cursor = match pill_window.cursor_position() {
-            Ok(pos) => pos,
-            Err(e) => {
-                log::warn!("Failed to get cursor position: {}, using primary monitor", e);
-                tauri::PhysicalPosition { x: 0.0, y: 0.0 }
+        // Check for a saved position first
+        let saved_pos = crate::read_settings(app)
+            .ok()
+            .and_then(|json| {
+                let x = json["pill_position"]["x"].as_i64()?;
+                let y = json["pill_position"]["y"].as_i64()?;
+                Some((x as i32, y as i32))
+            });
+
+        let (x, y) = if let Some((sx, sy)) = saved_pos {
+            log::debug!("Pill restored to saved position ({}, {})", sx, sy);
+            (sx, sy)
+        } else {
+            match compute_home_position(&pill_window) {
+                Some(pos) => {
+                    log::debug!("Pill positioned at bottom-center ({}, {})", pos.0, pos.1);
+                    pos
+                }
+                None => {
+                    log::warn!("No monitors detected, emitting pill-show without positioning");
+                    app.emit_to("pill", "pill-show", ()).ok();
+                    return;
+                }
             }
         };
 
-        // 2. Find which monitor the cursor is on
-        let monitors = pill_window.available_monitors().unwrap_or_default();
-        let target_monitor = monitors.iter().find(|m| {
-            let pos = m.position();
-            let size = m.size();
-            let (mx, my) = (pos.x as f64, pos.y as f64);
-            let (mw, mh) = (size.width as f64, size.height as f64);
-            cursor.x >= mx && cursor.x < mx + mw && cursor.y >= my && cursor.y < my + mh
-        });
-
-        // 3. Get the work area (excludes taskbar) of that monitor.
-        // Fall back to primary monitor if cursor isn't found on any.
-        let work_area = if let Some(mon) = target_monitor {
-            mon.work_area().clone()
-        } else if let Some(primary) = monitors.first() {
-            primary.work_area().clone()
-        } else {
-            log::warn!("No monitors detected, emitting pill-show without positioning");
-            app.emit_to("pill", "pill-show", ()).ok();
-            return;
-        };
-
-        // 4. Calculate bottom-center position within work area.
-        // Pill dimensions: 178 x 46 (from tauri.conf.json)
-        let pill_width: i32 = 178;
-        let pill_height: i32 = 46;
-        let margin_bottom: i32 = 14; // pixels above bottom of work area
-        let wa_x = work_area.position.x;
-        let wa_y = work_area.position.y;
-        let wa_w = work_area.size.width as i32;
-        let wa_h = work_area.size.height as i32;
-
-        let x = wa_x + (wa_w - pill_width) / 2;
-        let y = wa_y + wa_h - pill_height - margin_bottom;
-
         let _ = pill_window.set_position(tauri::PhysicalPosition::new(x, y));
-        log::debug!("Pill positioned at ({}, {}) on monitor work area", x, y);
 
         // Emit pill-show AFTER positioning
         app.emit_to("pill", "pill-show", ()).ok();
     } else {
         log::warn!("Pill window not found, cannot position or show pill");
     }
+}
+
+/// Move the pill window to (x, y) and persist the position to settings.json.
+#[tauri::command]
+pub async fn set_pill_position(app: tauri::AppHandle, x: i32, y: i32) -> Result<(), String> {
+    let pill_window = app.get_webview_window("pill").ok_or("pill window not found")?;
+    pill_window
+        .set_position(tauri::PhysicalPosition::new(x, y))
+        .map_err(|e| e.to_string())?;
+    let mut json = crate::read_settings(&app)?;
+    json["pill_position"] = serde_json::json!({"x": x, "y": y});
+    crate::write_settings(&app, &json)?;
+    Ok(())
+}
+
+/// Clear the saved pill position and reposition to bottom-center home.
+#[tauri::command]
+pub async fn reset_pill_position(app: tauri::AppHandle) -> Result<(), String> {
+    // Remove saved position from settings
+    let mut json = crate::read_settings(&app)?;
+    if let Some(obj) = json.as_object_mut() {
+        obj.remove("pill_position");
+    }
+    crate::write_settings(&app, &json)?;
+
+    // Reposition to home
+    if let Some(pill_window) = app.get_webview_window("pill") {
+        match compute_home_position(&pill_window) {
+            Some((x, y)) => {
+                let _ = pill_window.set_position(tauri::PhysicalPosition::new(x, y));
+                log::debug!("Pill reset to bottom-center ({}, {})", x, y);
+            }
+            None => {
+                log::warn!("No monitors detected, cannot reset pill to home position");
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Compute normalized RMS from the last `window` samples of the buffer.
