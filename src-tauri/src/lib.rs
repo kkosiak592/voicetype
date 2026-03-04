@@ -1206,7 +1206,7 @@ fn list_models() -> Result<Vec<ModelInfo>, String> {
         ModelInfo {
             id: "parakeet-tdt-v2-fp32".to_string(),
             name: "Parakeet TDT (fp32)".to_string(),
-            description: "High accuracy · Fast speed · 2.56 GB".to_string(),
+            description: "High accuracy · Moderate speed · 2.56 GB".to_string(),
             recommended: true,
             downloaded: crate::download::parakeet_fp32_model_exists(),
         },
@@ -1214,7 +1214,7 @@ fn list_models() -> Result<Vec<ModelInfo>, String> {
         ModelInfo {
             id: "moonshine-tiny".to_string(),
             name: "Moonshine Tiny".to_string(),
-            description: "Medium accuracy · Fastest speed · 108 MB".to_string(),
+            description: "Medium accuracy · Fast speed · 108 MB".to_string(),
             recommended: false,
             downloaded: crate::download::moonshine_tiny_model_exists(),
         },
