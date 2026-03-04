@@ -193,7 +193,8 @@ Last activity: 2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny fronten
 
 ### Pending Todos
 
-(none)
+1. Re-integrate Caps Lock toggle feature (area: ui)
+2. Remove stale Parakeet vocabulary prompting warning from model page (area: ui)
 
 ### Roadmap Evolution
 
