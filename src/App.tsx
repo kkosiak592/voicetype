@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { motion, AnimatePresence } from 'framer-motion';
 import { getStore, DEFAULTS } from './lib/store';
 import { Sidebar, SectionId } from './components/Sidebar';
 import { GeneralSection } from './components/sections/GeneralSection';
@@ -53,7 +54,7 @@ function App() {
       unlisten = fn;
       // Listener is now registered — signal the backend it can safely emit.
       if (!cancelled) {
-        invoke('notify_frontend_ready').catch(() => {});
+        invoke('notify_frontend_ready').catch(() => { });
       }
     });
     return () => {
@@ -163,9 +164,14 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-white dark:bg-gray-900">
-      <Sidebar activeSection={activeSection} onSelect={setActiveSection} />
-      <div className="flex flex-1 flex-col">
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden font-sans">
+      <Sidebar
+        activeSection={activeSection}
+        onSelect={setActiveSection}
+        updaterState={updater.state}
+        onCheckForUpdates={updater.checkNow}
+      />
+      <div className="flex flex-1 flex-col bg-white dark:bg-gray-950 shadow-[-10px_0_30px_-15px_rgba(0,0,0,0.1)] dark:shadow-[_0_0_0_1px_rgba(255,255,255,0.05),-10px_0_30px_-15px_rgba(0,0,0,0.5)] z-10 relative">
         <UpdateBanner
           state={updater.state}
           onDownload={updater.startDownload}
@@ -175,38 +181,47 @@ function App() {
           onDismiss={updater.dismiss}
           onRetry={updater.checkNow}
         />
-        <main className="flex-1 overflow-y-auto px-6 py-5 text-gray-900 dark:text-gray-100">
-          {activeSection === 'general' && (
-            <GeneralSection
-              hotkey={hotkey}
-              onHotkeyChange={(newKey) => {
-                setHotkey(newKey);
-                // Re-query hook status — rebind_hotkey may have installed the hook on-demand
-                invoke<boolean>('get_hook_status').then(setHookAvailable).catch(() => {});
-              }}
-              recordingMode={recordingMode}
-              onRecordingModeChange={setRecordingMode}
-              updaterState={updater.state}
-              onCheckForUpdates={updater.checkNow}
-              hookAvailable={hookAvailable}
-            />
-          )}
-{activeSection === 'history' && <HistorySection />}
-          {activeSection === 'model' && (
-            <ModelSection
-              selectedModel={selectedModel}
-              onSelectedModelChange={setSelectedModel}
-            />
-          )}
-          {activeSection === 'microphone' && (
-            <MicrophoneSection
-              selectedMic={selectedMic}
-              onSelectedMicChange={setSelectedMic}
-            />
-          )}
-          {activeSection === 'appearance' && (
-            <AppearanceSection theme={theme} onThemeChange={setTheme} />
-          )}
+        <main className="flex-1 overflow-y-auto px-6 py-5 md:px-8 md:py-6">
+          <div className="mx-auto max-w-4xl">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeSection}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+              >
+                {activeSection === 'general' && (
+                  <GeneralSection
+                    hotkey={hotkey}
+                    onHotkeyChange={(newKey) => {
+                      setHotkey(newKey);
+                      invoke<boolean>('get_hook_status').then(setHookAvailable).catch(() => { });
+                    }}
+                    recordingMode={recordingMode}
+                    onRecordingModeChange={setRecordingMode}
+                    hookAvailable={hookAvailable}
+                  />
+                )}
+                {activeSection === 'history' && <HistorySection />}
+                {activeSection === 'model' && (
+                  <ModelSection
+                    selectedModel={selectedModel}
+                    onSelectedModelChange={setSelectedModel}
+                  />
+                )}
+                {activeSection === 'microphone' && (
+                  <MicrophoneSection
+                    selectedMic={selectedMic}
+                    onSelectedMicChange={setSelectedMic}
+                  />
+                )}
+                {activeSection === 'appearance' && (
+                  <AppearanceSection theme={theme} onThemeChange={setTheme} />
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </div>
         </main>
       </div>
     </div>
