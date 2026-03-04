@@ -27,7 +27,7 @@ use transcribe_rs::{
 #[cfg(feature = "bench_extra")]
 use ort::execution_providers::{CUDAExecutionProvider, CPUExecutionProvider};
 
-#[cfg(feature = "bench_extra")]
+#[cfg(any(feature = "bench_extra", feature = "parakeet"))]
 use voice_activity_detector::VoiceActivityDetector;
 
 // ---------------------------------------------------------------------------
@@ -125,7 +125,7 @@ fn read_wav_to_f32(path: &str) -> Result<Vec<f32>, String> {
 /// 3. When silence exceeds SILENCE_SPLIT_CHUNKS (~320ms), end current segment
 /// 4. Cap segments at MAX_SEGMENT_SAMPLES (30s = 480000 samples)
 /// 5. Discard segments shorter than MIN_SEGMENT_SAMPLES (0.5s = 8000 samples)
-#[cfg(feature = "bench_extra")]
+#[cfg(any(feature = "bench_extra", feature = "parakeet"))]
 fn vad_chunk_audio(samples: &[f32]) -> Vec<Vec<f32>> {
     const CHUNK_SIZE: usize = 512;
     const SPEECH_THRESHOLD: f32 = 0.5;
@@ -447,10 +447,38 @@ struct BenchResult {
 // Main
 // ---------------------------------------------------------------------------
 
+/// Check if a model should run based on --model filters.
+/// If no --model args given, all models run.
+/// Supports substring matching: --model streaming matches all streaming variants.
+fn should_run_model(model_label: &str, filters: &[String]) -> bool {
+    if filters.is_empty() {
+        return true;
+    }
+    filters.iter().any(|f| model_label.contains(f.as_str()))
+}
+
 fn main() {
+    // Parse --model filters from CLI args
+    let args: Vec<String> = std::env::args().collect();
+    let mut model_filters: Vec<String> = Vec::new();
+    let mut i = 1;
+    while i < args.len() {
+        if args[i] == "--model" || args[i] == "-m" {
+            if i + 1 < args.len() {
+                model_filters.push(args[i + 1].clone());
+                i += 2;
+                continue;
+            }
+        }
+        i += 1;
+    }
+
     println!("==========================================================");
     println!("VoiceType Model Benchmark");
     println!("==========================================================");
+    if !model_filters.is_empty() {
+        println!("Filter: {}", model_filters.join(", "));
+    }
 
     // GPU detection
     let (use_gpu, parakeet_provider) = {
@@ -623,6 +651,10 @@ fn main() {
     // -----------------------------------------------------------------------
     #[cfg(feature = "whisper")]
     for (model_path, model_label) in &found_whisper {
+        if !should_run_model(model_label, &model_filters) {
+            println!("\n--- {} SKIPPED (filtered) ---", model_label);
+            continue;
+        }
         println!("\n=== {} ===", model_label);
 
         // Load model once
@@ -732,7 +764,7 @@ fn main() {
     // Parakeet model
     // -----------------------------------------------------------------------
     #[cfg(feature = "parakeet")]
-    if parakeet_found {
+    if parakeet_found && should_run_model("parakeet-tdt-v2", &model_filters) {
         println!("\n=== parakeet-tdt-v2 (provider={}) ===", parakeet_provider);
 
         let load_start = Instant::now();
@@ -774,35 +806,60 @@ fn main() {
                 }
             };
 
+            let needs_chunking = audio.len() > 30 * 16000; // > 30 seconds
+            let vad_start = Instant::now();
+            let chunks: Vec<Vec<f32>> = if needs_chunking {
+                vad_chunk_audio(&audio)
+            } else {
+                vec![audio]
+            };
+            let vad_ms = if needs_chunking { vad_start.elapsed().as_millis() as u64 } else { 0 };
+            if needs_chunking {
+                println!("  VAD chunking: {}ms -> {} segments", vad_ms, chunks.len());
+            }
+
             let mut latencies: Vec<u64> = Vec::with_capacity(ITERATIONS);
             let mut first_text = String::new();
 
             for i in 0..ITERATIONS {
                 let t = Instant::now();
-                match parakeet.transcribe_samples(
-                    audio.clone(),
-                    16000,
-                    1,
-                    Some(TimestampMode::Sentences),
-                ) {
-                    Ok(result) => {
-                        let elapsed = t.elapsed().as_millis() as u64;
-                        latencies.push(elapsed);
-                        if i == 0 {
-                            first_text = result.text.trim().to_string();
-                            println!(
-                                "  [run 1] {}ms — \"{}\"",
-                                elapsed,
-                                truncate(&first_text, 80)
-                            );
-                        } else {
-                            println!("  [run {}] {}ms", i + 1, elapsed);
+                let mut combined_text = String::new();
+                let mut had_error = false;
+
+                for (seg_idx, seg) in chunks.iter().enumerate() {
+                    match parakeet.transcribe_samples(
+                        seg.clone(),
+                        16000,
+                        1,
+                        Some(TimestampMode::Sentences),
+                    ) {
+                        Ok(result) => {
+                            if !combined_text.is_empty() && !result.text.trim().is_empty() {
+                                combined_text.push(' ');
+                            }
+                            combined_text.push_str(result.text.trim());
+                        }
+                        Err(e) => {
+                            eprintln!("  ERROR during inference run {} seg {}: {}", i + 1, seg_idx, e);
+                            had_error = true;
+                            break;
                         }
                     }
-                    Err(e) => {
-                        eprintln!("  ERROR during inference run {}: {}", i + 1, e);
-                        break;
-                    }
+                }
+
+                if had_error { break; }
+
+                let elapsed = t.elapsed().as_millis() as u64;
+                latencies.push(elapsed);
+                if i == 0 {
+                    first_text = combined_text.clone();
+                    println!(
+                        "  [run 1] {}ms — \"{}\"",
+                        elapsed,
+                        truncate(&first_text, 80)
+                    );
+                } else {
+                    println!("  [run {}] {}ms", i + 1, elapsed);
                 }
             }
 
@@ -846,7 +903,7 @@ fn main() {
             };
 
         // --- Moonshine tiny ---
-        if let Some(ref mpath) = moonshine_tiny_path {
+        if let Some(ref mpath) = moonshine_tiny_path.filter(|_| should_run_model("moonshine-tiny", &model_filters)) {
             println!("\n=== moonshine-tiny (provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
             let load_start = Instant::now();
             let mut engine = MoonshineEngine::new();
@@ -945,7 +1002,7 @@ fn main() {
         }
 
         // --- Moonshine base ---
-        if let Some(ref mpath) = moonshine_base_path {
+        if let Some(ref mpath) = moonshine_base_path.filter(|_| should_run_model("moonshine-base", &model_filters)) {
             println!("\n=== moonshine-base (provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
             let load_start = Instant::now();
             let mut engine = MoonshineEngine::new();
@@ -1044,7 +1101,7 @@ fn main() {
         }
 
         // --- Moonshine streaming tiny ---
-        if let Some(ref mpath) = moonshine_streaming_tiny_path {
+        if let Some(ref mpath) = moonshine_streaming_tiny_path.filter(|_| should_run_model("moonshine-streaming-tiny", &model_filters)) {
             println!("\n=== moonshine-streaming-tiny (provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
             let load_start = Instant::now();
             let mut engine = MoonshineStreamingEngine::new();
@@ -1068,8 +1125,19 @@ fn main() {
                     }
                 };
 
-                // Streaming engine handles long audio natively — no VAD chunking needed
-                let chunks: Vec<Vec<f32>> = vec![audio];
+                // The adapter.ort has a 4096-frame positional limit (~81.9s at 50fps).
+                // VAD-chunk long audio into segments the same way as non-streaming moonshine.
+                let needs_chunking = audio.len() > 30 * 16000;
+                let vad_start = Instant::now();
+                let chunks: Vec<Vec<f32>> = if needs_chunking {
+                    vad_chunk_audio(&audio)
+                } else {
+                    vec![audio]
+                };
+                let vad_ms = if needs_chunking { vad_start.elapsed().as_millis() as u64 } else { 0 };
+                if needs_chunking {
+                    println!("  VAD chunking: {}ms -> {} segments", vad_ms, chunks.len());
+                }
 
                 let mut latencies: Vec<u64> = Vec::with_capacity(ITERATIONS);
                 let mut first_text = String::new();
@@ -1131,7 +1199,7 @@ fn main() {
         }
 
         // --- Moonshine streaming small ---
-        if let Some(ref mpath) = moonshine_streaming_small_path {
+        if let Some(ref mpath) = moonshine_streaming_small_path.filter(|_| should_run_model("moonshine-streaming-small", &model_filters)) {
             println!("\n=== moonshine-streaming-small (provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
             let load_start = Instant::now();
             let mut engine = MoonshineStreamingEngine::new();
@@ -1155,8 +1223,19 @@ fn main() {
                     }
                 };
 
-                // Streaming engine handles long audio natively — no VAD chunking needed
-                let chunks: Vec<Vec<f32>> = vec![audio];
+                // The adapter.ort has a 4096-frame positional limit (~81.9s at 50fps).
+                // VAD-chunk long audio into segments the same way as non-streaming moonshine.
+                let needs_chunking = audio.len() > 30 * 16000;
+                let vad_start = Instant::now();
+                let chunks: Vec<Vec<f32>> = if needs_chunking {
+                    vad_chunk_audio(&audio)
+                } else {
+                    vec![audio]
+                };
+                let vad_ms = if needs_chunking { vad_start.elapsed().as_millis() as u64 } else { 0 };
+                if needs_chunking {
+                    println!("  VAD chunking: {}ms -> {} segments", vad_ms, chunks.len());
+                }
 
                 let mut latencies: Vec<u64> = Vec::with_capacity(ITERATIONS);
                 let mut first_text = String::new();
@@ -1218,7 +1297,7 @@ fn main() {
         }
 
         // --- Moonshine streaming medium ---
-        if let Some(ref mpath) = moonshine_streaming_medium_path {
+        if let Some(ref mpath) = moonshine_streaming_medium_path.filter(|_| should_run_model("moonshine-streaming-medium", &model_filters)) {
             println!("\n=== moonshine-streaming-medium (provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
             let load_start = Instant::now();
             let mut engine = MoonshineStreamingEngine::new();
@@ -1242,8 +1321,19 @@ fn main() {
                     }
                 };
 
-                // Streaming engine handles long audio natively — no VAD chunking needed
-                let chunks: Vec<Vec<f32>> = vec![audio];
+                // The adapter.ort has a 4096-frame positional limit (~81.9s at 50fps).
+                // VAD-chunk long audio into segments the same way as non-streaming moonshine.
+                let needs_chunking = audio.len() > 30 * 16000;
+                let vad_start = Instant::now();
+                let chunks: Vec<Vec<f32>> = if needs_chunking {
+                    vad_chunk_audio(&audio)
+                } else {
+                    vec![audio]
+                };
+                let vad_ms = if needs_chunking { vad_start.elapsed().as_millis() as u64 } else { 0 };
+                if needs_chunking {
+                    println!("  VAD chunking: {}ms -> {} segments", vad_ms, chunks.len());
+                }
 
                 let mut latencies: Vec<u64> = Vec::with_capacity(ITERATIONS);
                 let mut first_text = String::new();
@@ -1305,7 +1395,7 @@ fn main() {
         }
 
         // --- SenseVoice small ---
-        if let Some(ref spath) = sensevoice_path {
+        if let Some(ref spath) = sensevoice_path.filter(|_| should_run_model("sensevoice-small", &model_filters)) {
             println!("\n=== sensevoice-small (provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
             let load_start = Instant::now();
             let mut engine = SenseVoiceEngine::new();
