@@ -109,7 +109,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 [##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
 
-Last activity: 2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny frontend integration verified end-to-end
+Last activity: 2026-03-04 - Completed quick task 39: Add ALL CAPS toggle to the frontend UI
 
 ## Performance Metrics
 
@@ -199,6 +199,7 @@ Last activity: 2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny fronten
 4. Add per-application profiles with auto-switch on focused window (area: general)
 5. Learn from user corrections to auto-improve dictionary (area: general)
 6. Long-press pill to drag reposition and double-click to reset home (area: ui)
+7. Add always-listen mode to reduce activation latency (area: general)
 
 ### Roadmap Evolution
 
@@ -230,6 +231,7 @@ None active.
 | 36 | Add 90s benchmark clips (deep-sea oceanography, aviation history, renewable energy) to PS1 script and benchmark.rs with 4-column pivot tables | 2026-03-04 | e8bea88 | Complete | [36-add-90s-benchmark-clips-to-benchmark-bin](./quick/36-add-90s-benchmark-clips-to-benchmark-bin/) |
 | 37 | Add --progressive flag to benchmark binary: VAD-driven real-time chunk dispatch with post-release latency metric across all 7 engine sections | 2026-03-04 | 0bf1333 | Complete | [37-add-progressive-flag-to-benchmark-binary](./quick/37-add-progressive-flag-to-benchmark-binary/) |
 | 38 | Remove entire Vocabulary section from settings UI and all vocabulary_prompt/initial_prompt plumbing from Rust backend | 2026-03-04 | 6c3616b | Complete | [38-remove-entire-vocabulary-section-from-se](./quick/38-remove-entire-vocabulary-section-from-se/) |
+| 39 | Add ALL CAPS toggle to the frontend UI | 2026-03-04 | 090526e | Complete | [39-add-all-caps-toggle-to-the-frontend-ui](./quick/39-add-all-caps-toggle-to-the-frontend-ui/) |
 
 ## Session Continuity
 
