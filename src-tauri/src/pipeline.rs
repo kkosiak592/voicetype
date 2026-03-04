@@ -375,6 +375,19 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
             }
             // Pill: success flash before hide
             app.emit_to("pill", "pill-result", "success").ok();
+            // Record in transcription history
+            {
+                let engine_name = {
+                    let engine_state = app.state::<crate::ActiveEngine>();
+                    let guard = engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                    match *guard {
+                        crate::TranscriptionEngine::Whisper => "whisper",
+                        crate::TranscriptionEngine::Parakeet => "parakeet",
+                        crate::TranscriptionEngine::Moonshine => "moonshine",
+                    }
+                };
+                crate::history::append_history(&app, &formatted_for_tooltip, engine_name);
+            }
         }
         Ok(Err(e)) => {
             log::error!("Pipeline: injection failed: {}", e);

@@ -1,6 +1,7 @@
 mod audio;
 mod corrections;
 mod download;
+mod history;
 mod inject;
 mod pill;
 mod pipeline;
@@ -1269,6 +1270,17 @@ fn is_pipeline_active(state: tauri::State<'_, LevelStreamActive>) -> bool {
     state.0.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// Return the full transcription history (newest first, capped at 50 entries).
+///
+/// The in-memory list is loaded from history.json at startup and updated
+/// by `history::append_history` after each successful transcription.
+#[tauri::command]
+fn get_history(app: tauri::AppHandle) -> Result<Vec<history::HistoryEntry>, String> {
+    let state = app.state::<history::HistoryState>();
+    let guard = state.0.lock().map_err(|e| format!("history lock failed: {}", e))?;
+    Ok(guard.clone())
+}
+
 /// Switch the active whisper model. Reloads the WhisperContext without app restart.
 ///
 /// Uses spawn_blocking because model loading is CPU-intensive.
@@ -1609,6 +1621,7 @@ pub fn run() {
             set_update_available,
             destroy_tray,
             is_pipeline_active,
+            get_history,
             #[cfg(feature = "whisper")]
             check_first_run,
             #[cfg(feature = "whisper")]
@@ -1630,6 +1643,13 @@ pub fn run() {
                 let state = app.state::<SettingsState>();
                 let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
                 *guard = disk_settings;
+            }
+
+            // Load transcription history from disk before build_tray so manage() is called
+            // before any IPC command could potentially access HistoryState.
+            {
+                let entries = history::load_history(app.handle());
+                app.manage(history::HistoryState(std::sync::Mutex::new(entries)));
             }
 
             build_tray(app)?;
