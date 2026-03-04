@@ -237,8 +237,17 @@ impl StreamingModel {
 
     /// Run encoder + adapter on accumulated features.
     ///
-    /// Calculates stable frames (accounting for lookahead), runs encoder with
-    /// sliding window context, then adapter to produce memory frames.
+    /// Matches the C++ reference implementation exactly:
+    /// 1. Compute window: [encoder_frames_emitted - left_context, total_features)
+    /// 2. Run encoder on the entire window in a single call
+    /// 3. Slice out only the new frames from encoder output
+    /// 4. Run adapter on those new frames with the current pos_offset
+    ///
+    /// The adapter.ort model has an internal positional embedding table of exactly
+    /// 4096 positions. Callers must ensure total new frames emitted stays within
+    /// this limit (max ~81.9s at 50fps). The `generate()` method in offline mode
+    /// enforces this by capping audio to 4096 frames before encoding.
+    ///
     /// Returns the number of new memory frames added.
     pub fn encode(&mut self, state: &mut StreamingState, is_final: bool) -> Result<i32, MoonshineError> {
         let total_features = state.accumulated_feature_count;
@@ -257,23 +266,21 @@ impl StreamingModel {
             return Ok(0);
         }
 
-        // Encoder sliding window with left context
         let left_context_frames = (16 * self.config.depth) as i32;
+
+        // Encoder window: prepend left-context before the first new frame, extend to
+        // end of accumulated features (so encoder sees right-context too).
         let window_start = (state.encoder_frames_emitted - left_context_frames).max(0);
         let window_size = total_features - window_start;
 
         log::trace!(
-            "encode: total={}, stable={}, new={}, window_start={}, window_size={}",
-            total_features,
-            stable_count,
-            new_frames,
-            window_start,
-            window_size
+            "encode: encoder_frames_emitted={}, stable_count={}, new_frames={}, window=[{}, {}), window_size={}",
+            state.encoder_frames_emitted, stable_count, new_frames, window_start, window_start + window_size, window_size
         );
 
-        // Slice accumulated features for the window — borrow, don't clone
+        // Slice accumulated features for this window
         let start_idx = (window_start as usize) * self.config.encoder_dim;
-        let end_idx = start_idx + (window_size as usize) * self.config.encoder_dim;
+        let end_idx   = start_idx + (window_size as usize) * self.config.encoder_dim;
         let window_features = &state.accumulated_features[start_idx..end_idx];
 
         let features_view = ArrayViewD::from_shape(
@@ -298,11 +305,12 @@ impl StreamingModel {
             MoonshineError::OutputNotFound("encoded not contiguous".to_string())
         })?;
 
-        // Slice new frames from encoder output
+        // The encoder output aligns 1-to-1 with the window input frames.
+        // New frames start at offset (encoder_frames_emitted - window_start) within output.
         let slice_start = (state.encoder_frames_emitted - window_start) as usize;
         if slice_start + new_frames as usize > total_encoded as usize {
             return Err(MoonshineError::InvalidState(format!(
-                "Encoder window misaligned: start={}, new_frames={}, total={}",
+                "Encoder window misaligned: slice_start={}, new_frames={}, total_encoded={}",
                 slice_start, new_frames, total_encoded
             )));
         }
@@ -314,7 +322,7 @@ impl StreamingModel {
             })
             .collect();
 
-        // Run adapter
+        // Run adapter on the new frames
         let enc_slice_view = ArrayViewD::from_shape(
             IxDyn(&[1, new_frames as usize, self.config.encoder_dim]),
             &new_encoded,
@@ -344,14 +352,17 @@ impl StreamingModel {
         let mem_size = new_frames as usize * self.config.decoder_dim;
         state.memory.extend_from_slice(&mem_data[..mem_size]);
         state.memory_len += new_frames;
+        state.adapter_pos_offset += new_frames as i64;
 
         // Invalidate cross KV cache since memory changed
         state.cross_kv_valid = false;
-        log::trace!("encode: cross KV invalidated, memory_len={}", state.memory_len);
+        log::trace!(
+            "encode: cross KV invalidated, memory_len={}, new_frames={}",
+            state.memory_len, new_frames
+        );
 
         // Update tracking
         state.encoder_frames_emitted = stable_count;
-        state.adapter_pos_offset += new_frames as i64;
 
         Ok(new_frames)
     }
@@ -551,20 +562,38 @@ impl StreamingModel {
     /// High-level offline transcription: process all audio and decode.
     ///
     /// 1. Process all audio in 1280-sample chunks through frontend (including partial tail)
-    /// 2. Encode with is_final=true to flush all frames
-    /// 3. Compute cross KV
-    /// 4. Autoregressive decoding: BOS → greedy decode → until EOS or max tokens
+    /// 2. Cap accumulated features to the adapter's positional embedding limit (4096 frames)
+    /// 3. Encode with is_final=true to flush all frames
+    /// 4. Compute cross KV
+    /// 5. Autoregressive decoding: BOS → greedy decode → until EOS or max tokens
+    ///
+    /// The adapter.ort model has a fixed positional embedding table of 4096 entries.
+    /// Audio exceeding ~81.9 seconds (4096 frames at 50fps) is truncated to fit.
     pub fn generate(
         &mut self,
         samples: &[f32],
         max_tokens_per_second: f32,
         max_tokens_override: Option<usize>,
     ) -> Result<Vec<i64>, MoonshineError> {
+        const ADAPTER_MAX_FRAMES: i32 = 4096;
+
         let mut state = self.create_state();
 
         // Process all audio including partial tail chunk
         for chunk in samples.chunks(CHUNK_SIZE) {
             self.process_audio_chunk(&mut state, chunk)?;
+        }
+
+        // The adapter model's positional embedding table has exactly 4096 entries.
+        // Truncate accumulated features to this limit to prevent broadcast errors.
+        if state.accumulated_feature_count > ADAPTER_MAX_FRAMES {
+            let cap = ADAPTER_MAX_FRAMES as usize;
+            log::warn!(
+                "generate: accumulated_feature_count={} exceeds adapter limit {}; truncating",
+                state.accumulated_feature_count, ADAPTER_MAX_FRAMES
+            );
+            state.accumulated_features.truncate(cap * self.config.encoder_dim);
+            state.accumulated_feature_count = ADAPTER_MAX_FRAMES;
         }
 
         // Encode with is_final=true to emit all frames including lookahead

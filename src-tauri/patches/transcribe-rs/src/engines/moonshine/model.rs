@@ -156,7 +156,7 @@ impl MoonshineModel {
     ) -> Result<Vec<i64>, MoonshineError> {
         // Validate audio duration
         let audio_duration = samples.len() as f32 / SAMPLE_RATE as f32;
-        if audio_duration < 0.1 || audio_duration > 64.0 {
+        if audio_duration < 0.1 || audio_duration > 600.0 {
             return Err(MoonshineError::AudioDuration(audio_duration));
         }
 

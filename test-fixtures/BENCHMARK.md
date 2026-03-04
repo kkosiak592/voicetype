@@ -40,6 +40,21 @@ cargo run --bin benchmark --features whisper,parakeet,bench_extra --release
 
 > First build takes 10-30 minutes (CUDA compilation). The `bench_extra` feature adds transcribe-rs for Moonshine and SenseVoice inference.
 
+**Filter by model (substring match):**
+
+```powershell
+# Only streaming models
+cargo run --bin benchmark --features whisper,parakeet,bench_extra --release -- --model streaming
+
+# Only a specific model
+cargo run --bin benchmark --features whisper,parakeet,bench_extra --release -- -m moonshine-streaming-tiny
+
+# Multiple filters
+cargo run --bin benchmark --features whisper,parakeet,bench_extra --release -- -m streaming -m sensevoice
+```
+
+> Without `--model`, all models run. Filters use substring matching.
+
 ### 3. Read results
 
 The benchmark prints per-clip results and a ranked summary table:
@@ -78,6 +93,6 @@ Models that aren't downloaded are skipped automatically.
 | moonshine-streaming-small  | `moonshine-streaming-small/`  | ~? MB | [usefulsensors/moonshine](https://huggingface.co/usefulsensors/moonshine) streaming ONNX |
 | moonshine-streaming-medium | `moonshine-streaming-medium/` | ~? MB | [usefulsensors/moonshine](https://huggingface.co/usefulsensors/moonshine) streaming ONNX |
 
-> Moonshine streaming models use the 5-session streaming ONNX pipeline (frontend, encoder, adapter, cross_kv, decoder_kv) and do not require VAD chunking — they handle audio of any length natively via sliding-window encoder.
+> Moonshine streaming models use the 5-session streaming ONNX pipeline (frontend, encoder, adapter, cross_kv, decoder_kv). The adapter has a 4096-frame positional limit (~82s at 50fps), so the benchmark applies VAD chunking for clips >30s.
 
 All models are stored in `%APPDATA%\VoiceType\models\`.
