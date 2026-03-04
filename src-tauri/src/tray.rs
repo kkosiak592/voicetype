@@ -1,6 +1,6 @@
 use tauri::{
     menu::{Menu, MenuItem},
-    tray::TrayIconBuilder,
+    tray::{MouseButton, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
 
@@ -76,6 +76,16 @@ pub fn set_tray_update_indicator(app: &tauri::AppHandle, available: bool) {
     }
 }
 
+/// Destroy the tray icon explicitly before relaunch.
+/// Prevents Windows from showing a stale icon alongside the new process's icon.
+/// Windows defers tray icon cleanup by ~200ms after process exit; calling this
+/// before relaunch() ensures the icon is gone before the new process registers its own.
+pub fn destroy_tray(app: &tauri::AppHandle) {
+    if let Some(tray) = app.tray_by_id("tray") {
+        let _ = tray.set_visible(false);
+    }
+}
+
 pub fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let settings_i = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
     let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -90,6 +100,17 @@ pub fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         .tooltip("VoiceType - Idle")
         .menu(&menu)
         .show_menu_on_left_click(false) // left-click does nothing per spec
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::DoubleClick { button, .. } = event {
+                if button == MouseButton::Left {
+                    let app = tray.app_handle();
+                    if let Some(w) = app.get_webview_window("settings") {
+                        let _ = w.show();
+                        let _ = w.set_focus();
+                    }
+                }
+            }
+        })
         .on_menu_event(|app, event| match event.id.as_ref() {
             "settings" | "update_available" => {
                 if let Some(w) = app.get_webview_window("settings") {

@@ -1354,6 +1354,18 @@ fn set_update_available(app: tauri::AppHandle, available: bool) {
     tray::set_tray_update_indicator(&app, available);
 }
 
+/// Destroy the tray icon before app relaunch.
+///
+/// Called by the frontend's restartNow() immediately before relaunch() to prevent
+/// duplicate tray icons on Windows. Windows defers cleanup of the old process's tray
+/// icon by ~200ms after exit; the new process registers its icon before the OS removes
+/// the old one, causing both to appear simultaneously.
+#[tauri::command]
+fn destroy_tray(app: tauri::AppHandle) -> Result<(), String> {
+    tray::destroy_tray(&app);
+    Ok(())
+}
+
 /// Check whether the recording/transcription pipeline is currently active.
 ///
 /// Returns true if audio capture or transcription is in progress (LevelStreamActive flag is set).
@@ -1700,6 +1712,7 @@ pub fn run() {
             enable_autostart,
             updater::check_for_update,
             set_update_available,
+            destroy_tray,
             is_pipeline_active,
             #[cfg(feature = "whisper")]
             check_first_run,
