@@ -1,4 +1,4 @@
-export type SectionId = 'general' | 'profiles' | 'model' | 'microphone' | 'appearance';
+export type SectionId = 'general' | 'vocabulary' | 'model' | 'microphone' | 'appearance' | 'history';
 
 interface SidebarItem {
   id: SectionId;
@@ -8,10 +8,11 @@ interface SidebarItem {
 
 const ITEMS: SidebarItem[] = [
   { id: 'general', label: 'General', icon: '⌨' },
-  { id: 'profiles', label: 'Profiles', icon: '◈' },
+  { id: 'vocabulary', label: 'Vocabulary', icon: '◈' },
   { id: 'model', label: 'Model', icon: '◎' },
   { id: 'microphone', label: 'Microphone', icon: '◉' },
   { id: 'appearance', label: 'Appearance', icon: '◐' },
+  { id: 'history', label: 'History', icon: '◷' },
 ];
 
 interface SidebarProps {

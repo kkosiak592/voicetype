@@ -1,49 +1,49 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { ProfileSwitcher, ProfileInfo } from '../ProfileSwitcher';
 import { DictionaryEditor } from '../DictionaryEditor';
-import { getStore } from '../../lib/store';
 
-interface ProfilesSectionProps {
-  activeProfileId: string;
-  onActiveProfileChange: (id: string) => void;
-}
-
-export function ProfilesSection({ activeProfileId, onActiveProfileChange }: ProfilesSectionProps) {
-  const [profiles, setProfiles] = useState<ProfileInfo[]>([]);
+export function VocabularySection() {
+  const [prompt, setPrompt] = useState('');
   const [corrections, setCorrections] = useState<Record<string, string>>({});
   const [allCaps, setAllCaps] = useState(false);
   const [loading, setLoading] = useState(true);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     async function loadInitial() {
-      // Sync backend with frontend's active profile before reading corrections
-      await invoke('set_active_profile', { profileId: activeProfileId });
-      const [profileList, correctionMap] = await Promise.all([
-        invoke<ProfileInfo[]>('get_profiles'),
+      const [savedPrompt, correctionMap, savedAllCaps] = await Promise.all([
+        invoke<string>('get_vocabulary_prompt'),
         invoke<Record<string, string>>('get_corrections'),
+        invoke<boolean>('get_all_caps'),
       ]);
-      setProfiles(profileList);
+      setPrompt(savedPrompt);
       setCorrections(correctionMap);
+      setAllCaps(savedAllCaps);
       setLoading(false);
     }
     loadInitial().catch(err => {
-      console.error('Failed to load profiles:', err);
+      console.error('Failed to load vocabulary settings:', err);
       setLoading(false);
     });
-  }, [activeProfileId]);
+  }, []);
 
-  async function handleProfileSelect(id: string) {
-    try {
-      await invoke('set_active_profile', { profileId: id });
-      const store = await getStore();
-      await store.set('activeProfile', id);
-      const correctionMap = await invoke<Record<string, string>>('get_corrections');
-      setCorrections(correctionMap);
-      onActiveProfileChange(id);
-    } catch (err) {
-      console.error('Failed to switch profile:', err);
-    }
+  function handlePromptChange(value: string) {
+    setPrompt(value);
+    // Debounce: save after 1 second of no typing
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      invoke('set_vocabulary_prompt', { prompt: value }).catch(err => {
+        console.error('Failed to save vocabulary prompt:', err);
+      });
+    }, 1000);
+  }
+
+  function handlePromptBlur() {
+    // Also save immediately on blur
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    invoke('set_vocabulary_prompt', { prompt }).catch(err => {
+      console.error('Failed to save vocabulary prompt on blur:', err);
+    });
   }
 
   async function handleAllCapsToggle() {
@@ -69,11 +69,10 @@ export function ProfilesSection({ activeProfileId, onActiveProfileChange }: Prof
     return (
       <div>
         <h1 className="mb-5 text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-          Profiles
+          Vocabulary
         </h1>
         <div className="space-y-2">
-          <div className="h-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
-          <div className="h-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+          <div className="h-24 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
         </div>
       </div>
     );
@@ -82,23 +81,34 @@ export function ProfilesSection({ activeProfileId, onActiveProfileChange }: Prof
   return (
     <div>
       <h1 className="mb-4 text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-        Profiles
+        Vocabulary
       </h1>
 
       <div className="space-y-4">
-        {/* Profile switcher */}
-        <ProfileSwitcher
-          profiles={profiles}
-          activeId={activeProfileId}
-          onSelect={handleProfileSelect}
-        />
+        {/* Vocabulary prompt */}
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-900 dark:text-gray-100">
+            Vocabulary Prompt
+          </label>
+          <textarea
+            value={prompt}
+            onChange={(e) => handlePromptChange(e.target.value)}
+            onBlur={handlePromptBlur}
+            rows={4}
+            placeholder="Enter domain-specific terms to improve recognition accuracy..."
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500 resize-none"
+          />
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Terms and phrases injected as context to bias the model toward domain vocabulary.
+          </p>
+        </div>
 
         {/* ALL CAPS toggle */}
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-gray-900 dark:text-gray-100">ALL CAPS output</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Uppercase all injected text for engineering drawings
+              Uppercase all injected text
             </p>
           </div>
           <button

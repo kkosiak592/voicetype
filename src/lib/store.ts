@@ -5,7 +5,6 @@ export interface AppSettings {
   theme: 'light' | 'dark';
   autostart: boolean;
   recordingMode: 'hold' | 'toggle';
-  activeProfile: string;
   selectedMic: string;
   selectedModel: string;
 }
@@ -15,7 +14,6 @@ export const DEFAULTS: AppSettings = {
   theme: 'light',
   autostart: false,
   recordingMode: 'hold',
-  activeProfile: 'general',
   selectedMic: 'System Default',
   selectedModel: '',
 };

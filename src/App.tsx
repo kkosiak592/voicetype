@@ -4,7 +4,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getStore, DEFAULTS } from './lib/store';
 import { Sidebar, SectionId } from './components/Sidebar';
 import { GeneralSection } from './components/sections/GeneralSection';
-import { ProfilesSection } from './components/sections/ProfilesSection';
+import { VocabularySection } from './components/sections/VocabularySection';
 import { ModelSection } from './components/sections/ModelSection';
 import { MicrophoneSection } from './components/sections/MicrophoneSection';
 import { AppearanceSection } from './components/sections/AppearanceSection';
@@ -26,7 +26,6 @@ function App() {
   const [hotkey, setHotkey] = useState(DEFAULTS.hotkey);
   const [theme, setTheme] = useState<'light' | 'dark'>(DEFAULTS.theme);
   const [recordingMode, setRecordingMode] = useState<'hold' | 'toggle'>(DEFAULTS.recordingMode);
-  const [activeProfile, setActiveProfile] = useState(DEFAULTS.activeProfile);
   const [selectedMic, setSelectedMic] = useState(DEFAULTS.selectedMic);
   const [selectedModel, setSelectedModel] = useState(DEFAULTS.selectedModel);
   const [loaded, setLoaded] = useState(false);
@@ -77,7 +76,6 @@ function App() {
       const savedHotkey = await store.get<string>('hotkey');
       const savedTheme = await store.get<'light' | 'dark'>('theme');
       const savedRecordingMode = await store.get<'hold' | 'toggle'>('recordingMode');
-      const savedActiveProfile = await store.get<string>('activeProfile');
       const savedSelectedMic = await store.get<string>('selectedMic');
       const savedSelectedModel = await store.get<string>('selectedModel');
 
@@ -94,7 +92,6 @@ function App() {
       }
 
       if (savedRecordingMode) setRecordingMode(savedRecordingMode);
-      if (savedActiveProfile) setActiveProfile(savedActiveProfile);
       if (savedSelectedMic) setSelectedMic(savedSelectedMic);
       // Reconcile selectedModel with the backend's actual engine state.
       // The Tauri store and Rust settings.json can desync (separate I/O paths),
@@ -194,11 +191,9 @@ function App() {
               hookAvailable={hookAvailable}
             />
           )}
-          {activeSection === 'profiles' && (
-            <ProfilesSection
-              activeProfileId={activeProfile}
-              onActiveProfileChange={setActiveProfile}
-            />
+          {activeSection === 'vocabulary' && <VocabularySection />}
+          {activeSection === 'history' && (
+            <div className="text-sm text-gray-500">History coming soon</div>
           )}
           {activeSection === 'model' && (
             <ModelSection
