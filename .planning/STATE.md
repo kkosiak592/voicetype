@@ -2,6 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Keyboard Hook
+status: completed
+last_updated: "2026-03-04T13:06:53.061Z"
+progress:
+  total_phases: 8
+  completed_phases: 4
+  total_plans: 11
+  completed_plans: 8
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.2
+milestone_name: Keyboard Hook
 status: planning
 last_updated: "2026-03-03T15:22:44.378Z"
 progress:
@@ -31,18 +44,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** Phase 19 — Include distil-large-v3.5 as download option and first-time run
+**Current focus:** Phase 19.1 — Integrate Moonshine Tiny model into main app with VAD chunking and GPU support
 
 ## Position
 
 **Milestone:** v1.2 Keyboard Hook
-**Phase:** 19 — Include distil-large-v3.5 as download option and first-time run
-**Plan:** 01 complete (2026-03-03) — awaiting human-verify checkpoint
-**Status:** Plan 01 complete, checkpoint pending
+**Phase:** 19.1 — Integrate Moonshine Tiny model into main app with VAD chunking and GPU support
+**Plan:** 01 complete (2026-03-04)
+**Status:** Plan 01 complete
 
 [##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
 
-Last activity: 2026-03-04 - Completed quick task 36: Add 90s benchmark clips to benchmark binary
+Last activity: 2026-03-04 - Completed Phase 19.1 Plan 01: Moonshine Tiny backend integration
 
 ## Performance Metrics
 
@@ -58,6 +71,7 @@ Last activity: 2026-03-04 - Completed quick task 36: Add 90s benchmark clips to 
 | Phase 16-rebind-and-coexistence P02 | 8 | 2 tasks | 2 files |
 | Phase 17-frontend-capture-ui P01 | 5 | 2 tasks | 4 files |
 | Phase 19 P01 | 4 | 2 tasks | 3 files |
+| Phase 19.1 P01 | 35 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -95,6 +109,10 @@ Last activity: 2026-03-04 - Completed quick task 36: Add 90s benchmark clips to 
 - [Quick 26]: set_model() early-return requires is_some() guard on WhisperContext — settings.json model_id alone insufficient after first-run
 - [Quick 26]: default-run = voice-to-text in Cargo.toml required when multiple [[bin]] targets exist
 - [Quick 29]: ort added as direct optional dep for bench_extra — Rust 2021 edition requires explicit dep to use ort types in benchmark binary
+- [Phase 19.1]: 19.1-01: moonshine feature adds dep:ort directly — transcribe_moonshine.rs uses ort::execution_providers types directly
+- [Phase 19.1]: 19.1-01: TranscribeRsEngine trait alias used to avoid collision with crate-level TranscriptionEngine enum
+- [Phase 19.1]: 19.1-01: DirectML EP for Moonshine falls back to CPU — ort DirectML EP availability for ONNX Moonshine not validated
+- [Phase 19.1]: 19.1-01: decoder_model_merged.onnx as sentinel file for Moonshine download existence check (largest file, last to complete)
 
 ### Research Flags (from SUMMARY.md)
 
@@ -111,6 +129,7 @@ Last activity: 2026-03-04 - Completed quick task 36: Add 90s benchmark clips to 
 - Phase 19 added: Include distil-large-v3.5 as download option and first-time run
 - Phase 20 added: Implement dual CPU/GPU installers with variant-specific auto-updates
 - Phase 21 added: Integration and Distribution (moved from Phase 18 — voided Phase 18 to allow 19-20 to execute first)
+- Phase 19.1 inserted after Phase 19: Integrate Moonshine Tiny model into main app with VAD chunking and GPU support (URGENT)
 
 ### Blockers/Concerns
 
@@ -135,5 +154,5 @@ None active.
 ## Session Continuity
 
 Last session: 2026-03-04
-Stopped at: Quick task 36 complete — 90s benchmark clips and 4-column pivot tables
+Stopped at: Phase 19.1 Plan 01 complete — Moonshine Tiny backend integration (transcribe_moonshine.rs, vad chunking, download command, IPC wiring)
 Resume file: None
