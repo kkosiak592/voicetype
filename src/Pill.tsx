@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { invoke } from "@tauri-apps/api/core";
 import { FrequencyBars } from "./components/FrequencyBars";
 import { ProcessingDots } from "./components/ProcessingDots";
 
@@ -7,19 +8,31 @@ const appWindow = getCurrentWebviewWindow();
 
 type PillDisplayState = "hidden" | "recording" | "processing" | "error";
 type AnimState = "hidden" | "visible" | "exiting";
+type DragState = "idle" | "ready" | "dragging";
 
 export function Pill() {
   const [displayState, setDisplayState] = useState<PillDisplayState>("hidden");
   const [animState, setAnimState] = useState<AnimState>("hidden");
   const [level, setLevel] = useState(0);
+  const [dragState, setDragState] = useState<DragState>("idle");
 
   // Timer for exit animation sequencing
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Long-press timer
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Throttle ref for invoke calls during drag
+  const lastInvokeRef = useRef<number>(0);
 
   function clearAllTimers() {
     if (exitTimerRef.current) {
       clearTimeout(exitTimerRef.current);
       exitTimerRef.current = null;
+    }
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
     }
   }
 
@@ -37,6 +50,7 @@ export function Pill() {
     // pill-hide: exit animation then hide window
     appWindow.listen("pill-hide", () => {
       clearAllTimers();
+      setDragState("idle");
       setAnimState("exiting");
       // After exit animation completes (200ms), hide window and reset state
       exitTimerRef.current = setTimeout(() => {
@@ -64,6 +78,7 @@ export function Pill() {
 
     // pill-result: trigger exit animation on result
     appWindow.listen<string>("pill-result", () => {
+      setDragState("idle");
       setAnimState("exiting");
       exitTimerRef.current = setTimeout(() => {
         appWindow.hide();
@@ -79,6 +94,79 @@ export function Pill() {
     };
   }, []);
 
+  // ---- Drag handlers ----
+
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    // Only primary button (left click / touch)
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTimerRef.current = null;
+      setDragState("ready");
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }, 600);
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    setDragState((prev) => {
+      if (prev === "idle") return prev;
+
+      if (prev === "ready") {
+        // First move after long-press — transition to dragging
+        // (state update is async; we handle move in dragging branch too)
+        const now = Date.now();
+        if (now - lastInvokeRef.current >= 16) {
+          lastInvokeRef.current = now;
+          const x = Math.round(e.screenX) - 89; // 178/2
+          const y = Math.round(e.screenY) - 23; // 46/2
+          invoke("set_pill_position", { x, y }).catch(() => {});
+        }
+        return "dragging";
+      }
+
+      if (prev === "dragging") {
+        const now = Date.now();
+        if (now - lastInvokeRef.current >= 16) {
+          lastInvokeRef.current = now;
+          const x = Math.round(e.screenX) - 89;
+          const y = Math.round(e.screenY) - 23;
+          invoke("set_pill_position", { x, y }).catch(() => {});
+        }
+        return "dragging";
+      }
+
+      return prev;
+    });
+  }
+
+  function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    // Clear long-press timer if it hasn't fired yet
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+
+    setDragState((prev) => {
+      if (prev === "dragging" || prev === "ready") {
+        try {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {
+          // ignore if capture was not active
+        }
+        return "idle";
+      }
+      return prev;
+    });
+  }
+
+  function handlePointerCancel(e: React.PointerEvent<HTMLDivElement>) {
+    handlePointerUp(e);
+  }
+
+  function handleDoubleClick() {
+    invoke("reset_pill_position").catch(() => {});
+  }
+
   return (
     <div
       className={`
@@ -90,7 +178,14 @@ export function Pill() {
         ${animState === "hidden" ? "opacity-0 pointer-events-none" : ""}
         ${displayState === "processing" ? "pill-processing" : ""}
         ${displayState === "recording" ? "pill-recording" : ""}
+        ${dragState === "ready" ? "pill-drag-ready" : ""}
+        ${dragState === "dragging" ? "pill-dragging" : ""}
       `}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onDoubleClick={handleDoubleClick}
     >
       {/* Recording state: frequency bars only — no red dot */}
       {displayState === "recording" && (

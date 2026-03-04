@@ -111,6 +111,28 @@ body,
 }
 
 /* ==========================================================================
+   Drag mode: glow + scale cue
+   ========================================================================== */
+
+@keyframes pill-drag-ready {
+  0%, 100% { transform: scale(1.0); }
+  50% { transform: scale(1.04); }
+}
+
+.pill-drag-ready {
+  animation: pill-drag-ready 0.5s ease-in-out 1;
+  border: 1px solid rgba(139, 92, 246, 0.7);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.35), 0 4px 16px rgba(0, 0, 0, 0.4);
+  cursor: grab;
+}
+
+.pill-dragging {
+  border: 1px solid rgba(139, 92, 246, 0.9);
+  box-shadow: 0 0 28px rgba(139, 92, 246, 0.5), 0 8px 24px rgba(0, 0, 0, 0.5);
+  cursor: grabbing;
+}
+
+/* ==========================================================================
    Content cross-fade helpers
    ========================================================================== */
 
