@@ -198,6 +198,7 @@ Last activity: 2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny fronten
 3. Add filler word removal to transcription output (area: general)
 4. Add per-application profiles with auto-switch on focused window (area: general)
 5. Learn from user corrections to auto-improve dictionary (area: general)
+6. Long-press pill to drag reposition and double-click to reset home (area: ui)
 
 ### Roadmap Evolution
 
