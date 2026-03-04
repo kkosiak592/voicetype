@@ -42,7 +42,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 [##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
 
-Last activity: 2026-03-04 - Completed quick task 34: Add VAD-based chunking to parakeet model in benchmark
+Last activity: 2026-03-04 - Completed quick task 35: Fix benchmark fairness - add VAD chunking to Whisper and incremental audio feed for streaming models
 
 ## Performance Metrics
 
