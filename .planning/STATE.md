@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Keyboard Hook
 status: planning
-stopped_at: Phase 19.3 context gathered
-last_updated: "2026-03-04T20:56:44.081Z"
+stopped_at: Completed 19.3-01-PLAN.md
+last_updated: "2026-03-04T21:27:11.857Z"
 last_activity: "2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny frontend integration verified end-to-end"
 progress:
   total_phases: 10
   completed_phases: 6
-  total_plans: 13
-  completed_plans: 10
+  total_plans: 16
+  completed_plans: 11
 ---
 
 ---
@@ -128,6 +128,7 @@ Last activity: 2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny fronten
 | Phase 19.1 P01 | 35 | 2 tasks | 6 files |
 | Phase 19.1 P02 | 0 | 2 tasks | 3 files |
 | Phase 19.2 P01 | 4 | 2 tasks | 3 files |
+| Phase 19.3 P01 | 8 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -175,6 +176,9 @@ Last activity: 2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny fronten
 - [Phase 19.2]: 19.2-01: parakeet-tdt-v2-fp32 recommended unconditionally — benchmark data shows best accuracy/latency balance on all hardware
 - [Phase 19.2]: 19.2-01: distil-large-v3.5 removal from model_id_to_path() causes graceful auto-fallback for existing users via startup error chain — no migration code needed
 - [Phase 19.2]: 19.2-01: list_models() gpu_mode variable removed entirely — all recommended flags are now compile-time constants
+- [Phase 19.3]: set_visible(false) used for destroy_tray — TrayIcon type in Tauri v2 does not expose public destroy(); set_visible(false) removes icon from Windows tray
+- [Phase 19.3]: MouseButton::Left guard on DoubleClick handler prevents right-double-click from opening settings unintentionally
+- [Phase 19.3]: try/catch around invoke('destroy_tray') in updater.ts ensures relaunch proceeds even if IPC fails (non-critical cleanup)
 
 ### Research Flags (from SUMMARY.md)
 
@@ -220,6 +224,6 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-04T20:56:44.075Z
-Stopped at: Phase 19.3 context gathered
-Resume file: .planning/phases/19.3-ui-polish-tray-icons-profile-simplification-history-panel-double-click-settings/19.3-CONTEXT.md
+Last session: 2026-03-04T21:27:11.851Z
+Stopped at: Completed 19.3-01-PLAN.md
+Resume file: None
