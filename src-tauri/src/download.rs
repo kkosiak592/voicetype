@@ -203,7 +203,168 @@ pub async fn download_model(
     Ok(())
 }
 
-// ── Parakeet TDT model download ────────────────────────────────────────────
+// ── Moonshine Tiny ONNX model download ─────────────────────────────────────
+
+/// Moonshine Tiny ONNX files from HuggingFace repo onnx-community/moonshine-tiny-ONNX.
+///
+/// Three files: encoder (~4 MB), decoder_merged (~104 MB), tokenizer (~1 KB).
+/// sentinel file is decoder_model_merged.onnx (largest file, last to complete).
+const MOONSHINE_TINY_FILES: &[(&str, &str, u64)] = &[
+    ("encoder_model.onnx", "encoder_model.onnx", 4_200_000),
+    ("decoder_model_merged.onnx", "decoder_model_merged.onnx", 109_000_000),
+    ("tokenizer.json", "tokenizer.json", 1_200),
+];
+
+/// Returns the directory where the Moonshine Tiny ONNX model files are stored.
+pub fn moonshine_tiny_model_dir() -> PathBuf {
+    models_dir().join("moonshine-tiny-ONNX")
+}
+
+/// Returns true if the Moonshine Tiny model appears to have been fully downloaded.
+///
+/// Checks for decoder_model_merged.onnx — the largest file and the last to complete
+/// during download, so its presence indicates a complete download.
+pub fn moonshine_tiny_model_exists() -> bool {
+    moonshine_tiny_model_dir()
+        .join("decoder_model_merged.onnx")
+        .exists()
+}
+
+/// Constructs the HuggingFace resolve URL for a Moonshine Tiny ONNX file.
+fn moonshine_download_url(filename: &str) -> String {
+    format!(
+        "https://huggingface.co/onnx-community/moonshine-tiny-ONNX/resolve/main/{}",
+        filename
+    )
+}
+
+/// Downloads all 3 Moonshine Tiny ONNX files to models/moonshine-tiny-ONNX/ with streaming
+/// progress events.
+///
+/// The model directory contains 3 files: encoder_model.onnx, decoder_model_merged.onnx,
+/// and tokenizer.json. All must be co-located for the ONNX Runtime to load the model.
+///
+/// Progress is cumulative across all 3 files (single progress bar).
+/// On any file error the entire moonshine-tiny-ONNX/ directory is removed.
+#[tauri::command]
+pub async fn download_moonshine_tiny_model(on_event: Channel<DownloadEvent>) -> Result<(), String> {
+    let dest_dir = moonshine_tiny_model_dir();
+
+    // Ensure destination directory exists
+    tokio::fs::create_dir_all(&dest_dir)
+        .await
+        .map_err(|e| format!("Failed to create moonshine-tiny-ONNX model directory: {}", e))?;
+
+    // Total expected bytes across all files (used for progress denominator)
+    let total_bytes: u64 = MOONSHINE_TINY_FILES.iter().map(|(_, _, size)| size).sum();
+
+    let _ = on_event.send(DownloadEvent::Started {
+        url: "moonshine-tiny-ONNX (3 files)".to_string(),
+        total_bytes,
+    });
+
+    let client = reqwest::Client::new();
+    let mut cumulative_downloaded: u64 = 0;
+
+    for (remote_name, local_name, expected_size) in MOONSHINE_TINY_FILES {
+        let url = moonshine_download_url(remote_name);
+        let dest = dest_dir.join(local_name);
+        let tmp_path = dest.with_extension("tmp");
+
+        log::info!("Downloading Moonshine Tiny file: {} -> {} ({})", remote_name, local_name, url);
+
+        let response = client.get(&url).send().await.map_err(|e| {
+            let msg = format!("HTTP request failed for {}: {}", remote_name, e);
+            let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
+            let dir = dest_dir.clone();
+            tokio::spawn(async move {
+                let _ = tokio::fs::remove_dir_all(dir).await;
+            });
+            msg
+        })?;
+
+        // Use content-length from response if available; otherwise fall back to expected size
+        let file_total = response.content_length().unwrap_or(*expected_size);
+        let _ = file_total; // used implicitly via cumulative progress
+
+        let mut file = tokio::fs::File::create(&tmp_path).await.map_err(|e| {
+            let msg = format!("Failed to create temp file for {}: {}", local_name, e);
+            let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
+            let dir = dest_dir.clone();
+            tokio::spawn(async move {
+                let _ = tokio::fs::remove_dir_all(dir).await;
+            });
+            msg
+        })?;
+
+        let mut stream = response.bytes_stream();
+
+        while let Some(chunk_result) = stream.next().await {
+            let chunk = chunk_result.map_err(|e| {
+                let msg = format!("Download stream error for {}: {}", remote_name, e);
+                let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
+                let tmp = tmp_path.clone();
+                let dir = dest_dir.clone();
+                tokio::spawn(async move {
+                    let _ = tokio::fs::remove_file(tmp).await;
+                    let _ = tokio::fs::remove_dir_all(dir).await;
+                });
+                msg
+            })?;
+
+            file.write_all(&chunk).await.map_err(|e| {
+                let msg = format!("Failed to write chunk for {}: {}", local_name, e);
+                let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
+                let tmp = tmp_path.clone();
+                let dir = dest_dir.clone();
+                tokio::spawn(async move {
+                    let _ = tokio::fs::remove_file(tmp).await;
+                    let _ = tokio::fs::remove_dir_all(dir).await;
+                });
+                msg
+            })?;
+
+            cumulative_downloaded += chunk.len() as u64;
+
+            let _ = on_event.send(DownloadEvent::Progress {
+                downloaded_bytes: cumulative_downloaded,
+                total_bytes,
+            });
+        }
+
+        // Flush and close before rename
+        file.flush().await.map_err(|e| {
+            let msg = format!("Failed to flush temp file for {}: {}", local_name, e);
+            let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
+            msg
+        })?;
+        drop(file);
+
+        // Atomically move temp file to final destination
+        tokio::fs::rename(&tmp_path, &dest).await.map_err(|e| {
+            let msg = format!("Failed to rename temp file for {}: {}", local_name, e);
+            let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
+            msg
+        })?;
+
+        log::info!(
+            "Moonshine Tiny file downloaded: {} ({} bytes cumulative)",
+            local_name,
+            cumulative_downloaded
+        );
+    }
+
+    log::info!(
+        "Moonshine Tiny ONNX model download complete ({} bytes, {})",
+        cumulative_downloaded,
+        dest_dir.display()
+    );
+
+    let _ = on_event.send(DownloadEvent::Finished);
+    Ok(())
+}
+
+// ── Parakeet TDT model download ─────────────────────────────────────────────
 
 /// Parakeet TDT fp32 ONNX files from HuggingFace repo istupakov/parakeet-tdt-0.6b-v2-onnx.
 ///

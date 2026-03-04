@@ -254,6 +254,7 @@ fn read_saved_engine(app: &tauri::App, gpu_mode: bool) -> TranscriptionEngine {
     match json.get("active_engine").and_then(|v| v.as_str()) {
         Some("parakeet") => TranscriptionEngine::Parakeet,
         Some("whisper") => TranscriptionEngine::Whisper,
+        Some("moonshine") => TranscriptionEngine::Moonshine,
         _ => default_engine,
     }
 }
@@ -346,6 +347,7 @@ fn get_engine(app: tauri::AppHandle) -> String {
 fn set_engine(app: tauri::AppHandle, engine: String, parakeet_model: Option<String>) -> Result<(), String> {
     let new_engine = match engine.as_str() {
         "parakeet" => TranscriptionEngine::Parakeet,
+        "moonshine" => TranscriptionEngine::Moonshine,
         _ => TranscriptionEngine::Whisper,
     };
     // Update ActiveEngine managed state
@@ -405,6 +407,53 @@ fn set_engine(app: tauri::AppHandle, engine: String, parakeet_model: Option<Stri
             *guard = TranscriptionEngine::Whisper;
             return Err(
                 "Parakeet model not downloaded. Download it first from Settings.".to_string(),
+            );
+        }
+    }
+    // If switching to Moonshine, load model with GPU provider
+    #[cfg(feature = "moonshine")]
+    if new_engine == TranscriptionEngine::Moonshine {
+        let moonshine_state = app.state::<MoonshineStateMutex>();
+        let model_dir = download::moonshine_tiny_model_dir();
+        if model_dir.exists() {
+            #[cfg(feature = "whisper")]
+            let provider = {
+                let gpu_detection = app.state::<CachedGpuDetection>();
+                gpu_detection.0.parakeet_provider.clone()
+            };
+            #[cfg(not(feature = "whisper"))]
+            let provider = "cpu".to_string();
+            match transcribe_moonshine::load_moonshine(&model_dir, &provider) {
+                Ok(engine_instance) => {
+                    let inner_arc = std::sync::Arc::new(std::sync::Mutex::new(engine_instance));
+                    let warmup_arc = inner_arc.clone();
+                    {
+                        let mut guard = moonshine_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                        *guard = Some(inner_arc);
+                    }
+                    log::info!("Moonshine model loaded on engine switch");
+                    std::thread::spawn(move || {
+                        let mut guard = warmup_arc.lock().unwrap_or_else(|e| e.into_inner());
+                        transcribe_moonshine::warm_up_moonshine(&mut guard);
+                    });
+                }
+                Err(e) => {
+                    log::error!("Failed to load Moonshine on engine switch: {}", e);
+                    let state = app.state::<ActiveEngine>();
+                    let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+                    *guard = TranscriptionEngine::Whisper;
+                    return Err(format!(
+                        "Moonshine model failed to load: {}. Reverting to Whisper.",
+                        e
+                    ));
+                }
+            }
+        } else {
+            let state = app.state::<ActiveEngine>();
+            let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+            *guard = TranscriptionEngine::Whisper;
+            return Err(
+                "Moonshine model not downloaded. Download it first from Settings.".to_string(),
             );
         }
     }
@@ -1189,6 +1238,15 @@ fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
         downloaded: crate::download::parakeet_fp32_model_exists(),
     });
 
+    // Moonshine Tiny — fastest for short clips, works on any hardware
+    models.push(ModelInfo {
+        id: "moonshine-tiny".to_string(),
+        name: "Moonshine Tiny".to_string(),
+        description: "Fastest — 108 MB — ONNX-based, works on any hardware".to_string(),
+        recommended: false,
+        downloaded: crate::download::moonshine_tiny_model_exists(),
+    });
+
     Ok(models)
 }
 
@@ -1283,11 +1341,13 @@ fn check_first_run(app: tauri::AppHandle) -> FirstRunStatus {
     let parakeet_fp32_exists = crate::download::parakeet_fp32_model_exists();
     // Distil Large v3.5 is also a valid installed model — skip first-run if it is present
     let distil_v35_exists = dir.join("ggml-distil-large-v3.5.bin").exists();
+    // Moonshine Tiny is also a valid installed model — skip first-run if it is present
+    let moonshine_exists = crate::download::moonshine_tiny_model_exists();
     // directml_available: only true when a discrete non-NVIDIA GPU exists (AMD RX, Intel Arc).
     // Integrated-only GPUs (Intel UHD, AMD APU) cannot run Parakeet at useful speed via DirectML.
     let directml_available = detection.0.has_discrete_gpu && !detection.0.is_nvidia;
     FirstRunStatus {
-        needs_setup: !large_exists && !small_exists && !parakeet_fp32_exists && !distil_v35_exists,
+        needs_setup: !large_exists && !small_exists && !parakeet_fp32_exists && !distil_v35_exists && !moonshine_exists,
         gpu_detected: gpu_mode,
         gpu_name: detection.0.gpu_name.clone(),
         directml_available,
@@ -1625,6 +1685,13 @@ pub fn run() {
         builder = builder.manage(ParakeetStateMutex(std::sync::Mutex::new(None)));
     }
 
+    // MoonshineStateMutex starts as None — model is loaded on demand (engine switch)
+    // or at startup if saved engine is Moonshine.
+    #[cfg(feature = "moonshine")]
+    {
+        builder = builder.manage(MoonshineStateMutex(std::sync::Mutex::new(None)));
+    }
+
     builder.invoke_handler(tauri::generate_handler![
             rebind_hotkey,
             unregister_hotkey,
@@ -1647,6 +1714,7 @@ pub fn run() {
             set_all_caps,
             download::download_model,
             download::download_parakeet_fp32_model,
+            download::download_moonshine_tiny_model,
             enable_autostart,
             updater::check_for_update,
             set_update_available,
@@ -1770,6 +1838,65 @@ pub fn run() {
                         log::warn!(
                             "Parakeet set as engine but model files not found (variant: {}) — falling back to Whisper",
                             parakeet_model_id
+                        );
+                        let engine_state = app.state::<ActiveEngine>();
+                        let mut guard = engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                        *guard = TranscriptionEngine::Whisper;
+                    }
+                }
+            }
+
+            // If saved engine is Moonshine and moonshine feature is enabled, load model at startup.
+            #[cfg(feature = "moonshine")]
+            {
+                let saved_engine = {
+                    let engine_state = app.state::<ActiveEngine>();
+                    let guard = engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                    *guard
+                };
+                if saved_engine == TranscriptionEngine::Moonshine {
+                    let model_dir = download::moonshine_tiny_model_dir();
+                    if model_dir.exists() {
+                        let provider = {
+                            #[cfg(feature = "whisper")]
+                            {
+                                let gpu_detection = app.state::<CachedGpuDetection>();
+                                gpu_detection.0.parakeet_provider.clone()
+                            }
+                            #[cfg(not(feature = "whisper"))]
+                            { "cpu".to_string() }
+                        };
+                        match transcribe_moonshine::load_moonshine(&model_dir, &provider) {
+                            Ok(engine_instance) => {
+                                let moonshine_state = app.state::<MoonshineStateMutex>();
+                                let inner_arc = std::sync::Arc::new(std::sync::Mutex::new(engine_instance));
+                                let warmup_arc = inner_arc.clone();
+                                {
+                                    let mut guard =
+                                        moonshine_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                                    *guard = Some(inner_arc);
+                                }
+                                log::info!("Moonshine model loaded at startup");
+                                // Warm up in background to avoid blocking UI
+                                std::thread::spawn(move || {
+                                    let mut guard = warmup_arc.lock().unwrap_or_else(|e| e.into_inner());
+                                    transcribe_moonshine::warm_up_moonshine(&mut guard);
+                                });
+                            }
+                            Err(e) => {
+                                log::warn!(
+                                    "Moonshine startup load failed: {} — falling back to Whisper",
+                                    e
+                                );
+                                let engine_state = app.state::<ActiveEngine>();
+                                let mut guard =
+                                    engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                                *guard = TranscriptionEngine::Whisper;
+                            }
+                        }
+                    } else {
+                        log::warn!(
+                            "Moonshine set as engine but model not found — falling back to Whisper"
                         );
                         let engine_state = app.state::<ActiveEngine>();
                         let mut guard = engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
