@@ -100,7 +100,7 @@ Phases execute in numeric order: 15 → 16 → 17 → 19 → 19.1 → 19.2 → 1
 | 19. Distil-large-v3.5 | 1/1 | Complete   | 2026-03-03 | - |
 | 19.1. Moonshine Tiny | 2/2 | Complete    | 2026-03-04 | - |
 | 19.2. Model Selection Revamp | 1/1 | Complete | 2026-03-04 | - |
-| 19.3. UI Polish | 2/3 | In Progress|  | - |
+| 19.3. UI Polish | 3/3 | Complete   | 2026-03-04 | - |
 | 20. Bundle CUDA DLLs | v1.2 | 0/1 | Not started | - |
 | 21. Integration and Distribution | v1.2 | 0/1 | Not started | - |
 
@@ -122,7 +122,7 @@ Plans:
 **Goal:** Fix duplicate tray icons, add double-click-to-open-settings, simplify multi-profile system to single vocabulary prompt, and add transcription history panel with click-to-copy
 **Requirements**: TRAY-FIX, TRAY-DBLCLICK, PROFILE-SIMPLIFY, HISTORY-PANEL
 **Depends on:** Phase 19.2
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 19.3-01-PLAN.md — Tray duplicate fix (destroy before relaunch) and double-click handler
