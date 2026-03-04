@@ -20,12 +20,20 @@ use parakeet_rs::{ExecutionConfig, ExecutionProvider, ParakeetTDT, TimestampMode
 #[cfg(feature = "bench_extra")]
 use transcribe_rs::{
     TranscriptionEngine,
-    engines::moonshine::{MoonshineEngine, MoonshineModelParams, MoonshineStreamingEngine, StreamingModelParams},
+    engines::moonshine::{MoonshineEngine, MoonshineModelParams},
     engines::sense_voice::{SenseVoiceEngine, SenseVoiceModelParams},
 };
 
 #[cfg(feature = "bench_extra")]
+use transcribe_rs::engines::moonshine::streaming_model::StreamingModel;
+
+#[cfg(feature = "bench_extra")]
 use ort::execution_providers::{CUDAExecutionProvider, CPUExecutionProvider};
+
+/// Simulated microphone frame size for streaming benchmarks: 320ms at 16kHz = 5120 samples.
+/// This approximates real-world audio capture cadence.
+#[cfg(feature = "bench_extra")]
+const STREAMING_FRAME_SAMPLES: usize = 5120;
 
 #[cfg(any(feature = "bench_extra", feature = "parakeet", feature = "whisper"))]
 use voice_activity_detector::VoiceActivityDetector;
@@ -1132,18 +1140,23 @@ fn main() {
 
         // --- Moonshine streaming tiny ---
         if let Some(ref mpath) = moonshine_streaming_tiny_path.filter(|_| should_run_model("moonshine-streaming-tiny", &model_filters)) {
-            println!("\n=== moonshine-streaming-tiny (provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
+            println!("\n=== moonshine-streaming-tiny (incremental, provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
             let load_start = Instant::now();
-            let mut engine = MoonshineStreamingEngine::new();
-            let mut params = StreamingModelParams::default();
-            params.execution_providers = bench_extra_providers.clone();
-            match engine.load_model_with_params(mpath.as_path(), params) {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("  ERROR loading moonshine-streaming-tiny: {}", e);
+            let mut model_opt = match StreamingModel::new(
+                mpath.as_path(),
+                0,
+                bench_extra_providers.clone(),
+            ) {
+                Ok(m) => {
+                    println!("  Load time: {}ms", load_start.elapsed().as_millis());
+                    Some(m)
                 }
-            }
-            println!("  Load time: {}ms", load_start.elapsed().as_millis());
+                Err(e) => {
+                    eprintln!("  ERROR loading moonshine-streaming-tiny: {} ({}ms)", e, load_start.elapsed().as_millis());
+                    None
+                }
+            };
+            if let Some(ref mut model) = model_opt {
 
             for (wav_path, clip_label) in &clip_paths {
                 println!("  Clip: {}", clip_label);
@@ -1155,8 +1168,7 @@ fn main() {
                     }
                 };
 
-                // The adapter.ort has a 4096-frame positional limit (~81.9s at 50fps).
-                // VAD-chunk long audio into segments the same way as non-streaming moonshine.
+                // VAD-chunk long audio to stay within adapter's 4096-frame limit (~81.9s).
                 let needs_chunking = audio.len() > 30 * 16000;
                 let vad_start = Instant::now();
                 let chunks: Vec<Vec<f32>> = if needs_chunking {
@@ -1176,21 +1188,89 @@ fn main() {
                     let t = Instant::now();
                     let mut combined_text = String::new();
                     let mut had_error = false;
+                    let mut first_partial_ms: Option<u64> = None;
 
                     for (seg_idx, seg) in chunks.iter().enumerate() {
-                        match engine.transcribe_samples(seg.clone(), None) {
-                            Ok(result) => {
-                                if !combined_text.is_empty() && !result.text.trim().is_empty() {
-                                    combined_text.push(' ');
-                                }
-                                combined_text.push_str(result.text.trim());
-                            }
-                            Err(e) => {
-                                eprintln!("  ERROR during inference run {} seg {}: {}", i + 1, seg_idx, e);
+                        let mut state = model.create_state();
+
+                        // Feed audio incrementally in 320ms frames to simulate real-time mic input
+                        for frame_start in (0..seg.len()).step_by(STREAMING_FRAME_SAMPLES) {
+                            let frame_end = (frame_start + STREAMING_FRAME_SAMPLES).min(seg.len());
+                            let frame = &seg[frame_start..frame_end];
+                            if let Err(e) = model.process_audio_chunk(&mut state, frame) {
+                                eprintln!("  ERROR process_audio_chunk run {} seg {}: {}", i + 1, seg_idx, e);
                                 had_error = true;
                                 break;
                             }
                         }
+                        if had_error { break; }
+
+                        // Encode all accumulated features (is_final=true for offline-style)
+                        if let Err(e) = model.encode(&mut state, true) {
+                            eprintln!("  ERROR encode run {} seg {}: {}", i + 1, seg_idx, e);
+                            had_error = true;
+                            break;
+                        }
+
+                        if state.memory_len == 0 {
+                            // No features produced — skip this segment
+                            continue;
+                        }
+
+                        if let Err(e) = model.compute_cross_kv(&mut state) {
+                            eprintln!("  ERROR compute_cross_kv run {} seg {}: {}", i + 1, seg_idx, e);
+                            had_error = true;
+                            break;
+                        }
+
+                        // Autoregressive decoding (greedy via decode_step + argmax)
+                        let duration_sec = seg.len() as f32 / 16000.0;
+                        let max_tokens = ((duration_sec * 6.5).ceil() as usize)
+                            .min(model.config.max_seq_len);
+                        let mut tokens: Vec<i64> = Vec::new();
+                        let mut current_token = model.config.bos_id;
+                        let mut decode_err = false;
+
+                        for _step in 0..max_tokens {
+                            let logits = match model.decode_step(&mut state, current_token) {
+                                Ok(l) => l,
+                                Err(e) => {
+                                    eprintln!("  ERROR decode_step run {} seg {}: {}", i + 1, seg_idx, e);
+                                    decode_err = true;
+                                    break;
+                                }
+                            };
+                            // Greedy argmax
+                            let next_token = logits.iter().enumerate()
+                                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                                .map(|(idx, _)| idx as i64)
+                                .unwrap_or(model.config.eos_id);
+
+                            if next_token == model.config.eos_id { break; }
+                            tokens.push(next_token);
+                            current_token = next_token;
+
+                            // Record time-to-first-token for run 1
+                            if first_partial_ms.is_none() {
+                                first_partial_ms = Some(t.elapsed().as_millis() as u64);
+                            }
+                        }
+
+                        if decode_err { had_error = true; break; }
+
+                        let seg_text = match model.decode_tokens(&tokens) {
+                            Ok(text) => text,
+                            Err(e) => {
+                                eprintln!("  ERROR decode_tokens run {} seg {}: {}", i + 1, seg_idx, e);
+                                had_error = true;
+                                break;
+                            }
+                        };
+
+                        if !combined_text.is_empty() && !seg_text.trim().is_empty() {
+                            combined_text.push(' ');
+                        }
+                        combined_text.push_str(seg_text.trim());
                     }
 
                     if had_error { break; }
@@ -1199,7 +1279,11 @@ fn main() {
                     latencies.push(elapsed);
                     if i == 0 {
                         first_text = combined_text.trim().to_string();
-                        println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
+                        if let Some(fp) = first_partial_ms {
+                            println!("  [run 1] {}ms (first-partial: {}ms) — \"{}\"", elapsed, fp, truncate(&first_text, 80));
+                        } else {
+                            println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
+                        }
                     } else {
                         println!("  [run {}] {}ms", i + 1, elapsed);
                     }
@@ -1215,6 +1299,9 @@ fn main() {
                 let reference = reference_for_clip(clip_label);
                 let (wer, subs, ins, dels, ref_n) = compute_wer(reference, &first_text);
                 println!("  -> avg={}ms  min={}ms  max={}ms  WER={:.1}% (S={} I={} D={} / {} words)", avg, min, max, wer, subs, ins, dels, ref_n);
+                if needs_chunking {
+                    println!("  (total incl. VAD: avg={}ms)", avg + vad_ms);
+                }
 
                 results.push(BenchResult {
                     model: "moonshine-streaming-tiny".to_string(),
@@ -1226,22 +1313,28 @@ fn main() {
                     first_text,
                 });
             }
+            } // end if let Some(model_opt)
         }
 
         // --- Moonshine streaming small ---
         if let Some(ref mpath) = moonshine_streaming_small_path.filter(|_| should_run_model("moonshine-streaming-small", &model_filters)) {
-            println!("\n=== moonshine-streaming-small (provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
+            println!("\n=== moonshine-streaming-small (incremental, provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
             let load_start = Instant::now();
-            let mut engine = MoonshineStreamingEngine::new();
-            let mut params = StreamingModelParams::default();
-            params.execution_providers = bench_extra_providers.clone();
-            match engine.load_model_with_params(mpath.as_path(), params) {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("  ERROR loading moonshine-streaming-small: {}", e);
+            let mut model_opt = match StreamingModel::new(
+                mpath.as_path(),
+                0,
+                bench_extra_providers.clone(),
+            ) {
+                Ok(m) => {
+                    println!("  Load time: {}ms", load_start.elapsed().as_millis());
+                    Some(m)
                 }
-            }
-            println!("  Load time: {}ms", load_start.elapsed().as_millis());
+                Err(e) => {
+                    eprintln!("  ERROR loading moonshine-streaming-small: {} ({}ms)", e, load_start.elapsed().as_millis());
+                    None
+                }
+            };
+            if let Some(ref mut model) = model_opt {
 
             for (wav_path, clip_label) in &clip_paths {
                 println!("  Clip: {}", clip_label);
@@ -1253,8 +1346,7 @@ fn main() {
                     }
                 };
 
-                // The adapter.ort has a 4096-frame positional limit (~81.9s at 50fps).
-                // VAD-chunk long audio into segments the same way as non-streaming moonshine.
+                // VAD-chunk long audio to stay within adapter's 4096-frame limit (~81.9s).
                 let needs_chunking = audio.len() > 30 * 16000;
                 let vad_start = Instant::now();
                 let chunks: Vec<Vec<f32>> = if needs_chunking {
@@ -1274,21 +1366,79 @@ fn main() {
                     let t = Instant::now();
                     let mut combined_text = String::new();
                     let mut had_error = false;
+                    let mut first_partial_ms: Option<u64> = None;
 
                     for (seg_idx, seg) in chunks.iter().enumerate() {
-                        match engine.transcribe_samples(seg.clone(), None) {
-                            Ok(result) => {
-                                if !combined_text.is_empty() && !result.text.trim().is_empty() {
-                                    combined_text.push(' ');
-                                }
-                                combined_text.push_str(result.text.trim());
-                            }
-                            Err(e) => {
-                                eprintln!("  ERROR during inference run {} seg {}: {}", i + 1, seg_idx, e);
+                        let mut state = model.create_state();
+
+                        for frame_start in (0..seg.len()).step_by(STREAMING_FRAME_SAMPLES) {
+                            let frame_end = (frame_start + STREAMING_FRAME_SAMPLES).min(seg.len());
+                            let frame = &seg[frame_start..frame_end];
+                            if let Err(e) = model.process_audio_chunk(&mut state, frame) {
+                                eprintln!("  ERROR process_audio_chunk run {} seg {}: {}", i + 1, seg_idx, e);
                                 had_error = true;
                                 break;
                             }
                         }
+                        if had_error { break; }
+
+                        if let Err(e) = model.encode(&mut state, true) {
+                            eprintln!("  ERROR encode run {} seg {}: {}", i + 1, seg_idx, e);
+                            had_error = true;
+                            break;
+                        }
+
+                        if state.memory_len == 0 { continue; }
+
+                        if let Err(e) = model.compute_cross_kv(&mut state) {
+                            eprintln!("  ERROR compute_cross_kv run {} seg {}: {}", i + 1, seg_idx, e);
+                            had_error = true;
+                            break;
+                        }
+
+                        let duration_sec = seg.len() as f32 / 16000.0;
+                        let max_tokens = ((duration_sec * 6.5).ceil() as usize)
+                            .min(model.config.max_seq_len);
+                        let mut tokens: Vec<i64> = Vec::new();
+                        let mut current_token = model.config.bos_id;
+                        let mut decode_err = false;
+
+                        for _step in 0..max_tokens {
+                            let logits = match model.decode_step(&mut state, current_token) {
+                                Ok(l) => l,
+                                Err(e) => {
+                                    eprintln!("  ERROR decode_step run {} seg {}: {}", i + 1, seg_idx, e);
+                                    decode_err = true;
+                                    break;
+                                }
+                            };
+                            let next_token = logits.iter().enumerate()
+                                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                                .map(|(idx, _)| idx as i64)
+                                .unwrap_or(model.config.eos_id);
+                            if next_token == model.config.eos_id { break; }
+                            tokens.push(next_token);
+                            current_token = next_token;
+                            if first_partial_ms.is_none() {
+                                first_partial_ms = Some(t.elapsed().as_millis() as u64);
+                            }
+                        }
+
+                        if decode_err { had_error = true; break; }
+
+                        let seg_text = match model.decode_tokens(&tokens) {
+                            Ok(text) => text,
+                            Err(e) => {
+                                eprintln!("  ERROR decode_tokens run {} seg {}: {}", i + 1, seg_idx, e);
+                                had_error = true;
+                                break;
+                            }
+                        };
+
+                        if !combined_text.is_empty() && !seg_text.trim().is_empty() {
+                            combined_text.push(' ');
+                        }
+                        combined_text.push_str(seg_text.trim());
                     }
 
                     if had_error { break; }
@@ -1297,7 +1447,11 @@ fn main() {
                     latencies.push(elapsed);
                     if i == 0 {
                         first_text = combined_text.trim().to_string();
-                        println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
+                        if let Some(fp) = first_partial_ms {
+                            println!("  [run 1] {}ms (first-partial: {}ms) — \"{}\"", elapsed, fp, truncate(&first_text, 80));
+                        } else {
+                            println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
+                        }
                     } else {
                         println!("  [run {}] {}ms", i + 1, elapsed);
                     }
@@ -1313,6 +1467,9 @@ fn main() {
                 let reference = reference_for_clip(clip_label);
                 let (wer, subs, ins, dels, ref_n) = compute_wer(reference, &first_text);
                 println!("  -> avg={}ms  min={}ms  max={}ms  WER={:.1}% (S={} I={} D={} / {} words)", avg, min, max, wer, subs, ins, dels, ref_n);
+                if needs_chunking {
+                    println!("  (total incl. VAD: avg={}ms)", avg + vad_ms);
+                }
 
                 results.push(BenchResult {
                     model: "moonshine-streaming-small".to_string(),
@@ -1324,22 +1481,28 @@ fn main() {
                     first_text,
                 });
             }
+            } // end if let Some(model_opt)
         }
 
         // --- Moonshine streaming medium ---
         if let Some(ref mpath) = moonshine_streaming_medium_path.filter(|_| should_run_model("moonshine-streaming-medium", &model_filters)) {
-            println!("\n=== moonshine-streaming-medium (provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
+            println!("\n=== moonshine-streaming-medium (incremental, provider={}) ===", if bench_extra_providers.is_some() { "cuda" } else { "cpu" });
             let load_start = Instant::now();
-            let mut engine = MoonshineStreamingEngine::new();
-            let mut params = StreamingModelParams::default();
-            params.execution_providers = bench_extra_providers.clone();
-            match engine.load_model_with_params(mpath.as_path(), params) {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("  ERROR loading moonshine-streaming-medium: {}", e);
+            let mut model_opt = match StreamingModel::new(
+                mpath.as_path(),
+                0,
+                bench_extra_providers.clone(),
+            ) {
+                Ok(m) => {
+                    println!("  Load time: {}ms", load_start.elapsed().as_millis());
+                    Some(m)
                 }
-            }
-            println!("  Load time: {}ms", load_start.elapsed().as_millis());
+                Err(e) => {
+                    eprintln!("  ERROR loading moonshine-streaming-medium: {} ({}ms)", e, load_start.elapsed().as_millis());
+                    None
+                }
+            };
+            if let Some(ref mut model) = model_opt {
 
             for (wav_path, clip_label) in &clip_paths {
                 println!("  Clip: {}", clip_label);
@@ -1351,8 +1514,7 @@ fn main() {
                     }
                 };
 
-                // The adapter.ort has a 4096-frame positional limit (~81.9s at 50fps).
-                // VAD-chunk long audio into segments the same way as non-streaming moonshine.
+                // VAD-chunk long audio to stay within adapter's 4096-frame limit (~81.9s).
                 let needs_chunking = audio.len() > 30 * 16000;
                 let vad_start = Instant::now();
                 let chunks: Vec<Vec<f32>> = if needs_chunking {
@@ -1372,21 +1534,79 @@ fn main() {
                     let t = Instant::now();
                     let mut combined_text = String::new();
                     let mut had_error = false;
+                    let mut first_partial_ms: Option<u64> = None;
 
                     for (seg_idx, seg) in chunks.iter().enumerate() {
-                        match engine.transcribe_samples(seg.clone(), None) {
-                            Ok(result) => {
-                                if !combined_text.is_empty() && !result.text.trim().is_empty() {
-                                    combined_text.push(' ');
-                                }
-                                combined_text.push_str(result.text.trim());
-                            }
-                            Err(e) => {
-                                eprintln!("  ERROR during inference run {} seg {}: {}", i + 1, seg_idx, e);
+                        let mut state = model.create_state();
+
+                        for frame_start in (0..seg.len()).step_by(STREAMING_FRAME_SAMPLES) {
+                            let frame_end = (frame_start + STREAMING_FRAME_SAMPLES).min(seg.len());
+                            let frame = &seg[frame_start..frame_end];
+                            if let Err(e) = model.process_audio_chunk(&mut state, frame) {
+                                eprintln!("  ERROR process_audio_chunk run {} seg {}: {}", i + 1, seg_idx, e);
                                 had_error = true;
                                 break;
                             }
                         }
+                        if had_error { break; }
+
+                        if let Err(e) = model.encode(&mut state, true) {
+                            eprintln!("  ERROR encode run {} seg {}: {}", i + 1, seg_idx, e);
+                            had_error = true;
+                            break;
+                        }
+
+                        if state.memory_len == 0 { continue; }
+
+                        if let Err(e) = model.compute_cross_kv(&mut state) {
+                            eprintln!("  ERROR compute_cross_kv run {} seg {}: {}", i + 1, seg_idx, e);
+                            had_error = true;
+                            break;
+                        }
+
+                        let duration_sec = seg.len() as f32 / 16000.0;
+                        let max_tokens = ((duration_sec * 6.5).ceil() as usize)
+                            .min(model.config.max_seq_len);
+                        let mut tokens: Vec<i64> = Vec::new();
+                        let mut current_token = model.config.bos_id;
+                        let mut decode_err = false;
+
+                        for _step in 0..max_tokens {
+                            let logits = match model.decode_step(&mut state, current_token) {
+                                Ok(l) => l,
+                                Err(e) => {
+                                    eprintln!("  ERROR decode_step run {} seg {}: {}", i + 1, seg_idx, e);
+                                    decode_err = true;
+                                    break;
+                                }
+                            };
+                            let next_token = logits.iter().enumerate()
+                                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                                .map(|(idx, _)| idx as i64)
+                                .unwrap_or(model.config.eos_id);
+                            if next_token == model.config.eos_id { break; }
+                            tokens.push(next_token);
+                            current_token = next_token;
+                            if first_partial_ms.is_none() {
+                                first_partial_ms = Some(t.elapsed().as_millis() as u64);
+                            }
+                        }
+
+                        if decode_err { had_error = true; break; }
+
+                        let seg_text = match model.decode_tokens(&tokens) {
+                            Ok(text) => text,
+                            Err(e) => {
+                                eprintln!("  ERROR decode_tokens run {} seg {}: {}", i + 1, seg_idx, e);
+                                had_error = true;
+                                break;
+                            }
+                        };
+
+                        if !combined_text.is_empty() && !seg_text.trim().is_empty() {
+                            combined_text.push(' ');
+                        }
+                        combined_text.push_str(seg_text.trim());
                     }
 
                     if had_error { break; }
@@ -1395,7 +1615,11 @@ fn main() {
                     latencies.push(elapsed);
                     if i == 0 {
                         first_text = combined_text.trim().to_string();
-                        println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
+                        if let Some(fp) = first_partial_ms {
+                            println!("  [run 1] {}ms (first-partial: {}ms) — \"{}\"", elapsed, fp, truncate(&first_text, 80));
+                        } else {
+                            println!("  [run 1] {}ms — \"{}\"", elapsed, truncate(&first_text, 80));
+                        }
                     } else {
                         println!("  [run {}] {}ms", i + 1, elapsed);
                     }
@@ -1411,6 +1635,9 @@ fn main() {
                 let reference = reference_for_clip(clip_label);
                 let (wer, subs, ins, dels, ref_n) = compute_wer(reference, &first_text);
                 println!("  -> avg={}ms  min={}ms  max={}ms  WER={:.1}% (S={} I={} D={} / {} words)", avg, min, max, wer, subs, ins, dels, ref_n);
+                if needs_chunking {
+                    println!("  (total incl. VAD: avg={}ms)", avg + vad_ms);
+                }
 
                 results.push(BenchResult {
                     model: "moonshine-streaming-medium".to_string(),
@@ -1422,6 +1649,7 @@ fn main() {
                     first_text,
                 });
             }
+            } // end if let Some(model_opt)
         }
 
         // --- SenseVoice small ---
