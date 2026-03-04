@@ -4,7 +4,6 @@ import { listen } from '@tauri-apps/api/event';
 import { getStore, DEFAULTS } from './lib/store';
 import { Sidebar, SectionId } from './components/Sidebar';
 import { GeneralSection } from './components/sections/GeneralSection';
-import { VocabularySection } from './components/sections/VocabularySection';
 import { ModelSection } from './components/sections/ModelSection';
 import { MicrophoneSection } from './components/sections/MicrophoneSection';
 import { AppearanceSection } from './components/sections/AppearanceSection';
@@ -192,8 +191,7 @@ function App() {
               hookAvailable={hookAvailable}
             />
           )}
-          {activeSection === 'vocabulary' && <VocabularySection />}
-          {activeSection === 'history' && <HistorySection />}
+{activeSection === 'history' && <HistorySection />}
           {activeSection === 'model' && (
             <ModelSection
               selectedModel={selectedModel}
