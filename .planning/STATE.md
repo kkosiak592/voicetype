@@ -180,9 +180,10 @@ None active.
 | 34 | Add VAD-based chunking to parakeet benchmark section for clips >30s | 2026-03-04 | 21d4441 | Complete | [34-add-vad-based-chunking-to-parakeet-model](./quick/34-add-vad-based-chunking-to-parakeet-model/) |
 | 35 | Fix benchmark fairness: add VAD chunking to Whisper and switch streaming Moonshine to incremental frame feeding | 2026-03-04 | bdb3c14 | Complete | [35-fix-benchmark-fairness-add-vad-chunking-](./quick/35-fix-benchmark-fairness-add-vad-chunking-/) |
 | 36 | Add 90s benchmark clips (deep-sea oceanography, aviation history, renewable energy) to PS1 script and benchmark.rs with 4-column pivot tables | 2026-03-04 | e8bea88 | Complete | [36-add-90s-benchmark-clips-to-benchmark-bin](./quick/36-add-90s-benchmark-clips-to-benchmark-bin/) |
+| 37 | Add --progressive flag to benchmark binary: VAD-driven real-time chunk dispatch with post-release latency metric across all 7 engine sections | 2026-03-04 | 0bf1333 | Complete | [37-add-progressive-flag-to-benchmark-binary](./quick/37-add-progressive-flag-to-benchmark-binary/) |
 
 ## Session Continuity
 
 Last session: 2026-03-04
-Stopped at: Phase 19.1 Plan 02 complete — Moonshine Tiny frontend integration (ModelSection engine routing, ModelSelector download props, FirstRun model card, end-to-end verified)
+Stopped at: Quick 37 complete — --progressive flag with run_progressive generic helper, ProgressiveResult struct, post-release latency metric, comparison and pivot tables
 Resume file: None
