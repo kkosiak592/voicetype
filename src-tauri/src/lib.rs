@@ -1186,22 +1186,28 @@ fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
     use crate::transcribe::models_dir;
     let dir = models_dir();
 
+    // Determine GPU availability from cached detection
+    let has_gpu = {
+        let detection = app.state::<CachedGpuDetection>();
+        detection.0.is_nvidia
+    };
+
     // Sorted by speed-to-accuracy ratio (best value first)
-    let mut models = vec![
-        // Parakeet TDT fp32 — best accuracy, fast speed, works on all hardware
+    let models = vec![
+        // Parakeet TDT fp32 — best accuracy, fast speed, recommended with GPU
         ModelInfo {
             id: "parakeet-tdt-v2-fp32".to_string(),
             name: "Parakeet TDT (fp32)".to_string(),
             description: "High accuracy · Moderate speed · 2.56 GB".to_string(),
-            recommended: true,
+            recommended: has_gpu,
             downloaded: crate::download::parakeet_fp32_model_exists(),
         },
-        // Moonshine Tiny — fastest, good accuracy, works on any hardware
+        // Moonshine Tiny — fastest, good accuracy, recommended without GPU
         ModelInfo {
             id: "moonshine-tiny".to_string(),
             name: "Moonshine Tiny".to_string(),
             description: "Medium accuracy · Fast speed · 108 MB".to_string(),
-            recommended: false,
+            recommended: !has_gpu,
             downloaded: crate::download::moonshine_tiny_model_exists(),
         },
         ModelInfo {
