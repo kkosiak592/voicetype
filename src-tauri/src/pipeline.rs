@@ -350,6 +350,7 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
         }
     };
 
+    let formatted_for_tooltip = formatted.clone();
     let to_inject = format!("{} ", formatted); // trailing space per CONTEXT.md
 
     log::info!(
@@ -370,7 +371,7 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
             log::info!("Pipeline: injection complete");
             // Tray tooltip for development debugging: show last transcription
             if let Some(tray) = app.tray_by_id("tray") {
-                let _ = tray.set_tooltip(Some(&format!("VoiceType — last: {}", formatted)));
+                let _ = tray.set_tooltip(Some(&format!("VoiceType — last: {}", formatted_for_tooltip)));
             }
             // Pill: success flash before hide
             app.emit_to("pill", "pill-result", "success").ok();

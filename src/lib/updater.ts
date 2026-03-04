@@ -48,6 +48,7 @@ const INITIAL_STATE: UpdateState = {
 
 export function useUpdater(): UseUpdaterReturn {
   const [state, setState] = useState<UpdateState>(INITIAL_STATE);
+  const stateRef = useRef<UpdateState>(INITIAL_STATE);
   const updateRef = useRef<Update | null>(null);
   const cancelledRef = useRef(false);
   const isCheckingRef = useRef(false);
@@ -205,6 +206,11 @@ export function useUpdater(): UseUpdaterReturn {
     setState(prev => ({ ...prev, dismissed: true }));
   }, []);
 
+  // Keep stateRef in sync so the periodic interval can read status without re-registering
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
   // Launch-time check: delay 4 seconds so startup is not blocked
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -219,17 +225,10 @@ export function useUpdater(): UseUpdaterReturn {
   // Periodic check every 4 hours — only when not downloading or ready
   useEffect(() => {
     const interval = setInterval(() => {
-      setState(prev => {
-        // Don't interrupt active downloads or pending restarts
-        if (prev.status === 'downloading' || prev.status === 'ready' || prev.status === 'checking') {
-          return prev;
-        }
-        // Trigger the check (async — must be called outside setState)
-        return prev;
-      });
-
-      // Call outside setState to avoid stale closure issues
-      // We read state via ref to avoid re-registering the interval on every state change
+      // Don't check during active download/ready states
+      if (['downloading', 'ready', 'checking'].some(s => stateRef.current?.status === s)) {
+        return;
+      }
       checkNow();
     }, FOUR_HOURS_MS);
 
