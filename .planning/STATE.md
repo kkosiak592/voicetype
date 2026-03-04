@@ -193,10 +193,7 @@ Last activity: 2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny fronten
 
 ### Pending Todos
 
-1. Debug multiple duplicate tray icons appearing in system tray (area: ui)
-2. Remove structural profile and simplify to single profile with editable prompt (area: ui)
-3. Add transcription history panel to settings (area: ui)
-4. Open settings window on tray icon double-click (area: ui)
+(none)
 
 ### Roadmap Evolution
 
