@@ -342,19 +342,15 @@ pub async fn download_moonshine_tiny_model(
             // Check cancellation flag before processing each chunk
             if flag.load(Ordering::Relaxed) {
                 drop(file);
-                let _ = tokio::fs::remove_file(&tmp_path).await;
-                let dir = dest_dir.clone();
-                let _ = tokio::fs::remove_dir_all(dir).await;
+                let _ = tokio::fs::remove_dir_all(&dest_dir).await;
                 return Err("Download cancelled".to_string());
             }
 
             let chunk = chunk_result.map_err(|e| {
                 let msg = format!("Download stream error for {}: {}", remote_name, e);
                 let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
-                let tmp = tmp_path.clone();
                 let dir = dest_dir.clone();
                 tokio::spawn(async move {
-                    let _ = tokio::fs::remove_file(tmp).await;
                     let _ = tokio::fs::remove_dir_all(dir).await;
                 });
                 msg
@@ -363,10 +359,8 @@ pub async fn download_moonshine_tiny_model(
             file.write_all(&chunk).await.map_err(|e| {
                 let msg = format!("Failed to write chunk for {}: {}", local_name, e);
                 let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
-                let tmp = tmp_path.clone();
                 let dir = dest_dir.clone();
                 tokio::spawn(async move {
-                    let _ = tokio::fs::remove_file(tmp).await;
                     let _ = tokio::fs::remove_dir_all(dir).await;
                 });
                 msg
@@ -393,11 +387,7 @@ pub async fn download_moonshine_tiny_model(
         // Validate downloaded file size against Content-Length header
         if let Some(expected_len) = content_length {
             if file_downloaded != expected_len {
-                let _ = tokio::fs::remove_file(&tmp_path).await;
-                let dir = dest_dir.clone();
-                tokio::spawn(async move {
-                    let _ = tokio::fs::remove_dir_all(dir).await;
-                });
+                let _ = tokio::fs::remove_dir_all(&dest_dir).await;
                 let msg = format!(
                     "Size mismatch for {}: expected {} bytes (Content-Length), got {} bytes",
                     local_name, expected_len, file_downloaded
@@ -551,19 +541,15 @@ pub async fn download_parakeet_fp32_model(
             // Check cancellation flag before processing each chunk
             if flag.load(Ordering::Relaxed) {
                 drop(file);
-                let _ = tokio::fs::remove_file(&tmp_path).await;
-                let dir = dest_dir.clone();
-                let _ = tokio::fs::remove_dir_all(dir).await;
+                let _ = tokio::fs::remove_dir_all(&dest_dir).await;
                 return Err("Download cancelled".to_string());
             }
 
             let chunk = chunk_result.map_err(|e| {
                 let msg = format!("Download stream error for {}: {}", remote_name, e);
                 let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
-                let tmp = tmp_path.clone();
                 let dir = dest_dir.clone();
                 tokio::spawn(async move {
-                    let _ = tokio::fs::remove_file(tmp).await;
                     let _ = tokio::fs::remove_dir_all(dir).await;
                 });
                 msg
@@ -572,10 +558,8 @@ pub async fn download_parakeet_fp32_model(
             file.write_all(&chunk).await.map_err(|e| {
                 let msg = format!("Failed to write chunk for {}: {}", local_name, e);
                 let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
-                let tmp = tmp_path.clone();
                 let dir = dest_dir.clone();
                 tokio::spawn(async move {
-                    let _ = tokio::fs::remove_file(tmp).await;
                     let _ = tokio::fs::remove_dir_all(dir).await;
                 });
                 msg
@@ -602,11 +586,7 @@ pub async fn download_parakeet_fp32_model(
         // Validate downloaded file size against Content-Length header
         if let Some(expected_len) = content_length {
             if file_downloaded != expected_len {
-                let _ = tokio::fs::remove_file(&tmp_path).await;
-                let dir = dest_dir.clone();
-                tokio::spawn(async move {
-                    let _ = tokio::fs::remove_dir_all(dir).await;
-                });
+                let _ = tokio::fs::remove_dir_all(&dest_dir).await;
                 let msg = format!(
                     "Size mismatch for {}: expected {} bytes (Content-Length), got {} bytes",
                     local_name, expected_len, file_downloaded
