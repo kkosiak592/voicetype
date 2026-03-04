@@ -348,37 +348,67 @@ Temperatures near black smoker chimneys can exceed three hundred and fifty degre
 Despite the extreme heat, pressure, and complete absence of sunlight, dense ecosystems thrive around the vents. \
 Chemosynthetic bacteria form the base of these food webs by oxidising hydrogen sulphide instead of performing photosynthesis. \
 Giant tube worms can grow over two metres long and harbour symbiotic bacteria in a specialised organ called the trophosome. \
+At depths below one thousand metres the pressure exceeds one hundred atmospheres, compressing gases and deforming cell membranes. \
 Deep sea fish have evolved low density tissues and flexible bodies to withstand these crushing conditions. \
 The anglerfish uses a bioluminescent lure dangling from its head to attract prey in total darkness. \
+Octopuses and squid communicate through rapid changes in skin pigmentation driven by specialised cells called chromatophores. \
 The Mariana Trench in the western Pacific reaches a depth of nearly eleven kilometres at Challenger Deep. \
 Researchers use remotely operated vehicles equipped with cameras and robotic arms to collect biological and mineral samples. \
-Sound travels faster and farther in cold deep water, enabling blue whales to communicate across entire ocean basins.";
+Manganese nodules covering vast areas of the abyssal plain contain valuable concentrations of cobalt, nickel, and copper. \
+Sedimentation rates in the deep ocean average just a few millimetres per thousand years, preserving ancient climate records. \
+Whale falls create temporary oases of organic material that sustain unique communities of scavengers and decomposers for decades. \
+The midnight zone begins at one thousand metres where no sunlight penetrates and temperatures drop near freezing. \
+Barophilic microorganisms thrive under high pressure and cannot survive if brought to the surface. \
+Sound travels faster and farther in cold deep water, enabling blue whales to communicate across entire ocean basins. \
+Ocean trenches form where one tectonic plate is forced beneath another in a process called subduction. \
+Submersibles like Alvin and Deepsea Challenger have carried scientists to the deepest points of multiple ocean trenches. \
+Protecting deep sea ecosystems from mining, trawling, and pollution remains a major challenge for international marine policy.";
 
 const REF_90S_B: &str = "The history of powered flight began on a cold December morning in nineteen oh three at Kitty Hawk, North Carolina. \
 Orville and Wilbur Wright achieved the first sustained controlled flight lasting twelve seconds and covering thirty seven metres. \
 Their success depended on three years of systematic experiments with kites, gliders, and wind tunnel models. \
 Early aircraft were constructed from spruce wood, cotton fabric, and bicycle chain drives connected to pusher propellers. \
 World War One accelerated aviation technology as military commanders recognised the strategic value of aerial reconnaissance. \
+By nineteen eighteen, aircraft could carry bombs, mount machine guns, and dogfight at altitudes exceeding five thousand metres. \
 Charles Lindbergh crossed the Atlantic solo in nineteen twenty seven, completing the thirty three hour journey in the Spirit of St. Louis. \
+Commercial aviation grew rapidly through the nineteen thirties as airlines introduced pressurised cabins and all-metal airframes. \
 Frank Whittle in Britain and Hans von Ohain in Germany independently developed the jet engine in the late nineteen thirties. \
+The first operational jet fighter, the Messerschmitt two sixty two, entered service near the end of World War Two. \
 Breaking the sound barrier in October nineteen forty seven, Chuck Yeager flew the Bell X-one to Mach one point oh six. \
 The Boeing seven oh seven entered commercial service in nineteen fifty eight, making transatlantic travel accessible to millions. \
 Concorde, the supersonic passenger jet developed jointly by Britain and France, cruised at twice the speed of sound. \
+Wide body aircraft such as the Boeing seven forty seven transformed air travel by dramatically reducing ticket prices through scale. \
+Modern jet engines burn fuel far more efficiently than their predecessors, reducing carbon dioxide emissions per passenger kilometre. \
+Fly by wire systems replaced mechanical control linkages with electronic signals processed by flight computers. \
 Composite materials including carbon fibre reinforced polymers now make up more than half of the structural weight of new airliners. \
+Unmanned aerial vehicles range from miniature consumer drones to high altitude surveillance platforms with wingspans exceeding forty metres. \
+Electric aircraft are emerging as a viable option for short regional routes where battery energy density is sufficient. \
+Autonomous flight management systems can now land commercial aircraft in near zero visibility using instrument landing arrays. \
+Space planes capable of taking off from conventional runways and reaching orbital velocity represent the next frontier in aviation. \
 More than four billion passengers board commercial flights each year, making aviation one of the most transformative technologies in human history.";
 
 const REF_90S_C: &str = "Renewable energy systems harness naturally replenishing resources to generate electricity without depleting finite fossil fuel reserves. \
 Solar photovoltaic cells convert sunlight directly into electrical current through the photoelectric effect discovered by Albert Einstein. \
 Silicon wafers doped with phosphorus and boron create a semiconductor junction that releases electrons when struck by photons. \
 The cost of solar panels has fallen by more than ninety percent over the past fifteen years due to manufacturing scale and efficiency gains. \
+Concentrating solar power plants use mirrors or lenses to focus sunlight onto a heat exchanger that drives a steam turbine. \
 Wind turbines extract kinetic energy from moving air masses through rotating blades connected to an electrical generator. \
 Offshore wind installations benefit from stronger and more consistent wind speeds than land based sites, increasing capacity factors. \
 Modern turbines stand over two hundred metres tall with blades spanning more than one hundred metres tip to tip. \
 Grid scale battery storage using lithium ion or iron phosphate chemistry allows excess renewable generation to be shifted to peak demand periods. \
 Pumped hydro storage remains the largest form of grid storage globally, using surplus electricity to pump water uphill into reservoirs. \
+Hydrogen produced by electrolyser units powered by renewables can store energy seasonally and fuel industrial processes. \
+Smart grid technologies use real time data and automated switching to balance supply and demand across interconnected networks. \
+Power purchase agreements allow corporations to fund new renewable projects in exchange for long term fixed electricity pricing. \
+Variable renewable generation requires flexible backup capacity from gas turbines or demand response programmes to maintain grid stability. \
 Geothermal energy taps heat stored in rock and water beneath the Earth's surface to generate baseload electricity. \
+Tidal stream generators capture energy from predictable ocean currents driven by the gravitational pull of the moon. \
+Community energy cooperatives enable households to collectively own and operate local wind and solar installations. \
+Net metering policies allow residential solar owners to sell surplus generation back to the utility grid at retail rates. \
 The levelised cost of energy from onshore wind and utility scale solar now undercuts new coal and gas plants in most markets. \
-International energy agencies project that renewables could supply more than eighty percent of global electricity by twenty fifty.";
+Transmission constraints limit how much renewable energy can be delivered from generation hotspots to population centres. \
+International energy agencies project that renewables could supply more than eighty percent of global electricity by twenty fifty. \
+Transitioning to clean energy at the required scale demands coordinated investment in generation, storage, transmission, and grid modernisation.";
 
 /// Normalise text for WER comparison: lowercase, strip punctuation, collapse whitespace.
 fn normalise_for_wer(s: &str) -> Vec<String> {
@@ -508,9 +538,10 @@ fn should_run_model(model_label: &str, filters: &[String]) -> bool {
 }
 
 fn main() {
-    // Parse --model filters from CLI args
+    // Parse CLI args
     let args: Vec<String> = std::env::args().collect();
     let mut model_filters: Vec<String> = Vec::new();
+    let mut force_cpu = false;
     let mut i = 1;
     while i < args.len() {
         if args[i] == "--model" || args[i] == "-m" {
@@ -519,6 +550,8 @@ fn main() {
                 i += 2;
                 continue;
             }
+        } else if args[i] == "--cpu" {
+            force_cpu = true;
         }
         i += 1;
     }
@@ -529,9 +562,14 @@ fn main() {
     if !model_filters.is_empty() {
         println!("Filter: {}", model_filters.join(", "));
     }
+    if force_cpu {
+        println!("Mode: CPU-only (--cpu)");
+    }
 
     // GPU detection
-    let (use_gpu, parakeet_provider) = {
+    let (use_gpu, parakeet_provider) = if force_cpu {
+        (false, "cpu".to_string())
+    } else {
         #[cfg(any(feature = "whisper", feature = "parakeet"))]
         { detect_gpu() }
         #[cfg(not(any(feature = "whisper", feature = "parakeet")))]
