@@ -42,7 +42,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 [##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
 
-Last activity: 2026-03-04 - Completed quick task 35: Fix benchmark fairness - add VAD chunking to Whisper and incremental audio feed for streaming models
+Last activity: 2026-03-04 - Completed quick task 36: Add 90s benchmark clips to benchmark binary
 
 ## Performance Metrics
 
