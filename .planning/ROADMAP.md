@@ -126,17 +126,15 @@ Plans:
 - [ ] 19.1-01-PLAN.md — Backend engine core, VAD chunking, pipeline dispatch, download command, IPC wiring, startup loading
 - [ ] 19.1-02-PLAN.md — Frontend model selection, first-run card, download handling, human verification
 
-### Phase 20: Implement dual CPU/GPU installers with variant-specific auto-updates
+### Phase 20: Bundle CUDA DLLs in single installer with runtime GPU fallback
 
-**Goal:** Split the single NSIS installer into CPU and GPU variants with independent auto-update channels, so users without NVIDIA hardware can run VoiceType. Each variant gets its own updater manifest and the CI workflow produces both installers in parallel via a matrix build.
+**Goal:** Bundle redistributable CUDA DLLs (cudart, cublas, cublasLt) in the single installer so GGML/whisper-rs falls back to CPU at runtime on non-NVIDIA machines. No installer split, no updater changes — one installer works for all users.
 **Requirements**: TBD
 **Depends on:** Phase 19
-**Plans:** 3 plans
+**Plans:** 0 plans
 
 Plans:
-- [ ] 20-01-PLAN.md — Cargo cuda feature, config overlays, NSIS GPU hook, get_build_variant command
-- [ ] 20-02-PLAN.md — CI matrix workflow conversion with variant-specific updater JSON
-- [ ] 20-03-PLAN.md — Frontend variant display and human verification
+- [ ] TBD (run /gsd:plan-phase 20 to break down)
 
 ### Phase 21: Integration and Distribution
 **Goal**: All v1.2 behavior is verified under real runtime conditions that unit tests cannot cover, and the signed binary is confirmed safe for distribution
