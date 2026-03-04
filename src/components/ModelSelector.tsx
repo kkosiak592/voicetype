@@ -25,6 +25,10 @@ interface ModelSelectorProps {
   fp32Downloading?: boolean;
   fp32Percent?: number;
   fp32Error?: string | null;
+  onMoonshineDownload?: () => void;
+  moonshineDownloading?: boolean;
+  moonshinePercent?: number;
+  moonshineError?: string | null;
 }
 
 function formatMB(bytes: number): string {
@@ -41,6 +45,10 @@ export function ModelSelector({
   fp32Downloading = false,
   fp32Percent = 0,
   fp32Error = null,
+  onMoonshineDownload,
+  moonshineDownloading = false,
+  moonshinePercent = 0,
+  moonshineError = null,
 }: ModelSelectorProps) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -109,22 +117,28 @@ export function ModelSelector({
         const isSelected = selectedId === model.id;
         const isLoading = loadingId === model.id;
         const isParakeet = model.id === 'parakeet-tdt-v2-fp32';
+        const isMoonshine = model.id === 'moonshine-tiny';
 
-        // Resolve Parakeet download state
-        const thisDownloading = isParakeet ? fp32Downloading : false;
-        const thisPercent = isParakeet ? fp32Percent : 0;
-        const thisError = isParakeet ? fp32Error : null;
-        const thisOnDownload = isParakeet ? onFp32Download : undefined;
+        // Resolve download state for Parakeet and Moonshine (both use dedicated download commands)
+        const thisDownloading = isParakeet ? fp32Downloading : isMoonshine ? moonshineDownloading : false;
+        const thisPercent = isParakeet ? fp32Percent : isMoonshine ? moonshinePercent : 0;
+        const thisError = isParakeet ? fp32Error : isMoonshine ? moonshineError : null;
+        const thisOnDownload = isParakeet ? onFp32Download : isMoonshine ? onMoonshineDownload : undefined;
 
         const isParakeetDownloading = isParakeet && thisDownloading;
-        const isDownloading = isParakeet ? isParakeetDownloading : downloadingId === model.id;
+        const isMoonshineDownloading = isMoonshine && thisDownloading;
+        const isDownloading = isParakeet ? isParakeetDownloading
+          : isMoonshine ? isMoonshineDownloading
+          : downloadingId === model.id;
         const hasWhisperError =
           !isParakeet &&
+          !isMoonshine &&
           downloadingId === null &&
           downloadError !== null &&
           !model.downloaded;
         const hasParakeetError = isParakeet && !model.downloaded && thisError !== null;
-        const disabled = !model.downloaded || loadingId !== null || downloadingId !== null || fp32Downloading;
+        const hasMoonshineError = isMoonshine && !model.downloaded && thisError !== null;
+        const disabled = !model.downloaded || loadingId !== null || downloadingId !== null || fp32Downloading || moonshineDownloading;
 
         // Determine border style for undownloaded cards
         const undownloadedBorder = 'border-dashed border-gray-300 dark:border-gray-600';
@@ -170,17 +184,27 @@ export function ModelSelector({
                   {isParakeet && !model.downloaded && thisOnDownload && !isParakeetDownloading && (
                     <button
                       onClick={(e) => { e.stopPropagation(); thisOnDownload(); }}
-                      disabled={fp32Downloading || downloadingId !== null}
+                      disabled={fp32Downloading || downloadingId !== null || moonshineDownloading}
+                      className="rounded-md bg-indigo-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Download
+                    </button>
+                  )}
+                  {/* Moonshine download button */}
+                  {isMoonshine && !model.downloaded && thisOnDownload && !isMoonshineDownloading && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); thisOnDownload(); }}
+                      disabled={moonshineDownloading || fp32Downloading || downloadingId !== null}
                       className="rounded-md bg-indigo-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       Download
                     </button>
                   )}
                   {/* Whisper download button */}
-                  {!isParakeet && !model.downloaded && !isDownloading && (
+                  {!isParakeet && !isMoonshine && !model.downloaded && !isDownloading && (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDownload(model.id); }}
-                      disabled={downloadingId !== null || fp32Downloading}
+                      disabled={downloadingId !== null || fp32Downloading || moonshineDownloading}
                       className="rounded-md bg-indigo-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       Download
@@ -224,8 +248,38 @@ export function ModelSelector({
               </div>
             )}
 
+            {/* Progress bar for Moonshine download */}
+            {isMoonshine && isMoonshineDownloading && (
+              <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-gray-700 dark:bg-gray-800/50">
+                <div className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-indigo-500 transition-all duration-200"
+                    style={{ width: `${thisPercent}%` }}
+                  />
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {thisPercent}%
+                </p>
+              </div>
+            )}
+
+            {/* Error message for Moonshine download */}
+            {hasMoonshineError && thisError && (
+              <div className="mt-1 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-2 dark:border-red-800 dark:bg-red-900/20">
+                <p className="text-xs text-red-600 dark:text-red-400 truncate">{thisError}</p>
+                {thisOnDownload && (
+                  <button
+                    onClick={thisOnDownload}
+                    className="ml-3 shrink-0 text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    Retry
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Progress bar for active Whisper download */}
-            {!isParakeet && isDownloading && (
+            {!isParakeet && !isMoonshine && isDownloading && (
               <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-gray-700 dark:bg-gray-800/50">
                 <div className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
                   <div
@@ -242,7 +296,7 @@ export function ModelSelector({
             )}
 
             {/* Error message for Whisper download */}
-            {hasWhisperError && downloadError && (
+            {!isMoonshine && hasWhisperError && downloadError && (
               <div className="mt-1 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-2 dark:border-red-800 dark:bg-red-900/20">
                 <p className="text-xs text-red-600 dark:text-red-400 truncate">{downloadError}</p>
                 <button

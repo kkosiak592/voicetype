@@ -28,6 +28,9 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
   const [fp32Downloading, setFp32Downloading] = useState(false);
   const [fp32Percent, setFp32Percent] = useState(0);
   const [fp32Error, setFp32Error] = useState<string | null>(null);
+  const [moonshineDownloading, setMoonshineDownloading] = useState(false);
+  const [moonshinePercent, setMoonshinePercent] = useState(0);
+  const [moonshineError, setMoonshineError] = useState<string | null>(null);
   const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(null);
 
   useEffect(() => {
@@ -62,12 +65,18 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
   async function handleModelSelect(modelId: string) {
     try {
       const isParakeetVariant = modelId === 'parakeet-tdt-v2-fp32';
-      const engine = isParakeetVariant ? 'parakeet' : 'whisper';
+      const isMoonshineVariant = modelId === 'moonshine-tiny';
+      const engine = isParakeetVariant ? 'parakeet'
+        : isMoonshineVariant ? 'moonshine'
+        : 'whisper';
 
       if (isParakeetVariant) {
         // Always call set_engine for Parakeet — reloads the model on every switch.
         await invoke('set_engine', { engine: 'parakeet', parakeetModel: modelId });
         setCurrentEngine('parakeet');
+      } else if (isMoonshineVariant) {
+        await invoke('set_engine', { engine: 'moonshine', parakeetModel: null });
+        setCurrentEngine('moonshine');
       } else {
         if (engine !== currentEngine) {
           await invoke('set_engine', { engine, parakeetModel: null });
@@ -129,6 +138,43 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
     }
   }
 
+  async function handleMoonshineDownload() {
+    setMoonshineDownloading(true);
+    setMoonshinePercent(0);
+    setMoonshineError(null);
+
+    const onEvent = new Channel<DownloadEvent>();
+    onEvent.onmessage = async (msg) => {
+      switch (msg.event) {
+        case 'started':
+          break;
+        case 'progress': {
+          const pct = msg.data.totalBytes > 0
+            ? Math.round((msg.data.downloadedBytes / msg.data.totalBytes) * 100)
+            : 0;
+          setMoonshinePercent(pct);
+          break;
+        }
+        case 'finished':
+          setMoonshineDownloading(false);
+          await loadModels();
+          await handleModelSelect('moonshine-tiny');
+          break;
+        case 'error':
+          setMoonshineError(msg.data.message);
+          setMoonshineDownloading(false);
+          break;
+      }
+    };
+
+    try {
+      await invoke('download_moonshine_tiny_model', { onEvent });
+    } catch (e) {
+      setMoonshineError(String(e));
+      setMoonshineDownloading(false);
+    }
+  }
+
   return (
     <div>
       <h1 className="mb-1 text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
@@ -148,6 +194,10 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
         fp32Downloading={fp32Downloading}
         fp32Percent={fp32Percent}
         fp32Error={fp32Error}
+        onMoonshineDownload={handleMoonshineDownload}
+        moonshineDownloading={moonshineDownloading}
+        moonshinePercent={moonshinePercent}
+        moonshineError={moonshineError}
       />
 
       {gpuInfo && (
@@ -175,6 +225,11 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
       {currentEngine === 'parakeet' && (
         <p className="mt-3 text-xs text-gray-400 dark:text-gray-500">
           Parakeet doesn't support vocabulary prompting. Your corrections dictionary still applies.
+        </p>
+      )}
+      {currentEngine === 'moonshine' && (
+        <p className="mt-3 text-xs text-gray-400 dark:text-gray-500">
+          Moonshine doesn't support vocabulary prompting. Your corrections dictionary still applies.
         </p>
       )}
     </div>

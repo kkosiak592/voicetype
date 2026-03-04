@@ -19,6 +19,14 @@ interface FirstRunProps {
 
 const MODELS = [
   {
+    id: 'moonshine-tiny',
+    name: 'Moonshine Tiny',
+    size: '108 MB',
+    quality: 'Fastest transcription',
+    requirement: 'Works on any hardware',
+    gpuOnly: false,
+  },
+  {
     id: 'large-v3-turbo',
     name: 'Large v3 Turbo',
     size: '574 MB',
@@ -94,6 +102,12 @@ export function FirstRun({ gpuDetected, gpuName, directmlAvailable, recommendedM
         } catch (e) {
           console.warn('Failed to set Parakeet engine:', e);
         }
+      } else if (downloadingId === 'moonshine-tiny') {
+        try {
+          await invoke('set_engine', { engine: 'moonshine', parakeetModel: null });
+        } catch (e) {
+          console.warn('Failed to set Moonshine engine:', e);
+        }
       }
 
       if (active && downloadingId) {
@@ -145,6 +159,8 @@ export function FirstRun({ gpuDetected, gpuName, directmlAvailable, recommendedM
     try {
       if (modelId === 'parakeet-tdt-v2-fp32') {
         await invoke('download_parakeet_fp32_model', { onEvent });
+      } else if (modelId === 'moonshine-tiny') {
+        await invoke('download_moonshine_tiny_model', { onEvent });
       } else {
         await invoke('download_model', { modelId, onEvent });
       }
