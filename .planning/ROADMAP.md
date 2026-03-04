@@ -126,6 +126,16 @@ Plans:
 - [ ] 19.1-01-PLAN.md — Backend engine core, VAD chunking, pipeline dispatch, download command, IPC wiring, startup loading
 - [ ] 19.1-02-PLAN.md — Frontend model selection, first-run card, download handling, human verification
 
+### Phase 19.2: Revamp model selection with benchmark stats, recommend parakeet, remove distil-large-v3.5 (INSERTED)
+
+**Goal:** Remove distil-large-v3.5 from all model surfaces, embed benchmark stats in model descriptions, and make parakeet-tdt-v2-fp32 the universal recommended model — data-driven model selection based on Quick 27-37 benchmark results
+**Requirements**: N/A (no formal requirement IDs — cleanup/UX improvement)
+**Depends on:** Phase 19.1
+**Plans:** 1 plan
+
+Plans:
+- [ ] 19.2-01-PLAN.md — Backend distil removal, benchmark stat descriptions, universal parakeet recommendation, FirstRun cleanup
+
 ### Phase 20: Bundle CUDA DLLs in single installer with runtime GPU fallback
 
 **Goal:** Bundle redistributable CUDA DLLs (cudart, cublas, cublasLt) in the single installer so GGML/whisper-rs falls back to CPU at runtime on non-NVIDIA machines. No installer split, no updater changes — one installer works for all users.
