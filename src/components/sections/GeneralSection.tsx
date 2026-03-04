@@ -1,6 +1,7 @@
 import { HotkeyCapture } from '../HotkeyCapture';
 import { RecordingModeToggle } from '../RecordingModeToggle';
 import { AllCapsToggle } from '../AllCapsToggle';
+import { AlwaysListenToggle } from '../AlwaysListenToggle';
 
 interface GeneralSectionProps {
   hotkey: string;
@@ -57,6 +58,20 @@ export function GeneralSection({
               Choose how the hotkey controls your recording session.
             </p>
             <RecordingModeToggle value={recordingMode} onChange={onRecordingModeChange} />
+          </section>
+
+          <div className="my-5 border-t border-gray-100 dark:border-gray-800" />
+
+          <section>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Always Listen</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Keep microphone open to eliminate activation delay. Uses more resources.
+                </p>
+              </div>
+              <AlwaysListenToggle />
+            </div>
           </section>
         </div>
         {/* Card 2: Output */}
