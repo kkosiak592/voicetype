@@ -888,132 +888,36 @@ fn save_test_wav(app: tauri::AppHandle, state: tauri::State<'_, audio::AudioCapt
     Ok(path_str)
 }
 
-/// Read the saved active profile ID from in-memory settings.
-/// Returns "general" if not set.
-fn read_saved_profile_id(app: &tauri::App) -> String {
-    let state = app.state::<SettingsState>();
-    let guard = match state.0.lock() {
-        Ok(g) => g,
-        Err(_) => return "general".to_string(),
-    };
-    guard.get("active_profile_id")
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty())
-        .map(|s| s.to_owned())
-        .unwrap_or_else(|| "general".to_string())
-}
-
-/// Read the saved user corrections for a specific profile from in-memory settings.
-/// Returns an empty HashMap if not set.
-fn read_saved_corrections(app: &tauri::App, profile_id: &str) -> std::collections::HashMap<String, String> {
-    let state = app.state::<SettingsState>();
-    let guard = match state.0.lock() {
-        Ok(g) => g,
-        Err(_) => return std::collections::HashMap::new(),
-    };
-    let key = format!("corrections.{}", profile_id);
-    guard.get(&key)
-        .and_then(|v| v.as_object())
-        .map(|obj| {
-            obj.iter()
-                .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-/// Read the saved ALL CAPS flag for a specific profile from in-memory settings.
-/// Returns false if not set.
-fn read_saved_all_caps(app: &tauri::App, profile_id: &str) -> bool {
-    let state = app.state::<SettingsState>();
-    let guard = match state.0.lock() {
-        Ok(g) => g,
-        Err(_) => return false,
-    };
-    let key = format!("profiles.{}.all_caps", profile_id);
-    guard.get(&key)
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
-}
-
-/// Profile info returned by get_profiles command — lightweight, no corrections dictionary.
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ProfileInfo {
-    id: String,
-    name: String,
-    is_active: bool,
-}
-
-/// Returns the list of available profiles with their IDs, names, and active flag.
+/// Get the vocabulary prompt (initial_prompt) from the active profile.
 #[tauri::command]
-fn get_profiles(app: tauri::AppHandle) -> Result<Vec<ProfileInfo>, String> {
-    let active_id = {
+fn get_vocabulary_prompt(app: tauri::AppHandle) -> Result<String, String> {
+    let state = app.state::<profiles::ActiveProfile>();
+    let guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+    Ok(guard.initial_prompt.clone())
+}
+
+/// Set the vocabulary prompt (initial_prompt) in the active profile and persist to settings.json.
+#[tauri::command]
+fn set_vocabulary_prompt(app: tauri::AppHandle, prompt: String) -> Result<(), String> {
+    // Update in-memory ActiveProfile
+    {
         let state = app.state::<profiles::ActiveProfile>();
-        let guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
-        guard.id.clone()
-    };
-    Ok(profiles::get_all_profiles()
-        .into_iter()
-        .map(|p| ProfileInfo {
-            is_active: p.id == active_id,
-            id: p.id,
-            name: p.name,
-        })
-        .collect())
+        let mut guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+        guard.initial_prompt = prompt.clone();
+    }
+    // Persist to settings.json
+    let mut json = read_settings(&app)?;
+    json["vocabulary_prompt"] = serde_json::Value::String(prompt);
+    write_settings(&app, &json)?;
+    Ok(())
 }
 
-/// Switch the active profile by ID. Rebuilds the CorrectionsEngine from the new profile's
-/// corrections merged with any user-saved corrections for that profile.
-/// Persists the active profile ID to settings.json.
+/// Get the ALL CAPS flag from the active profile.
 #[tauri::command]
-fn set_active_profile(app: tauri::AppHandle, profile_id: String) -> Result<(), String> {
-    // Build the new profile
-    let mut new_profile = match profile_id.as_str() {
-        "structural-engineering" => profiles::structural_engineering_profile(),
-        "general" => profiles::general_profile(),
-        _ => return Err(format!("Unknown profile id: {}", profile_id)),
-    };
-
-    // Merge saved user corrections (user overrides defaults)
-    let mut json = read_settings(&app)?;
-
-    let user_corrections_key = format!("corrections.{}", profile_id);
-    if let Some(user_map) = json.get(&user_corrections_key).and_then(|v| v.as_object()) {
-        for (k, v) in user_map {
-            if let Some(s) = v.as_str() {
-                new_profile.corrections.insert(k.clone(), s.to_string());
-            }
-        }
-    }
-
-    // Load saved ALL CAPS flag for this profile
-    let all_caps_key = format!("profiles.{}.all_caps", profile_id);
-    if let Some(flag) = json.get(&all_caps_key).and_then(|v| v.as_bool()) {
-        new_profile.all_caps = flag;
-    }
-
-    // Rebuild corrections engine from merged corrections
-    let engine = corrections::CorrectionsEngine::from_map(&new_profile.corrections)?;
-
-    // Update managed states
-    {
-        let profile_state = app.state::<profiles::ActiveProfile>();
-        let mut guard = profile_state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
-        *guard = new_profile;
-    }
-    {
-        let corrections_state = app.state::<corrections::CorrectionsState>();
-        let mut guard = corrections_state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
-        *guard = engine;
-    }
-
-    // Persist active profile ID
-    json["active_profile_id"] = serde_json::Value::String(profile_id.clone());
-    write_settings(&app, &json)?;
-
-    log::info!("Active profile set to: {}", profile_id);
-    Ok(())
+fn get_all_caps(app: tauri::AppHandle) -> Result<bool, String> {
+    let state = app.state::<profiles::ActiveProfile>();
+    let guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+    Ok(guard.all_caps)
 }
 
 /// Returns the current active profile's corrections dictionary (for the UI editor).
@@ -1024,23 +928,16 @@ fn get_corrections(app: tauri::AppHandle) -> Result<std::collections::HashMap<St
     Ok(guard.corrections.clone())
 }
 
-/// Save user corrections for the active profile. Merges with defaults and rebuilds engine.
-/// Persists to settings.json under `corrections.{profile_id}`.
+/// Save user corrections. Rebuilds the corrections engine from the provided map.
+/// Persists to settings.json under `corrections.default`.
 #[tauri::command]
 fn save_corrections(app: tauri::AppHandle, corrections: std::collections::HashMap<String, String>) -> Result<(), String> {
-    let profile_id = {
+    // Update in-memory ActiveProfile corrections
+    {
         let state = app.state::<profiles::ActiveProfile>();
         let mut guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
-        // Rebuild corrections from defaults + user map so deleted keys are removed.
-        let defaults = match guard.id.as_str() {
-            "structural-engineering" => profiles::structural_engineering_profile().corrections,
-            _ => profiles::general_profile().corrections,
-        };
-        guard.corrections.clear();
-        guard.corrections.extend(defaults);
-        guard.corrections.extend(corrections.clone());
-        guard.id.clone()
-    };
+        guard.corrections = corrections.clone();
+    }
 
     // Rebuild engine from updated corrections
     let engine = {
@@ -1054,32 +951,29 @@ fn save_corrections(app: tauri::AppHandle, corrections: std::collections::HashMa
         *guard = engine;
     }
 
-    // Persist user corrections to settings.json
+    // Persist user corrections to settings.json under flat key
     let mut json = read_settings(&app)?;
-    let key = format!("corrections.{}", profile_id);
-    json[&key] = serde_json::to_value(&corrections).unwrap();
+    json["corrections.default"] = serde_json::to_value(&corrections).unwrap();
     write_settings(&app, &json)?;
 
-    log::info!("Corrections saved for profile '{}'", profile_id);
+    log::info!("Corrections saved ({} entries)", corrections.len());
     Ok(())
 }
 
-/// Toggle ALL CAPS for the active profile. Persists to settings.json.
+/// Toggle ALL CAPS. Persists to flat `all_caps` key in settings.json.
 #[tauri::command]
 fn set_all_caps(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
-    let profile_id = {
+    {
         let state = app.state::<profiles::ActiveProfile>();
         let mut guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
         guard.all_caps = enabled;
-        guard.id.clone()
-    };
+    }
 
     let mut json = read_settings(&app)?;
-    let key = format!("profiles.{}.all_caps", profile_id);
-    json[&key] = serde_json::Value::Bool(enabled);
+    json["all_caps"] = serde_json::Value::Bool(enabled);
     write_settings(&app, &json)?;
 
-    log::info!("ALL CAPS set to {} for profile '{}'", enabled, profile_id);
+    log::info!("ALL CAPS set to {}", enabled);
     Ok(())
 }
 
@@ -1698,8 +1592,9 @@ pub fn run() {
             save_test_wav,
             list_input_devices,
             set_microphone,
-            get_profiles,
-            set_active_profile,
+            get_vocabulary_prompt,
+            set_vocabulary_prompt,
+            get_all_caps,
             get_corrections,
             save_corrections,
             set_all_caps,
@@ -1911,29 +1806,75 @@ pub fn run() {
 
             // Load and register vocabulary profile + corrections engine
             {
-                let profile_id = read_saved_profile_id(app);
-                let mut active_profile = match profile_id.as_str() {
-                    "structural-engineering" => profiles::structural_engineering_profile(),
-                    _ => profiles::general_profile(),
-                };
+                let mut active_profile = profiles::default_profile();
 
-                // Merge user-saved corrections for this profile (user overrides defaults)
-                let user_corrections = read_saved_corrections(app, &profile_id);
-                for (k, v) in user_corrections {
-                    active_profile.corrections.insert(k, v);
+                // Migration + load: operate on a mutable copy of settings
+                let mut json = load_settings_from_disk(app.handle());
+
+                // Migration — corrections: if corrections.default absent but corrections.structural-engineering exists, copy it
+                let has_default_corrections = json.get("corrections.default").is_some();
+                if !has_default_corrections {
+                    if let Some(se_corrections) = json.get("corrections.structural-engineering").cloned() {
+                        log::info!("Migrating corrections.structural-engineering -> corrections.default");
+                        json["corrections.default"] = se_corrections;
+                        // Flush migration immediately
+                        let state = app.state::<SettingsState>();
+                        let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+                        *guard = json.clone();
+                        drop(guard);
+                        if let Err(e) = write_settings(app.handle(), &json) {
+                            log::error!("Failed to persist corrections migration: {}", e);
+                        }
+                    }
                 }
 
-                // Load saved ALL CAPS flag for this profile
-                active_profile.all_caps = read_saved_all_caps(app, &profile_id);
+                // Migration — all_caps: if flat all_caps absent but profiles.structural-engineering.all_caps is true, copy it
+                let has_flat_all_caps = json.get("all_caps").is_some();
+                if !has_flat_all_caps {
+                    if let Some(true) = json.get("profiles.structural-engineering.all_caps").and_then(|v| v.as_bool()) {
+                        log::info!("Migrating profiles.structural-engineering.all_caps -> all_caps");
+                        json["all_caps"] = serde_json::Value::Bool(true);
+                        let state = app.state::<SettingsState>();
+                        let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+                        *guard = json.clone();
+                        drop(guard);
+                        if let Err(e) = write_settings(app.handle(), &json) {
+                            log::error!("Failed to persist all_caps migration: {}", e);
+                        }
+                    }
+                }
 
-                // Build corrections engine from merged corrections
+                // Load vocabulary_prompt from settings
+                if let Some(prompt) = json.get("vocabulary_prompt").and_then(|v| v.as_str()) {
+                    active_profile.initial_prompt = prompt.to_owned();
+                }
+
+                // Load corrections from corrections.default key
+                if let Some(obj) = json.get("corrections.default").and_then(|v| v.as_object()) {
+                    for (k, v) in obj {
+                        if let Some(s) = v.as_str() {
+                            active_profile.corrections.insert(k.clone(), s.to_string());
+                        }
+                    }
+                }
+
+                // Load flat all_caps key
+                if let Some(flag) = json.get("all_caps").and_then(|v| v.as_bool()) {
+                    active_profile.all_caps = flag;
+                }
+
+                // Build corrections engine from corrections map
                 let engine = corrections::CorrectionsEngine::from_map(&active_profile.corrections)
                     .unwrap_or_else(|e| {
                         log::error!("Failed to build corrections engine at startup: {}", e);
                         corrections::CorrectionsEngine::from_map(&std::collections::HashMap::new()).unwrap()
                     });
 
-                log::info!("Active vocabulary profile: '{}' (all_caps={})", active_profile.id, active_profile.all_caps);
+                log::info!("Vocabulary profile loaded (all_caps={}, prompt_len={}, corrections={})",
+                    active_profile.all_caps,
+                    active_profile.initial_prompt.len(),
+                    active_profile.corrections.len()
+                );
                 app.manage(profiles::ActiveProfile(std::sync::Mutex::new(active_profile)));
                 app.manage(corrections::CorrectionsState(std::sync::Mutex::new(engine)));
             }
