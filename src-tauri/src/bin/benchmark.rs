@@ -510,7 +510,7 @@ fn find_wav(filename: &str) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------------
-// Benchmark result
+// Benchmark results
 // ---------------------------------------------------------------------------
 
 struct BenchResult {
@@ -521,6 +521,95 @@ struct BenchResult {
     max_ms: u64,
     wer: f64,
     first_text: String,
+}
+
+struct ProgressiveResult {
+    model: String,
+    clip: String,
+    /// Total wall-clock time for all chunks (batch-equivalent)
+    total_ms: u64,
+    /// Time from last chunk "becoming available" to final transcription done
+    post_release_ms: i64,  // can be negative if transcription finishes before last chunk arrives
+    /// Number of VAD chunks
+    num_chunks: usize,
+    wer: f64,
+    first_text: String,
+}
+
+// ---------------------------------------------------------------------------
+// Progressive benchmark helper
+// ---------------------------------------------------------------------------
+
+/// Simulate progressive VAD-driven chunk transcription.
+///
+/// For each chunk, computes its "available at" time = cumulative audio duration up to chunk end.
+/// Transcribes chunks sequentially. If transcription of prior chunks finishes before the next
+/// chunk is "available", we sleep the difference (simulating waiting for audio).
+/// If transcription runs longer, the next chunk is already available (no wait).
+///
+/// Returns (total_transcribe_ms, post_release_ms, combined_text, num_chunks).
+#[cfg(any(feature = "bench_extra", feature = "parakeet", feature = "whisper"))]
+fn run_progressive<F>(
+    samples: &[f32],
+    mut transcribe_chunk: F,
+) -> (u64, i64, String, usize)
+where
+    F: FnMut(&[f32]) -> Result<String, String>,
+{
+    let chunks = vad_chunk_audio(samples); // always chunk, even short clips
+    let num_chunks = chunks.len();
+
+    // Compute each chunk's "available at" time relative to audio start.
+    // Since vad_chunk_audio splits sequentially and sample rate is 16kHz,
+    // track cumulative sample position to determine real-time offset.
+    let mut chunk_available_at_ms: Vec<u64> = Vec::with_capacity(num_chunks);
+    let mut cumulative_samples: usize = 0;
+    for chunk in &chunks {
+        cumulative_samples += chunk.len();
+        // This chunk's audio ends at cumulative_samples / 16000 seconds
+        let available_ms = (cumulative_samples as f64 / 16.0) as u64;
+        chunk_available_at_ms.push(available_ms);
+    }
+
+    let wall_start = Instant::now();
+    let mut combined_text = String::new();
+    let mut total_transcribe_ms: u64 = 0;
+
+    for (i, chunk) in chunks.iter().enumerate() {
+        // Wait until this chunk "becomes available" (simulate real-time audio arrival)
+        let available_at = chunk_available_at_ms[i];
+        let elapsed_so_far = wall_start.elapsed().as_millis() as u64;
+        if elapsed_so_far < available_at {
+            std::thread::sleep(std::time::Duration::from_millis(available_at - elapsed_so_far));
+        }
+
+        let chunk_start = Instant::now();
+        match transcribe_chunk(chunk) {
+            Ok(text) => {
+                let chunk_ms = chunk_start.elapsed().as_millis() as u64;
+                total_transcribe_ms += chunk_ms;
+                let trimmed = text.trim();
+                if !trimmed.is_empty() {
+                    if !combined_text.is_empty() {
+                        combined_text.push(' ');
+                    }
+                    combined_text.push_str(trimmed);
+                }
+            }
+            Err(e) => {
+                eprintln!("  PROGRESSIVE ERROR chunk {}: {}", i, e);
+            }
+        }
+    }
+
+    let total_wall_ms = wall_start.elapsed().as_millis() as u64;
+    // Last chunk was available at chunk_available_at_ms[last]
+    // Transcription finished at total_wall_ms
+    // Post-release latency = total_wall_ms - last_chunk_available_at
+    let last_available = *chunk_available_at_ms.last().unwrap_or(&0);
+    let post_release_ms = total_wall_ms as i64 - last_available as i64;
+
+    (total_transcribe_ms, post_release_ms, combined_text, num_chunks)
 }
 
 // ---------------------------------------------------------------------------
@@ -542,6 +631,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let mut model_filters: Vec<String> = Vec::new();
     let mut force_cpu = false;
+    let mut progressive = false;
     let mut i = 1;
     while i < args.len() {
         if args[i] == "--model" || args[i] == "-m" {
@@ -552,6 +642,8 @@ fn main() {
             }
         } else if args[i] == "--cpu" {
             force_cpu = true;
+        } else if args[i] == "--progressive" {
+            progressive = true;
         }
         i += 1;
     }
@@ -564,6 +656,9 @@ fn main() {
     }
     if force_cpu {
         println!("Mode: CPU-only (--cpu)");
+    }
+    if progressive {
+        println!("Mode: progressive (simulated real-time dispatch)");
     }
 
     // GPU detection
@@ -735,6 +830,7 @@ fn main() {
 
     // Run benchmarks
     let mut results: Vec<BenchResult> = Vec::new();
+    let mut progressive_results: Vec<ProgressiveResult> = Vec::new();
     const ITERATIONS: usize = 3;
 
     // -----------------------------------------------------------------------
@@ -767,7 +863,7 @@ fn main() {
 
         for (wav_path, clip_label) in &clip_paths {
             println!("  Clip: {}", clip_label);
-            let audio = match read_wav_to_f32(wav_path) {
+            let audio_for_progressive = match read_wav_to_f32(wav_path) {
                 Ok(a) => a,
                 Err(e) => {
                     eprintln!("  ERROR reading WAV: {}", e);
@@ -775,12 +871,12 @@ fn main() {
                 }
             };
 
-            let needs_chunking = audio.len() > 30 * 16000;
+            let needs_chunking = audio_for_progressive.len() > 30 * 16000;
             let vad_start = Instant::now();
             let chunks: Vec<Vec<f32>> = if needs_chunking {
-                vad_chunk_audio(&audio)
+                vad_chunk_audio(&audio_for_progressive)
             } else {
-                vec![audio]
+                vec![audio_for_progressive.clone()]
             };
             let vad_ms = if needs_chunking { vad_start.elapsed().as_millis() as u64 } else { 0 };
             if needs_chunking {
@@ -878,6 +974,53 @@ fn main() {
                 wer,
                 first_text,
             });
+
+            // Progressive mode for Whisper
+            if progressive {
+                println!("  Progressive mode:");
+                let (total_ms, post_release_ms, text, num_chunks) = run_progressive(&audio_for_progressive, |chunk| {
+                    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+                    params.set_language(Some("en"));
+                    params.set_temperature(0.0);
+                    params.set_temperature_inc(0.0);
+                    params.set_single_segment(false);
+                    params.set_no_context(true);
+                    params.set_print_special(false);
+                    params.set_print_progress(false);
+                    params.set_print_realtime(false);
+                    params.set_print_timestamps(false);
+                    let mut state = ctx.create_state().map_err(|e| e.to_string())?;
+                    state.full(params, chunk).map_err(|e| e.to_string())?;
+                    let n_seg = state.full_n_segments();
+                    let mut seg_text = String::new();
+                    for s in 0..n_seg {
+                        if let Some(segment) = state.get_segment(s) {
+                            if let Ok(s_str) = segment.to_str() {
+                                let t = s_str.trim();
+                                if !t.is_empty() {
+                                    if !seg_text.is_empty() { seg_text.push(' '); }
+                                    seg_text.push_str(t);
+                                }
+                            }
+                        }
+                    }
+                    Ok(seg_text)
+                });
+                let reference = reference_for_clip(clip_label);
+                let (prog_wer, _, _, _, _) = compute_wer(reference, &text);
+                println!("    {} chunks, total={}ms, post-release={}ms, WER={:.1}%",
+                    num_chunks, total_ms, post_release_ms, prog_wer);
+                println!("    Text: \"{}\"", truncate(&text, 80));
+                progressive_results.push(ProgressiveResult {
+                    model: model_label.to_string(),
+                    clip: clip_label.to_string(),
+                    total_ms,
+                    post_release_ms,
+                    num_chunks,
+                    wer: prog_wer,
+                    first_text: text,
+                });
+            }
         }
     }
 
@@ -904,7 +1047,7 @@ fn main() {
             Ok(p) => p,
             Err(e) => {
                 eprintln!("  ERROR loading parakeet: {}", e);
-                print_summary(&results);
+                print_summary(&results, &progressive_results);
                 return;
             }
         };
@@ -919,7 +1062,7 @@ fn main() {
 
         for (wav_path, clip_label) in &clip_paths {
             println!("  Clip: {}", clip_label);
-            let audio = match read_wav_to_f32(wav_path) {
+            let audio_for_progressive = match read_wav_to_f32(wav_path) {
                 Ok(a) => a,
                 Err(e) => {
                     eprintln!("  ERROR reading WAV: {}", e);
@@ -927,12 +1070,12 @@ fn main() {
                 }
             };
 
-            let needs_chunking = audio.len() > 30 * 16000; // > 30 seconds
+            let needs_chunking = audio_for_progressive.len() > 30 * 16000; // > 30 seconds
             let vad_start = Instant::now();
             let chunks: Vec<Vec<f32>> = if needs_chunking {
-                vad_chunk_audio(&audio)
+                vad_chunk_audio(&audio_for_progressive)
             } else {
-                vec![audio]
+                vec![audio_for_progressive.clone()]
             };
             let vad_ms = if needs_chunking { vad_start.elapsed().as_millis() as u64 } else { 0 };
             if needs_chunking {
@@ -1004,6 +1147,30 @@ fn main() {
                 wer,
                 first_text,
             });
+
+            // Progressive mode for Parakeet
+            if progressive {
+                println!("  Progressive mode:");
+                let (total_ms, post_release_ms, text, num_chunks) = run_progressive(&audio_for_progressive, |chunk| {
+                    parakeet.transcribe_samples(chunk.to_vec(), 16000, 1, Some(TimestampMode::Sentences))
+                        .map(|r| r.text)
+                        .map_err(|e| e.to_string())
+                });
+                let reference = reference_for_clip(clip_label);
+                let (prog_wer, _, _, _, _) = compute_wer(reference, &text);
+                println!("    {} chunks, total={}ms, post-release={}ms, WER={:.1}%",
+                    num_chunks, total_ms, post_release_ms, prog_wer);
+                println!("    Text: \"{}\"", truncate(&text, 80));
+                progressive_results.push(ProgressiveResult {
+                    model: "parakeet-tdt-v2".to_string(),
+                    clip: clip_label.to_string(),
+                    total_ms,
+                    post_release_ms,
+                    num_chunks,
+                    wer: prog_wer,
+                    first_text: text,
+                });
+            }
         }
     }
 
@@ -1040,7 +1207,7 @@ fn main() {
 
             for (wav_path, clip_label) in &clip_paths {
                 println!("  Clip: {}", clip_label);
-                let audio = match read_wav_to_f32(wav_path) {
+                let audio_for_progressive = match read_wav_to_f32(wav_path) {
                     Ok(a) => a,
                     Err(e) => {
                         eprintln!("  ERROR reading WAV: {}", e);
@@ -1048,12 +1215,12 @@ fn main() {
                     }
                 };
 
-                let needs_chunking = audio.len() > 30 * 16000; // > 30 seconds
+                let needs_chunking = audio_for_progressive.len() > 30 * 16000; // > 30 seconds
                 let vad_start = Instant::now();
                 let chunks: Vec<Vec<f32>> = if needs_chunking {
-                    vad_chunk_audio(&audio)
+                    vad_chunk_audio(&audio_for_progressive)
                 } else {
-                    vec![audio]
+                    vec![audio_for_progressive.clone()]
                 };
                 let vad_ms = if needs_chunking { vad_start.elapsed().as_millis() as u64 } else { 0 };
                 if needs_chunking {
@@ -1119,6 +1286,30 @@ fn main() {
                     wer,
                     first_text,
                 });
+
+                // Progressive mode for Moonshine tiny
+                if progressive {
+                    println!("  Progressive mode:");
+                    let (total_ms, post_release_ms, text, num_chunks) = run_progressive(&audio_for_progressive, |chunk| {
+                        engine.transcribe_samples(chunk.to_vec(), None)
+                            .map(|r| r.text)
+                            .map_err(|e| e.to_string())
+                    });
+                    let reference = reference_for_clip(clip_label);
+                    let (prog_wer, _, _, _, _) = compute_wer(reference, &text);
+                    println!("    {} chunks, total={}ms, post-release={}ms, WER={:.1}%",
+                        num_chunks, total_ms, post_release_ms, prog_wer);
+                    println!("    Text: \"{}\"", truncate(&text, 80));
+                    progressive_results.push(ProgressiveResult {
+                        model: "moonshine-tiny".to_string(),
+                        clip: clip_label.to_string(),
+                        total_ms,
+                        post_release_ms,
+                        num_chunks,
+                        wer: prog_wer,
+                        first_text: text,
+                    });
+                }
             }
         }
 
@@ -1139,7 +1330,7 @@ fn main() {
 
             for (wav_path, clip_label) in &clip_paths {
                 println!("  Clip: {}", clip_label);
-                let audio = match read_wav_to_f32(wav_path) {
+                let audio_for_progressive = match read_wav_to_f32(wav_path) {
                     Ok(a) => a,
                     Err(e) => {
                         eprintln!("  ERROR reading WAV: {}", e);
@@ -1147,12 +1338,12 @@ fn main() {
                     }
                 };
 
-                let needs_chunking = audio.len() > 30 * 16000; // > 30 seconds
+                let needs_chunking = audio_for_progressive.len() > 30 * 16000; // > 30 seconds
                 let vad_start = Instant::now();
                 let chunks: Vec<Vec<f32>> = if needs_chunking {
-                    vad_chunk_audio(&audio)
+                    vad_chunk_audio(&audio_for_progressive)
                 } else {
-                    vec![audio]
+                    vec![audio_for_progressive.clone()]
                 };
                 let vad_ms = if needs_chunking { vad_start.elapsed().as_millis() as u64 } else { 0 };
                 if needs_chunking {
@@ -1218,6 +1409,30 @@ fn main() {
                     wer,
                     first_text,
                 });
+
+                // Progressive mode for Moonshine base
+                if progressive {
+                    println!("  Progressive mode:");
+                    let (total_ms, post_release_ms, text, num_chunks) = run_progressive(&audio_for_progressive, |chunk| {
+                        engine.transcribe_samples(chunk.to_vec(), None)
+                            .map(|r| r.text)
+                            .map_err(|e| e.to_string())
+                    });
+                    let reference = reference_for_clip(clip_label);
+                    let (prog_wer, _, _, _, _) = compute_wer(reference, &text);
+                    println!("    {} chunks, total={}ms, post-release={}ms, WER={:.1}%",
+                        num_chunks, total_ms, post_release_ms, prog_wer);
+                    println!("    Text: \"{}\"", truncate(&text, 80));
+                    progressive_results.push(ProgressiveResult {
+                        model: "moonshine-base".to_string(),
+                        clip: clip_label.to_string(),
+                        total_ms,
+                        post_release_ms,
+                        num_chunks,
+                        wer: prog_wer,
+                        first_text: text,
+                    });
+                }
             }
         }
 
@@ -1243,7 +1458,7 @@ fn main() {
 
             for (wav_path, clip_label) in &clip_paths {
                 println!("  Clip: {}", clip_label);
-                let audio = match read_wav_to_f32(wav_path) {
+                let audio_for_progressive = match read_wav_to_f32(wav_path) {
                     Ok(a) => a,
                     Err(e) => {
                         eprintln!("  ERROR reading WAV: {}", e);
@@ -1252,12 +1467,12 @@ fn main() {
                 };
 
                 // VAD-chunk long audio to stay within adapter's 4096-frame limit (~81.9s).
-                let needs_chunking = audio.len() > 30 * 16000;
+                let needs_chunking = audio_for_progressive.len() > 30 * 16000;
                 let vad_start = Instant::now();
                 let chunks: Vec<Vec<f32>> = if needs_chunking {
-                    vad_chunk_audio(&audio)
+                    vad_chunk_audio(&audio_for_progressive)
                 } else {
-                    vec![audio]
+                    vec![audio_for_progressive.clone()]
                 };
                 let vad_ms = if needs_chunking { vad_start.elapsed().as_millis() as u64 } else { 0 };
                 if needs_chunking {
@@ -1395,6 +1610,50 @@ fn main() {
                     wer,
                     first_text,
                 });
+
+                // Progressive mode for moonshine-streaming-tiny
+                if progressive {
+                    println!("  Progressive mode:");
+                    let (total_ms, post_release_ms, text, num_chunks) = run_progressive(&audio_for_progressive, |chunk| {
+                        let mut state = model.create_state();
+                        for frame_start in (0..chunk.len()).step_by(STREAMING_FRAME_SAMPLES) {
+                            let frame_end = (frame_start + STREAMING_FRAME_SAMPLES).min(chunk.len());
+                            model.process_audio_chunk(&mut state, &chunk[frame_start..frame_end])
+                                .map_err(|e| e.to_string())?;
+                        }
+                        model.encode(&mut state, true).map_err(|e| e.to_string())?;
+                        if state.memory_len == 0 { return Ok(String::new()); }
+                        model.compute_cross_kv(&mut state).map_err(|e| e.to_string())?;
+                        let duration_sec = chunk.len() as f32 / 16000.0;
+                        let max_tok = ((duration_sec * 6.5).ceil() as usize).min(model.config.max_seq_len);
+                        let mut tokens: Vec<i64> = Vec::new();
+                        let mut cur = model.config.bos_id;
+                        for _ in 0..max_tok {
+                            let logits = model.decode_step(&mut state, cur).map_err(|e| e.to_string())?;
+                            let next = logits.iter().enumerate()
+                                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                                .map(|(idx, _)| idx as i64).unwrap_or(model.config.eos_id);
+                            if next == model.config.eos_id { break; }
+                            tokens.push(next);
+                            cur = next;
+                        }
+                        model.decode_tokens(&tokens).map_err(|e| e.to_string())
+                    });
+                    let reference = reference_for_clip(clip_label);
+                    let (prog_wer, _, _, _, _) = compute_wer(reference, &text);
+                    println!("    {} chunks, total={}ms, post-release={}ms, WER={:.1}%",
+                        num_chunks, total_ms, post_release_ms, prog_wer);
+                    println!("    Text: \"{}\"", truncate(&text, 80));
+                    progressive_results.push(ProgressiveResult {
+                        model: "moonshine-streaming-tiny".to_string(),
+                        clip: clip_label.to_string(),
+                        total_ms,
+                        post_release_ms,
+                        num_chunks,
+                        wer: prog_wer,
+                        first_text: text,
+                    });
+                }
             }
             } // end if let Some(model_opt)
         }
@@ -1421,7 +1680,7 @@ fn main() {
 
             for (wav_path, clip_label) in &clip_paths {
                 println!("  Clip: {}", clip_label);
-                let audio = match read_wav_to_f32(wav_path) {
+                let audio_for_progressive = match read_wav_to_f32(wav_path) {
                     Ok(a) => a,
                     Err(e) => {
                         eprintln!("  ERROR reading WAV: {}", e);
@@ -1430,12 +1689,12 @@ fn main() {
                 };
 
                 // VAD-chunk long audio to stay within adapter's 4096-frame limit (~81.9s).
-                let needs_chunking = audio.len() > 30 * 16000;
+                let needs_chunking = audio_for_progressive.len() > 30 * 16000;
                 let vad_start = Instant::now();
                 let chunks: Vec<Vec<f32>> = if needs_chunking {
-                    vad_chunk_audio(&audio)
+                    vad_chunk_audio(&audio_for_progressive)
                 } else {
-                    vec![audio]
+                    vec![audio_for_progressive.clone()]
                 };
                 let vad_ms = if needs_chunking { vad_start.elapsed().as_millis() as u64 } else { 0 };
                 if needs_chunking {
@@ -1563,6 +1822,50 @@ fn main() {
                     wer,
                     first_text,
                 });
+
+                // Progressive mode for moonshine-streaming-small
+                if progressive {
+                    println!("  Progressive mode:");
+                    let (total_ms, post_release_ms, text, num_chunks) = run_progressive(&audio_for_progressive, |chunk| {
+                        let mut state = model.create_state();
+                        for frame_start in (0..chunk.len()).step_by(STREAMING_FRAME_SAMPLES) {
+                            let frame_end = (frame_start + STREAMING_FRAME_SAMPLES).min(chunk.len());
+                            model.process_audio_chunk(&mut state, &chunk[frame_start..frame_end])
+                                .map_err(|e| e.to_string())?;
+                        }
+                        model.encode(&mut state, true).map_err(|e| e.to_string())?;
+                        if state.memory_len == 0 { return Ok(String::new()); }
+                        model.compute_cross_kv(&mut state).map_err(|e| e.to_string())?;
+                        let duration_sec = chunk.len() as f32 / 16000.0;
+                        let max_tok = ((duration_sec * 6.5).ceil() as usize).min(model.config.max_seq_len);
+                        let mut tokens: Vec<i64> = Vec::new();
+                        let mut cur = model.config.bos_id;
+                        for _ in 0..max_tok {
+                            let logits = model.decode_step(&mut state, cur).map_err(|e| e.to_string())?;
+                            let next = logits.iter().enumerate()
+                                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                                .map(|(idx, _)| idx as i64).unwrap_or(model.config.eos_id);
+                            if next == model.config.eos_id { break; }
+                            tokens.push(next);
+                            cur = next;
+                        }
+                        model.decode_tokens(&tokens).map_err(|e| e.to_string())
+                    });
+                    let reference = reference_for_clip(clip_label);
+                    let (prog_wer, _, _, _, _) = compute_wer(reference, &text);
+                    println!("    {} chunks, total={}ms, post-release={}ms, WER={:.1}%",
+                        num_chunks, total_ms, post_release_ms, prog_wer);
+                    println!("    Text: \"{}\"", truncate(&text, 80));
+                    progressive_results.push(ProgressiveResult {
+                        model: "moonshine-streaming-small".to_string(),
+                        clip: clip_label.to_string(),
+                        total_ms,
+                        post_release_ms,
+                        num_chunks,
+                        wer: prog_wer,
+                        first_text: text,
+                    });
+                }
             }
             } // end if let Some(model_opt)
         }
@@ -1589,7 +1892,7 @@ fn main() {
 
             for (wav_path, clip_label) in &clip_paths {
                 println!("  Clip: {}", clip_label);
-                let audio = match read_wav_to_f32(wav_path) {
+                let audio_for_progressive = match read_wav_to_f32(wav_path) {
                     Ok(a) => a,
                     Err(e) => {
                         eprintln!("  ERROR reading WAV: {}", e);
@@ -1598,12 +1901,12 @@ fn main() {
                 };
 
                 // VAD-chunk long audio to stay within adapter's 4096-frame limit (~81.9s).
-                let needs_chunking = audio.len() > 30 * 16000;
+                let needs_chunking = audio_for_progressive.len() > 30 * 16000;
                 let vad_start = Instant::now();
                 let chunks: Vec<Vec<f32>> = if needs_chunking {
-                    vad_chunk_audio(&audio)
+                    vad_chunk_audio(&audio_for_progressive)
                 } else {
-                    vec![audio]
+                    vec![audio_for_progressive.clone()]
                 };
                 let vad_ms = if needs_chunking { vad_start.elapsed().as_millis() as u64 } else { 0 };
                 if needs_chunking {
@@ -1731,6 +2034,50 @@ fn main() {
                     wer,
                     first_text,
                 });
+
+                // Progressive mode for moonshine-streaming-medium
+                if progressive {
+                    println!("  Progressive mode:");
+                    let (total_ms, post_release_ms, text, num_chunks) = run_progressive(&audio_for_progressive, |chunk| {
+                        let mut state = model.create_state();
+                        for frame_start in (0..chunk.len()).step_by(STREAMING_FRAME_SAMPLES) {
+                            let frame_end = (frame_start + STREAMING_FRAME_SAMPLES).min(chunk.len());
+                            model.process_audio_chunk(&mut state, &chunk[frame_start..frame_end])
+                                .map_err(|e| e.to_string())?;
+                        }
+                        model.encode(&mut state, true).map_err(|e| e.to_string())?;
+                        if state.memory_len == 0 { return Ok(String::new()); }
+                        model.compute_cross_kv(&mut state).map_err(|e| e.to_string())?;
+                        let duration_sec = chunk.len() as f32 / 16000.0;
+                        let max_tok = ((duration_sec * 6.5).ceil() as usize).min(model.config.max_seq_len);
+                        let mut tokens: Vec<i64> = Vec::new();
+                        let mut cur = model.config.bos_id;
+                        for _ in 0..max_tok {
+                            let logits = model.decode_step(&mut state, cur).map_err(|e| e.to_string())?;
+                            let next = logits.iter().enumerate()
+                                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                                .map(|(idx, _)| idx as i64).unwrap_or(model.config.eos_id);
+                            if next == model.config.eos_id { break; }
+                            tokens.push(next);
+                            cur = next;
+                        }
+                        model.decode_tokens(&tokens).map_err(|e| e.to_string())
+                    });
+                    let reference = reference_for_clip(clip_label);
+                    let (prog_wer, _, _, _, _) = compute_wer(reference, &text);
+                    println!("    {} chunks, total={}ms, post-release={}ms, WER={:.1}%",
+                        num_chunks, total_ms, post_release_ms, prog_wer);
+                    println!("    Text: \"{}\"", truncate(&text, 80));
+                    progressive_results.push(ProgressiveResult {
+                        model: "moonshine-streaming-medium".to_string(),
+                        clip: clip_label.to_string(),
+                        total_ms,
+                        post_release_ms,
+                        num_chunks,
+                        wer: prog_wer,
+                        first_text: text,
+                    });
+                }
             }
             } // end if let Some(model_opt)
         }
@@ -1752,7 +2099,7 @@ fn main() {
 
             for (wav_path, clip_label) in &clip_paths {
                 println!("  Clip: {}", clip_label);
-                let audio = match read_wav_to_f32(wav_path) {
+                let audio_for_progressive = match read_wav_to_f32(wav_path) {
                     Ok(a) => a,
                     Err(e) => {
                         eprintln!("  ERROR reading WAV: {}", e);
@@ -1760,12 +2107,12 @@ fn main() {
                     }
                 };
 
-                let needs_chunking = audio.len() > 30 * 16000; // > 30 seconds
+                let needs_chunking = audio_for_progressive.len() > 30 * 16000; // > 30 seconds
                 let vad_start = Instant::now();
                 let chunks: Vec<Vec<f32>> = if needs_chunking {
-                    vad_chunk_audio(&audio)
+                    vad_chunk_audio(&audio_for_progressive)
                 } else {
-                    vec![audio]
+                    vec![audio_for_progressive.clone()]
                 };
                 let vad_ms = if needs_chunking { vad_start.elapsed().as_millis() as u64 } else { 0 };
                 if needs_chunking {
@@ -1831,19 +2178,43 @@ fn main() {
                     wer,
                     first_text,
                 });
+
+                // Progressive mode for SenseVoice
+                if progressive {
+                    println!("  Progressive mode:");
+                    let (total_ms, post_release_ms, text, num_chunks) = run_progressive(&audio_for_progressive, |chunk| {
+                        engine.transcribe_samples(chunk.to_vec(), None)
+                            .map(|r| r.text)
+                            .map_err(|e| e.to_string())
+                    });
+                    let reference = reference_for_clip(clip_label);
+                    let (prog_wer, _, _, _, _) = compute_wer(reference, &text);
+                    println!("    {} chunks, total={}ms, post-release={}ms, WER={:.1}%",
+                        num_chunks, total_ms, post_release_ms, prog_wer);
+                    println!("    Text: \"{}\"", truncate(&text, 80));
+                    progressive_results.push(ProgressiveResult {
+                        model: "sensevoice-small".to_string(),
+                        clip: clip_label.to_string(),
+                        total_ms,
+                        post_release_ms,
+                        num_chunks,
+                        wer: prog_wer,
+                        first_text: text,
+                    });
+                }
             }
         }
     }
 
-    print_summary(&results);
-    write_markdown_report(&results);
+    print_summary(&results, &progressive_results);
+    write_markdown_report(&results, &progressive_results);
 }
 
 // ---------------------------------------------------------------------------
 // Summary table
 // ---------------------------------------------------------------------------
 
-fn print_summary(results: &[BenchResult]) {
+fn print_summary(results: &[BenchResult], progressive: &[ProgressiveResult]) {
     println!("\n");
     println!("============================================================");
     println!("BENCHMARK RESULTS");
@@ -2026,13 +2397,76 @@ fn print_summary(results: &[BenchResult]) {
         println!("{:<30} | {:>10} | {:>10} | {:>10} | {:>10}", model, cols[0], cols[1], cols[2], cols[3]);
     }
     println!("{}", "=".repeat(82));
+
+    // -------------------------------------------------------------------
+    // Progressive vs Batch comparison tables
+    // -------------------------------------------------------------------
+    if !progressive.is_empty() {
+        println!("\n");
+        println!("================================================================================");
+        println!("PROGRESSIVE vs BATCH COMPARISON");
+        println!("================================================================================");
+        println!("{:<30} | {:<6} | {:>12} | {:>12} | {:>13} | {:>6} | {:>6}",
+            "Model", "Clip", "Batch (ms)", "Prog Total", "Post-Release", "Chunks", "dWER");
+        println!("{}", "-".repeat(100));
+
+        for pr in progressive {
+            // Find matching batch result
+            let batch_avg = results.iter()
+                .find(|r| r.model == pr.model && r.clip == pr.clip)
+                .map(|r| r.avg_ms as i64);
+            let batch_wer = results.iter()
+                .find(|r| r.model == pr.model && r.clip == pr.clip)
+                .map(|r| r.wer);
+
+            let batch_str = batch_avg.map(|v| format!("{}", v)).unwrap_or_else(|| "-".to_string());
+            let dwer_str = batch_wer.map(|bw| format!("{:+.1}%", pr.wer - bw)).unwrap_or_else(|| "-".to_string());
+            println!("{:<30} | {:<6} | {:>12} | {:>12} | {:>11}ms | {:>6} | {:>6}",
+                pr.model, pr.clip, batch_str, pr.total_ms, pr.post_release_ms, pr.num_chunks, dwer_str);
+        }
+        println!("{}", "=".repeat(100));
+
+        // Post-release latency pivot by duration
+        println!("\n");
+        println!("================================================================================");
+        println!("POST-RELEASE LATENCY BY DURATION (avg ms across clip variants)");
+        println!("================================================================================");
+        println!("{:<30} | {:>10} | {:>10} | {:>10} | {:>10}", "Model", "5s", "30s", "60s", "90s");
+        println!("{}", "-".repeat(82));
+
+        let mut prog_models: Vec<String> = Vec::new();
+        for pr in progressive {
+            if !prog_models.contains(&pr.model) {
+                prog_models.push(pr.model.clone());
+            }
+        }
+
+        let avg_post_release = |model: &str, prefix: &str| -> Option<f64> {
+            let matching: Vec<f64> = progressive.iter()
+                .filter(|r| r.model == model && r.clip.starts_with(prefix) && !r.clip[prefix.len()..].starts_with("s"))
+                .map(|r| r.post_release_ms as f64)
+                .collect();
+            if matching.is_empty() { None } else { Some(matching.iter().sum::<f64>() / matching.len() as f64) }
+        };
+
+        for model in &prog_models {
+            let cols: Vec<String> = duration_groups.iter().map(|d| {
+                match avg_post_release(model, d) {
+                    Some(v) => format!("{:.0}", v),
+                    None => "-".to_string(),
+                }
+            }).collect();
+            println!("{:<30} | {:>10} | {:>10} | {:>10} | {:>10}", model, cols[0], cols[1], cols[2], cols[3]);
+        }
+        println!("{}", "=".repeat(82));
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Markdown report writer
 // ---------------------------------------------------------------------------
 
-fn write_markdown_report(results: &[BenchResult]) {
+fn write_markdown_report(results: &[BenchResult], progressive: &[ProgressiveResult]) {
     if results.is_empty() {
         return;
     }
@@ -2202,6 +2636,54 @@ fn write_markdown_report(results: &[BenchResult]) {
             }
         }
         let _ = writeln!(file);
+    }
+
+    // --- Progressive vs Batch Comparison ---
+    if !progressive.is_empty() {
+        let _ = writeln!(file, "\n## Progressive vs Batch Comparison\n");
+        let _ = writeln!(file, "| Model | Clip | Batch (ms) | Prog Total | Post-Release (ms) | Chunks | dWER |");
+        let _ = writeln!(file, "|-------|------|-----------|-----------|------------------|--------|------|");
+        for pr in progressive {
+            let batch_avg = results.iter()
+                .find(|r| r.model == pr.model && r.clip == pr.clip)
+                .map(|r| r.avg_ms as i64);
+            let batch_wer = results.iter()
+                .find(|r| r.model == pr.model && r.clip == pr.clip)
+                .map(|r| r.wer);
+            let batch_str = batch_avg.map(|v| format!("{}", v)).unwrap_or_else(|| "-".to_string());
+            let dwer_str = batch_wer.map(|bw| format!("{:+.1}%", pr.wer - bw)).unwrap_or_else(|| "-".to_string());
+            let _ = writeln!(file, "| {} | {} | {} | {} | {} | {} | {} |",
+                pr.model, pr.clip, batch_str, pr.total_ms, pr.post_release_ms, pr.num_chunks, dwer_str);
+        }
+
+        // Post-release pivot by duration
+        let duration_groups_md = ["5s", "30s", "60s", "90s"];
+        let mut prog_models_md: Vec<String> = Vec::new();
+        for pr in progressive {
+            if !prog_models_md.contains(&pr.model) {
+                prog_models_md.push(pr.model.clone());
+            }
+        }
+        let avg_post_release_md = |model: &str, prefix: &str| -> Option<f64> {
+            let matching: Vec<f64> = progressive.iter()
+                .filter(|r| r.model == model && r.clip.starts_with(prefix) && !r.clip[prefix.len()..].starts_with("s"))
+                .map(|r| r.post_release_ms as f64)
+                .collect();
+            if matching.is_empty() { None } else { Some(matching.iter().sum::<f64>() / matching.len() as f64) }
+        };
+
+        let _ = writeln!(file, "\n## Post-Release Latency by Duration (avg ms across clip variants)\n");
+        let _ = writeln!(file, "| Model | 5s | 30s | 60s | 90s |");
+        let _ = writeln!(file, "|-------|----|-----|-----|-----|");
+        for name in &prog_models_md {
+            let cols: Vec<String> = duration_groups_md.iter().map(|d| {
+                match avg_post_release_md(name, d) {
+                    Some(v) => format!("{:.0}", v),
+                    None => "-".to_string(),
+                }
+            }).collect();
+            let _ = writeln!(file, "| {} | {} | {} | {} | {} |", name, cols[0], cols[1], cols[2], cols[3]);
+        }
     }
 
     println!("Wrote benchmark-results.md");
