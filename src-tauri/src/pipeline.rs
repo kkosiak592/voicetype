@@ -77,8 +77,12 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
             Some(audio) => {
                 let count = audio.flush_and_stop();
                 let buf = audio.get_buffer();
-                // Drop the stream to release the microphone (removes Windows tray icon)
-                *guard = None;
+                // Only drop the stream if always-listen is OFF
+                let always_listen = app.state::<crate::AlwaysListenActive>();
+                if !always_listen.0.load(std::sync::atomic::Ordering::Relaxed) {
+                    *guard = None; // Release mic (removes Windows tray icon)
+                }
+                // else: keep stream open for next activation (always-listen mode)
                 (count, buf)
             }
             None => {

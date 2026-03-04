@@ -142,6 +142,11 @@ pub struct SetupComplete(pub std::sync::atomic::AtomicBool);
 /// setup() checks this at completion to decide whether to emit hook-status-changed.
 pub struct FrontendReady(pub std::sync::atomic::AtomicBool);
 
+/// Managed state for always-listen mode. When enabled, the microphone stream
+/// stays open continuously (discarding samples) so hotkey activation has
+/// zero mic-init latency. Persisted to settings.json key `always_listen`.
+pub struct AlwaysListenActive(pub std::sync::atomic::AtomicBool);
+
 /// Returns true if the hotkey string contains only modifier tokens and no base key.
 /// Used as the single routing predicate for hook vs global-shortcut backend.
 ///
@@ -470,6 +475,18 @@ fn set_engine(app: tauri::AppHandle, engine: String, parakeet_model: Option<Stri
 /// sets recording=true, stores the AudioCapture in managed state, and returns the
 /// buffer Arc for level streaming. Returns None if the stream could not be opened.
 fn open_recording_stream(app: &tauri::AppHandle) -> Option<Arc<std::sync::Mutex<Vec<f32>>>> {
+    let audio_mutex = app.state::<audio::AudioCaptureMutex>();
+    let mut guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
+
+    // Reuse existing always-listen stream if available
+    if let Some(ref capture) = *guard {
+        capture.clear_buffer();
+        capture.recording.store(true, std::sync::atomic::Ordering::Relaxed);
+        log::info!("Reusing existing always-listen stream for recording");
+        return Some(capture.buffer.clone());
+    }
+
+    // No existing stream — open on-demand (original flow)
     let device_name = read_settings(app)
         .ok()
         .and_then(|json| json.get("microphone_device")
@@ -496,9 +513,6 @@ fn open_recording_stream(app: &tauri::AppHandle) -> Option<Arc<std::sync::Mutex<
     capture.clear_buffer();
     capture.recording.store(true, std::sync::atomic::Ordering::Relaxed);
     let buffer_clone = capture.buffer.clone();
-
-    let audio_mutex = app.state::<audio::AudioCaptureMutex>();
-    let mut guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
     *guard = Some(capture);
 
     Some(buffer_clone)
@@ -954,6 +968,80 @@ fn set_all_caps(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Get the always-listen flag from managed state.
+#[tauri::command]
+fn get_always_listen(app: tauri::AppHandle) -> Result<bool, String> {
+    let state = app.state::<AlwaysListenActive>();
+    Ok(state.0.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+/// Toggle always-listen mode. When enabled, opens a persistent mic stream that
+/// discards samples until recording starts (zero mic-init latency on hotkey).
+/// When disabled, drops the idle stream to release the mic.
+#[tauri::command]
+fn set_always_listen(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let state = app.state::<AlwaysListenActive>();
+    state.0.store(enabled, std::sync::atomic::Ordering::Relaxed);
+
+    // Persist to settings.json
+    let mut json = read_settings(&app)?;
+    json["always_listen"] = serde_json::Value::Bool(enabled);
+    write_settings(&app, &json)?;
+
+    if enabled {
+        open_always_listen_stream(&app);
+    } else {
+        // Drop the stream to release the mic (only if not currently recording)
+        let pipeline = app.state::<pipeline::PipelineState>();
+        if pipeline.current() == pipeline::Phase::Idle {
+            let audio_mutex = app.state::<audio::AudioCaptureMutex>();
+            let mut guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
+            *guard = None;
+        }
+    }
+
+    log::info!("Always-listen set to {}", enabled);
+    Ok(())
+}
+
+/// Open a persistent mic stream for always-listen mode.
+///
+/// The stream stays open and discards samples (recording=false) until the hotkey
+/// activates recording. If a stream is already open, this is a no-op.
+fn open_always_listen_stream(app: &tauri::AppHandle) {
+    let audio_mutex = app.state::<audio::AudioCaptureMutex>();
+    let mut guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
+    if guard.is_some() {
+        return; // Stream already open
+    }
+
+    let device_name = read_settings(app)
+        .ok()
+        .and_then(|json| json.get("microphone_device")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty() && *s != "System Default")
+            .map(|s| s.to_owned()));
+
+    let device = match audio::resolve_device_by_name(device_name.as_deref().unwrap_or("")) {
+        Ok(d) => d,
+        Err(e) => {
+            log::error!("Always-listen: cannot resolve microphone: {}", e);
+            return;
+        }
+    };
+
+    match audio::open_stream_with_device(device) {
+        Ok(capture) => {
+            // recording stays false — stream discards samples until hotkey activates
+            *guard = Some(capture);
+            log::info!("Always-listen: persistent stream opened (mic hot, not recording)");
+        }
+        Err(e) => {
+            log::error!("Always-listen: cannot open stream: {}", e);
+        }
+    }
+}
+
 /// Get a single setting by key. Returns null if the key does not exist.
 #[tauri::command]
 fn get_setting(app: tauri::AppHandle, key: String) -> Result<serde_json::Value, String> {
@@ -1007,6 +1095,21 @@ fn set_microphone(app: tauri::AppHandle, device_name: String) -> Result<(), Stri
     write_settings(&app, &json)?;
 
     log::info!("Microphone preference saved: '{}' (will take effect on next recording)", device_name);
+
+    // If always-listen is active and pipeline is idle, re-open stream with new device
+    let always_listen = app.state::<AlwaysListenActive>();
+    if always_listen.0.load(std::sync::atomic::Ordering::Relaxed) {
+        let pipeline = app.state::<pipeline::PipelineState>();
+        if pipeline.current() == pipeline::Phase::Idle {
+            let audio_mutex = app.state::<audio::AudioCaptureMutex>();
+            let mut guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
+            *guard = None; // Drop old stream
+            drop(guard);
+            open_always_listen_stream(&app);
+            log::info!("Always-listen: re-opened stream with new device '{}'", device_name);
+        }
+    }
+
     Ok(())
 }
 
@@ -1565,6 +1668,9 @@ pub fn run() {
     // an in-progress download from the Rust side (not just a JS-only flag).
     builder = builder.manage(download::DownloadCancelFlag(Arc::new(AtomicBool::new(false))));
 
+    // AlwaysListenActive — defaults to false, loaded from settings in setup()
+    builder = builder.manage(AlwaysListenActive(std::sync::atomic::AtomicBool::new(false)));
+
     builder.invoke_handler(tauri::generate_handler![
             rebind_hotkey,
             unregister_hotkey,
@@ -1584,6 +1690,8 @@ pub fn run() {
             get_corrections,
             save_corrections,
             set_all_caps,
+            get_always_listen,
+            set_always_listen,
             get_setting,
             set_setting,
             download::download_model,
@@ -1987,6 +2095,21 @@ pub fn run() {
             // This avoids the Windows microphone privacy indicator appearing when idle.
             app.manage(audio::AudioCaptureMutex(std::sync::Mutex::new(None)));
             log::info!("Audio capture state initialized (on-demand — no stream at startup)");
+
+            // Load always-listen setting from persisted settings
+            {
+                let always_listen_enabled = {
+                    let state = app.state::<SettingsState>();
+                    let guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+                    guard.get("always_listen").and_then(|v| v.as_bool()).unwrap_or(false)
+                };
+                if always_listen_enabled {
+                    let al_state = app.state::<AlwaysListenActive>();
+                    al_state.0.store(true, std::sync::atomic::Ordering::Relaxed);
+                    open_always_listen_stream(app.handle());
+                    log::info!("Always-listen enabled from settings — persistent stream opened");
+                }
+            }
 
             // Load whisper model (only when compiled with "whisper" feature).
             #[cfg(feature = "whisper")]
