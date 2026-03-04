@@ -130,9 +130,10 @@ None active.
 | 33 | Add GPU execution_providers to streaming Moonshine engine; wire moonshine-streaming-tiny/small/medium into benchmark | 2026-03-03 | 61171c7 | Complete | [33-add-moonshine-v2-streaming-models-to-ben](./quick/33-add-moonshine-v2-streaming-models-to-ben/) |
 | 34 | Add VAD-based chunking to parakeet benchmark section for clips >30s | 2026-03-04 | 21d4441 | Complete | [34-add-vad-based-chunking-to-parakeet-model](./quick/34-add-vad-based-chunking-to-parakeet-model/) |
 | 35 | Fix benchmark fairness: add VAD chunking to Whisper and switch streaming Moonshine to incremental frame feeding | 2026-03-04 | bdb3c14 | Complete | [35-fix-benchmark-fairness-add-vad-chunking-](./quick/35-fix-benchmark-fairness-add-vad-chunking-/) |
+| 36 | Add 90s benchmark clips (deep-sea oceanography, aviation history, renewable energy) to PS1 script and benchmark.rs with 4-column pivot tables | 2026-03-04 | e8bea88 | Complete | [36-add-90s-benchmark-clips-to-benchmark-bin](./quick/36-add-90s-benchmark-clips-to-benchmark-bin/) |
 
 ## Session Continuity
 
 Last session: 2026-03-04
-Stopped at: Quick task 35 complete — Whisper VAD chunking and streaming Moonshine incremental frame feeding
+Stopped at: Quick task 36 complete — 90s benchmark clips and 4-column pivot tables
 Resume file: None
