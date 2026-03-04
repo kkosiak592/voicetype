@@ -99,7 +99,7 @@ Phases execute in numeric order: 15 → 16 → 17 → 19 → 19.1 → 20 → 21
 | 18. Integration and Distribution | v1.2 | — | Voided | 2026-03-03 |
 | 19. Distil-large-v3.5 | 1/1 | Complete   | 2026-03-03 | - |
 | 19.1. Moonshine Tiny | 1/2 | In Progress|  | - |
-| 20. Dual CPU/GPU Installers | v1.2 | 0/3 | Not started | - |
+| 20. Bundle CUDA DLLs | v1.2 | 0/1 | Not started | - |
 | 21. Integration and Distribution | v1.2 | 0/1 | Not started | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
@@ -129,12 +129,12 @@ Plans:
 ### Phase 20: Bundle CUDA DLLs in single installer with runtime GPU fallback
 
 **Goal:** Bundle redistributable CUDA DLLs (cudart, cublas, cublasLt) in the single installer so GGML/whisper-rs falls back to CPU at runtime on non-NVIDIA machines. No installer split, no updater changes — one installer works for all users.
-**Requirements**: TBD
+**Requirements**: N/A (no formal requirement IDs — scope is CI/config only)
 **Depends on:** Phase 19
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 20 to break down)
+- [ ] 20-01-PLAN.md — CI DLL staging, Tauri bundle.resources map, gitignore, human verification of installer output
 
 ### Phase 21: Integration and Distribution
 **Goal**: All v1.2 behavior is verified under real runtime conditions that unit tests cannot cover, and the signed binary is confirmed safe for distribution
