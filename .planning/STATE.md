@@ -227,9 +227,10 @@ None active.
 | 35 | Fix benchmark fairness: add VAD chunking to Whisper and switch streaming Moonshine to incremental frame feeding | 2026-03-04 | bdb3c14 | Complete | [35-fix-benchmark-fairness-add-vad-chunking-](./quick/35-fix-benchmark-fairness-add-vad-chunking-/) |
 | 36 | Add 90s benchmark clips (deep-sea oceanography, aviation history, renewable energy) to PS1 script and benchmark.rs with 4-column pivot tables | 2026-03-04 | e8bea88 | Complete | [36-add-90s-benchmark-clips-to-benchmark-bin](./quick/36-add-90s-benchmark-clips-to-benchmark-bin/) |
 | 37 | Add --progressive flag to benchmark binary: VAD-driven real-time chunk dispatch with post-release latency metric across all 7 engine sections | 2026-03-04 | 0bf1333 | Complete | [37-add-progressive-flag-to-benchmark-binary](./quick/37-add-progressive-flag-to-benchmark-binary/) |
+| 38 | Remove entire Vocabulary section from settings UI and all vocabulary_prompt/initial_prompt plumbing from Rust backend | 2026-03-04 | 6c3616b | Complete | [38-remove-entire-vocabulary-section-from-se](./quick/38-remove-entire-vocabulary-section-from-se/) |
 
 ## Session Continuity
 
-Last session: 2026-03-04T21:47:35.508Z
+Last session: 2026-03-04T22:04:02Z
 Stopped at: Completed 19.3-03-PLAN.md
 Resume file: None
