@@ -19,10 +19,18 @@ interface FirstRunProps {
 
 const MODELS = [
   {
+    id: 'parakeet-tdt-v2-fp32',
+    name: 'Parakeet TDT (fp32)',
+    size: '2.56 GB',
+    quality: 'Best accuracy · works everywhere',
+    requirement: 'GPU accelerated (CUDA or DirectML)',
+    gpuOnly: false,
+  },
+  {
     id: 'moonshine-tiny',
     name: 'Moonshine Tiny',
     size: '108 MB',
-    quality: 'Fastest transcription',
+    quality: 'Fastest · best for short clips',
     requirement: 'Works on any hardware',
     gpuOnly: false,
   },
@@ -30,25 +38,9 @@ const MODELS = [
     id: 'large-v3-turbo',
     name: 'Large v3 Turbo',
     size: '574 MB',
-    quality: 'Most accurate',
+    quality: 'High accuracy · NVIDIA GPU',
     requirement: 'NVIDIA GPU required',
     gpuOnly: true,
-  },
-  {
-    id: 'distil-large-v3.5',
-    name: 'Distil Large v3.5',
-    size: '513 MB',
-    quality: 'High accuracy, fast',
-    requirement: 'GPU recommended, works on any hardware',
-    gpuOnly: false,
-  },
-  {
-    id: 'parakeet-tdt-v2-fp32',
-    name: 'Parakeet TDT (fp32)',
-    size: '2.56 GB',
-    quality: 'Fast and accurate',
-    requirement: 'GPU accelerated (CUDA or DirectML)',
-    gpuOnly: false,
   },
   {
     id: 'small-en',
