@@ -199,8 +199,7 @@ Last activity: 2026-03-04 - Completed quick task 39: Add ALL CAPS toggle to the 
 4. Add per-application profiles with auto-switch on focused window (area: general)
 5. Learn from user corrections to auto-improve dictionary (area: general)
 6. Long-press pill to drag reposition and double-click to reset home (area: ui)
-7. Add always-listen mode to reduce activation latency (area: general)
-8. Add local LLM intent-to-text cleanup pass over raw transcription (area: general)
+7. Add local LLM intent-to-text cleanup pass over raw transcription (area: general)
 
 ### Roadmap Evolution
 
@@ -233,9 +232,10 @@ None active.
 | 37 | Add --progressive flag to benchmark binary: VAD-driven real-time chunk dispatch with post-release latency metric across all 7 engine sections | 2026-03-04 | 0bf1333 | Complete | [37-add-progressive-flag-to-benchmark-binary](./quick/37-add-progressive-flag-to-benchmark-binary/) |
 | 38 | Remove entire Vocabulary section from settings UI and all vocabulary_prompt/initial_prompt plumbing from Rust backend | 2026-03-04 | 6c3616b | Complete | [38-remove-entire-vocabulary-section-from-se](./quick/38-remove-entire-vocabulary-section-from-se/) |
 | 39 | Add ALL CAPS toggle to the frontend UI | 2026-03-04 | 090526e | Complete | [39-add-all-caps-toggle-to-the-frontend-ui](./quick/39-add-all-caps-toggle-to-the-frontend-ui/) |
+| 40 | Add always-listen mode to reduce activation latency | 2026-03-04 | e94611a | Complete | [40-add-always-listen-mode-to-reduce-activat](./quick/40-add-always-listen-mode-to-reduce-activat/) |
 
 ## Session Continuity
 
-Last session: 2026-03-04T22:04:02Z
-Stopped at: Completed 19.3-03-PLAN.md
+Last session: 2026-03-04T23:29:47Z
+Stopped at: Completed quick-40
 Resume file: None
