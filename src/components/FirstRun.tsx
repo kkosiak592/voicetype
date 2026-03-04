@@ -17,12 +17,13 @@ interface FirstRunProps {
   onComplete: (downloadedModelId: string) => void;
 }
 
+// Sorted by speed-to-accuracy ratio (best value first)
 const MODELS = [
   {
     id: 'parakeet-tdt-v2-fp32',
     name: 'Parakeet TDT (fp32)',
     size: '2.56 GB',
-    quality: 'Best accuracy · works everywhere',
+    quality: 'High accuracy · Fast speed',
     requirement: 'GPU accelerated (CUDA or DirectML)',
     gpuOnly: false,
   },
@@ -30,7 +31,7 @@ const MODELS = [
     id: 'moonshine-tiny',
     name: 'Moonshine Tiny',
     size: '108 MB',
-    quality: 'Fastest · best for short clips',
+    quality: 'Good accuracy · Fastest speed',
     requirement: 'Works on any hardware',
     gpuOnly: false,
   },
@@ -38,7 +39,7 @@ const MODELS = [
     id: 'large-v3-turbo',
     name: 'Large v3 Turbo',
     size: '574 MB',
-    quality: 'High accuracy · NVIDIA GPU',
+    quality: 'High accuracy · Slow speed',
     requirement: 'NVIDIA GPU required',
     gpuOnly: true,
   },
@@ -46,7 +47,7 @@ const MODELS = [
     id: 'small-en',
     name: 'Small (English)',
     size: '190 MB',
-    quality: 'Fast and lightweight',
+    quality: 'Good accuracy · Moderate speed',
     requirement: 'GPU accelerated when available',
     gpuOnly: false,
   },

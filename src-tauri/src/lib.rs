@@ -1200,40 +1200,39 @@ fn list_models() -> Result<Vec<ModelInfo>, String> {
     use crate::transcribe::models_dir;
     let dir = models_dir();
 
+    // Sorted by speed-to-accuracy ratio (best value first)
     let mut models = vec![
+        // Parakeet TDT fp32 — best accuracy, fast speed, works on all hardware
         ModelInfo {
-            id: "large-v3-turbo".to_string(),
-            name: "Large v3 Turbo".to_string(),
-            description: "High accuracy · 5.3% WER · ~16s avg · 574 MB · NVIDIA GPU required".to_string(),
+            id: "parakeet-tdt-v2-fp32".to_string(),
+            name: "Parakeet TDT (fp32)".to_string(),
+            description: "High accuracy · Fast speed · 2.56 GB".to_string(),
+            recommended: true,
+            downloaded: crate::download::parakeet_fp32_model_exists(),
+        },
+        // Moonshine Tiny — fastest, good accuracy, works on any hardware
+        ModelInfo {
+            id: "moonshine-tiny".to_string(),
+            name: "Moonshine Tiny".to_string(),
+            description: "Good accuracy · Fastest speed · 108 MB".to_string(),
             recommended: false,
-            downloaded: dir.join("ggml-large-v3-turbo-q5_0.bin").exists(),
+            downloaded: crate::download::moonshine_tiny_model_exists(),
         },
         ModelInfo {
             id: "small-en".to_string(),
             name: "Small (English)".to_string(),
-            description: "Lightweight · 5.9% WER · ~5.0s avg · 190 MB".to_string(),
+            description: "Good accuracy · Moderate speed · 190 MB".to_string(),
             recommended: false,
             downloaded: dir.join("ggml-small.en-q5_1.bin").exists(),
         },
+        ModelInfo {
+            id: "large-v3-turbo".to_string(),
+            name: "Large v3 Turbo".to_string(),
+            description: "High accuracy · Slow speed · 574 MB · NVIDIA GPU required".to_string(),
+            recommended: false,
+            downloaded: dir.join("ggml-large-v3-turbo-q5_0.bin").exists(),
+        },
     ];
-
-    // Parakeet TDT fp32 — best accuracy, works on all hardware (CUDA, DirectML, CPU)
-    models.push(ModelInfo {
-        id: "parakeet-tdt-v2-fp32".to_string(),
-        name: "Parakeet TDT (fp32)".to_string(),
-        description: "Best accuracy · 5.3% WER · ~4.5s avg · 2.56 GB".to_string(),
-        recommended: true,
-        downloaded: crate::download::parakeet_fp32_model_exists(),
-    });
-
-    // Moonshine Tiny — fastest for short clips, works on any hardware
-    models.push(ModelInfo {
-        id: "moonshine-tiny".to_string(),
-        name: "Moonshine Tiny".to_string(),
-        description: "Fastest · 7.2% WER · ~2.3s avg · 108 MB".to_string(),
-        recommended: false,
-        downloaded: crate::download::moonshine_tiny_model_exists(),
-    });
 
     Ok(models)
 }
