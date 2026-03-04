@@ -9,6 +9,7 @@ import { ModelSection } from './components/sections/ModelSection';
 import { MicrophoneSection } from './components/sections/MicrophoneSection';
 import { AppearanceSection } from './components/sections/AppearanceSection';
 import { HistorySection } from './components/sections/HistorySection';
+import { SystemSection } from './components/sections/SystemSection';
 import { FirstRun } from './components/FirstRun';
 import { useUpdater } from './lib/updater';
 import { UpdateBanner } from './components/UpdateBanner';
@@ -219,6 +220,7 @@ function App() {
                 {activeSection === 'appearance' && (
                   <AppearanceSection theme={theme} onThemeChange={setTheme} />
                 )}
+                {activeSection === 'system' && <SystemSection />}
               </motion.div>
             </AnimatePresence>
           </div>
