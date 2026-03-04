@@ -89,7 +89,7 @@ Moved to Phase 21 to allow phases 19-20 to complete first.
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 15 → 16 → 17 → 19 → 19.1 → 20 → 21
+Phases execute in numeric order: 15 → 16 → 17 → 19 → 19.1 → 19.2 → 19.3 → 20 → 21
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -99,6 +99,8 @@ Phases execute in numeric order: 15 → 16 → 17 → 19 → 19.1 → 20 → 21
 | 18. Integration and Distribution | v1.2 | — | Voided | 2026-03-03 |
 | 19. Distil-large-v3.5 | 1/1 | Complete   | 2026-03-03 | - |
 | 19.1. Moonshine Tiny | 2/2 | Complete    | 2026-03-04 | - |
+| 19.2. Model Selection Revamp | 1/1 | Complete | 2026-03-04 | - |
+| 19.3. UI Polish | v1.2 | 0/3 | Planned | - |
 | 20. Bundle CUDA DLLs | v1.2 | 0/1 | Not started | - |
 | 21. Integration and Distribution | v1.2 | 0/1 | Not started | - |
 
@@ -114,6 +116,18 @@ Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
 
 Plans:
 - [x] TBD (run /gsd:plan-phase 19 to break down) (completed 2026-03-03)
+
+### Phase 19.3: UI polish — tray icons, profile simplification, history panel, double-click settings (INSERTED)
+
+**Goal:** Fix duplicate tray icons, add double-click-to-open-settings, simplify multi-profile system to single vocabulary prompt, and add transcription history panel with click-to-copy
+**Requirements**: TRAY-FIX, TRAY-DBLCLICK, PROFILE-SIMPLIFY, HISTORY-PANEL
+**Depends on:** Phase 19.2
+**Plans:** 3 plans
+
+Plans:
+- [ ] 19.3-01-PLAN.md — Tray duplicate fix (destroy before relaunch) and double-click handler
+- [ ] 19.3-02-PLAN.md — Profile simplification (remove multi-profile, add vocabulary prompt field)
+- [ ] 19.3-03-PLAN.md — Transcription history backend + frontend panel
 
 ### Phase 19.1: Integrate Moonshine Tiny model into main app with VAD chunking and GPU support (INSERTED)
 
