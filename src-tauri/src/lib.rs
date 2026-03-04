@@ -1214,7 +1214,7 @@ fn list_models() -> Result<Vec<ModelInfo>, String> {
         ModelInfo {
             id: "moonshine-tiny".to_string(),
             name: "Moonshine Tiny".to_string(),
-            description: "Good accuracy · Fastest speed · 108 MB".to_string(),
+            description: "Medium accuracy · Fastest speed · 108 MB".to_string(),
             recommended: false,
             downloaded: crate::download::moonshine_tiny_model_exists(),
         },

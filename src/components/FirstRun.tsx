@@ -31,7 +31,7 @@ const MODELS = [
     id: 'moonshine-tiny',
     name: 'Moonshine Tiny',
     size: '108 MB',
-    quality: 'Good accuracy · Fastest speed',
+    quality: 'Medium accuracy · Fastest speed',
     requirement: 'Works on any hardware',
     gpuOnly: false,
   },
