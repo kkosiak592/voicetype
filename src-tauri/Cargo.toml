@@ -21,7 +21,7 @@ required-features = ["whisper", "parakeet"]
 tauri-build = { version = "2", features = [] }
 
 [features]
-default = ["whisper", "parakeet"]
+default = ["whisper", "parakeet", "moonshine"]
 # Enable whisper-rs CUDA transcription. Requires:
 #   - LIBCLANG_PATH (LLVM clang for bindgen)
 #   - CUDA Toolkit 11.7 (CUDA_PATH)
@@ -33,6 +33,9 @@ whisper = ["dep:whisper-rs", "dep:nvml-wrapper"]
 #   - ONNX Runtime libraries (downloaded automatically by ort build script)
 #   - cuda feature enables GPU inference via ort/cuda
 parakeet = ["dep:parakeet-rs"]
+# Enable Moonshine and SenseVoice benchmarks via transcribe-rs (benchmark binary only).
+# Run: cargo run --bin benchmark --features whisper,parakeet,bench_extra --release
+moonshine = ["dep:transcribe-rs", "dep:ort"]
 # Enable Moonshine and SenseVoice benchmarks via transcribe-rs (benchmark binary only).
 # Run: cargo run --bin benchmark --features whisper,parakeet,bench_extra --release
 bench_extra = ["dep:transcribe-rs", "dep:ort"]

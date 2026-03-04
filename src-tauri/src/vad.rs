@@ -147,6 +147,126 @@ pub fn vad_trim_silence(samples: &[f32]) -> Vec<f32> {
     samples[start_sample..end_sample].to_vec()
 }
 
+// --- VAD chunking for Moonshine 30s context window ---
+
+/// Split audio into VAD-based chunks for Moonshine Tiny's 30s context window limit.
+///
+/// Moonshine Tiny (v1 batch engine) is trained on 4-30 second segments. Audio longer
+/// than 30 seconds MUST be split at silence boundaries before inference — passing longer
+/// audio produces garbled output or truncated results.
+///
+/// Algorithm:
+/// 1. Run Silero VAD over entire audio in 512-sample chunks
+/// 2. Track consecutive silence chunks — split when >= SILENCE_SPLIT_CHUNKS (~320ms) of silence
+/// 3. Cap segments at MAX_SEGMENT_SAMPLES (30s = 480000 samples)
+/// 4. Discard segments shorter than MIN_SEGMENT_SAMPLES (0.5s = 8000 samples)
+/// 5. Fallback: return full audio as single segment if chunking produces nothing
+///
+/// Creates a fresh VoiceActivityDetector per call (correct — Silero LSTM state must reset).
+pub fn vad_chunk_for_moonshine(samples: &[f32]) -> Vec<Vec<f32>> {
+    const CHUNK_SIZE: usize = 512;
+    const SPEECH_THRESHOLD: f32 = 0.5;
+    /// ~320ms of silence triggers a split (300ms at 16kHz = ~9.4 chunks, rounded to 10)
+    const SILENCE_SPLIT_CHUNKS: usize = 10;
+    const MAX_SEGMENT_SAMPLES: usize = 30 * 16000; // 30 seconds
+    const MIN_SEGMENT_SAMPLES: usize = 8000; // 0.5 seconds
+
+    let mut vad = match VoiceActivityDetector::builder()
+        .sample_rate(16000u32)
+        .chunk_size(CHUNK_SIZE)
+        .build()
+    {
+        Ok(v) => v,
+        Err(e) => {
+            log::error!(
+                "VAD chunk: failed to initialize VoiceActivityDetector: {} — returning single segment",
+                e
+            );
+            return vec![samples.to_vec()];
+        }
+    };
+
+    // Classify each chunk as speech or silence
+    let num_chunks = samples.len() / CHUNK_SIZE;
+    let mut is_speech: Vec<bool> = Vec::with_capacity(num_chunks);
+    for i in 0..num_chunks {
+        let start = i * CHUNK_SIZE;
+        let chunk = &samples[start..start + CHUNK_SIZE];
+        let prob = vad.predict(chunk.to_vec());
+        is_speech.push(prob >= SPEECH_THRESHOLD);
+    }
+
+    // Find split points: runs of >= SILENCE_SPLIT_CHUNKS consecutive silence chunks
+    let mut segments: Vec<Vec<f32>> = Vec::new();
+    let mut seg_start_chunk: usize = 0;
+    let mut silence_run: usize = 0;
+
+    for (i, &speech) in is_speech.iter().enumerate() {
+        if !speech {
+            silence_run += 1;
+        } else {
+            silence_run = 0;
+        }
+
+        let seg_len_samples = (i + 1 - seg_start_chunk) * CHUNK_SIZE;
+
+        // Split if: silence gap reached OR segment exceeds max duration
+        let should_split = (silence_run >= SILENCE_SPLIT_CHUNKS
+            && seg_len_samples > MIN_SEGMENT_SAMPLES)
+            || seg_len_samples >= MAX_SEGMENT_SAMPLES;
+
+        if should_split && i + 1 < num_chunks {
+            // End segment at the start of the silence run (keep speech, trim trailing silence)
+            let split_chunk = if silence_run >= SILENCE_SPLIT_CHUNKS {
+                i + 1 - silence_run // start of silence run
+            } else {
+                i + 1 // max length reached — split here
+            };
+
+            let start_sample = seg_start_chunk * CHUNK_SIZE;
+            let end_sample = std::cmp::min(split_chunk * CHUNK_SIZE, samples.len());
+
+            if end_sample > start_sample && (end_sample - start_sample) >= MIN_SEGMENT_SAMPLES {
+                segments.push(samples[start_sample..end_sample].to_vec());
+            }
+
+            seg_start_chunk = i + 1; // next chunk starts new segment
+            silence_run = 0;
+        }
+    }
+
+    // Final segment
+    let start_sample = seg_start_chunk * CHUNK_SIZE;
+    if start_sample < samples.len() {
+        let remaining = &samples[start_sample..];
+        if remaining.len() >= MIN_SEGMENT_SAMPLES {
+            segments.push(remaining.to_vec());
+        }
+    }
+
+    // Fallback: if chunking produced nothing, return the whole audio
+    if segments.is_empty() {
+        log::info!("VAD chunk: no segments produced — returning full audio as single segment");
+        segments.push(samples.to_vec());
+    }
+
+    log::info!(
+        "VAD chunk: {} segments from {:.1}s audio",
+        segments.len(),
+        samples.len() as f32 / 16000.0
+    );
+    for (i, seg) in segments.iter().enumerate() {
+        log::info!(
+            "VAD chunk: segment {}: {:.1}s ({} samples)",
+            i,
+            seg.len() as f32 / 16000.0,
+            seg.len()
+        );
+    }
+
+    segments
+}
+
 // --- Streaming VAD worker (toggle mode) ---
 
 /// Cancel handle for an active VAD worker.

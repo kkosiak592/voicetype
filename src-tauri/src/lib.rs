@@ -24,12 +24,17 @@ mod transcribe;
 #[cfg(feature = "parakeet")]
 mod transcribe_parakeet;
 
+// transcribe_moonshine.rs uses transcribe-rs (ONNX) for Moonshine Tiny batch inference.
+// Gated so the project builds without the moonshine feature.
+#[cfg(feature = "moonshine")]
+mod transcribe_moonshine;
+
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use tauri::Manager;
 use tray::build_tray;
 
-/// Transcription engine selector: Whisper (default) or Parakeet.
+/// Transcription engine selector: Whisper (default), Parakeet, or Moonshine.
 ///
 /// Not feature-gated so settings persistence works regardless of compiled features.
 /// Loaded from settings.json at startup via `read_saved_engine()`.
@@ -38,6 +43,7 @@ use tray::build_tray;
 pub enum TranscriptionEngine {
     Whisper,
     Parakeet,
+    Moonshine,
 }
 
 /// Mutex-backed managed state for the active transcription engine.
@@ -58,6 +64,20 @@ pub struct ActiveEngine(pub std::sync::Mutex<TranscriptionEngine>);
 #[cfg(feature = "parakeet")]
 pub struct ParakeetStateMutex(
     pub std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<parakeet_rs::ParakeetTDT>>>>,
+);
+
+/// Mutex-wrapped MoonshineEngine for runtime access.
+///
+/// Outer Mutex<Option<...>> mirrors ParakeetStateMutex — allows replacing the model
+/// at runtime (load-on-demand or engine switch).
+///
+/// Inner Arc<Mutex<MoonshineEngine>>: Arc makes it clonable for spawn_blocking;
+/// inner Mutex provides the `&mut self` access that transcribe_samples requires.
+/// MoonshineEngine is not Sync (transcribe_samples takes &mut self), so it cannot be
+/// wrapped in Arc alone — the inner Mutex serialises &mut access.
+#[cfg(feature = "moonshine")]
+pub struct MoonshineStateMutex(
+    pub std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<transcribe_rs::engines::moonshine::MoonshineEngine>>>>,
 );
 
 /// Control flag for the RMS level streaming loop. Stored as managed state
@@ -302,7 +322,7 @@ fn get_recording_mode(app: tauri::AppHandle) -> String {
     }
 }
 
-/// Returns the current active transcription engine as a string ("whisper" or "parakeet").
+/// Returns the current active transcription engine as a string ("whisper", "parakeet", or "moonshine").
 #[tauri::command]
 fn get_engine(app: tauri::AppHandle) -> String {
     let state = app.state::<ActiveEngine>();
@@ -310,6 +330,7 @@ fn get_engine(app: tauri::AppHandle) -> String {
     match *guard {
         TranscriptionEngine::Whisper => "whisper".to_string(),
         TranscriptionEngine::Parakeet => "parakeet".to_string(),
+        TranscriptionEngine::Moonshine => "moonshine".to_string(),
     }
 }
 
@@ -1195,23 +1216,24 @@ fn get_gpu_info(app: tauri::AppHandle) -> GpuInfo {
     let engine_str = match *engine {
         TranscriptionEngine::Whisper => "whisper",
         TranscriptionEngine::Parakeet => "parakeet",
+        TranscriptionEngine::Moonshine => "moonshine",
     };
     let settings = read_settings(&app).unwrap_or_else(|_| serde_json::json!({}));
-    let active_model = if *engine == TranscriptionEngine::Parakeet {
-        settings
+    let active_model = match *engine {
+        TranscriptionEngine::Parakeet => settings
             .get("parakeet_model")
             .and_then(|v| v.as_str())
             .unwrap_or("parakeet-tdt-v2-fp32")
-            .to_string()
-    } else {
-        settings
+            .to_string(),
+        TranscriptionEngine::Moonshine => "moonshine-tiny".to_string(),
+        _ => settings
             .get("whisper_model_id")
             .and_then(|v| v.as_str())
             .unwrap_or("unknown")
-            .to_string()
+            .to_string(),
     };
     let ep = match engine_str {
-        "parakeet" => detection.0.parakeet_provider.to_uppercase(),
+        "parakeet" | "moonshine" => detection.0.parakeet_provider.to_uppercase(),
         _ => {
             if detection.0.is_nvidia {
                 "CUDA".to_string()

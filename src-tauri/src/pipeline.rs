@@ -267,6 +267,55 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
                 return;
             }
         }
+        crate::TranscriptionEngine::Moonshine => {
+            #[cfg(feature = "moonshine")]
+            {
+                // Clone Arc<Mutex<MoonshineEngine>> out of managed state.
+                // The inner Mutex is locked inside spawn_blocking for &mut access.
+                let moonshine_arc = {
+                    let state = app.state::<crate::MoonshineStateMutex>();
+                    let guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+                    match guard.as_ref() {
+                        Some(arc) => arc.clone(),
+                        None => {
+                            log::error!("Pipeline: Moonshine model not loaded");
+                            app.emit_to("pill", "pill-result", "error").ok();
+                            reset_to_idle(&app);
+                            return;
+                        }
+                    }
+                };
+                match tauri::async_runtime::spawn_blocking(move || {
+                    let mut guard = moonshine_arc.lock().unwrap_or_else(|e| e.into_inner());
+                    crate::transcribe_moonshine::transcribe_with_moonshine(&mut guard, &samples)
+                })
+                .await
+                {
+                    Ok(Ok(text)) => text,
+                    Ok(Err(e)) => {
+                        log::error!("Pipeline: moonshine inference error: {}", e);
+                        app.emit_to("pill", "pill-result", "error").ok();
+                        reset_to_idle(&app);
+                        return;
+                    }
+                    Err(e) => {
+                        log::error!("Pipeline: moonshine spawn_blocking panicked: {}", e);
+                        app.emit_to("pill", "pill-result", "error").ok();
+                        reset_to_idle(&app);
+                        return;
+                    }
+                }
+            }
+            #[cfg(not(feature = "moonshine"))]
+            {
+                log::warn!(
+                    "Pipeline: moonshine feature not enabled, engine set to moonshine — falling back"
+                );
+                app.emit_to("pill", "pill-result", "error").ok();
+                reset_to_idle(&app);
+                return;
+            }
+        }
     };
 
     // 4. Text formatting per CONTEXT.md locked decisions:
