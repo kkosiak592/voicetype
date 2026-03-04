@@ -1,164 +1,164 @@
 # VoiceType Benchmark Results
 
-Generated: epoch 1772645900 (run `date -d @1772645900` to convert)
+Generated: epoch 1772654068 (run `date -d @1772654068` to convert)
 
 ## Results
 
 | Model | Clip | Avg (ms) | Min (ms) | Max (ms) | WER % |
 |-------|------|----------|----------|----------|-------|
-| whisper-small-en | 5s | 547 | 451 | 719 | 5.9% |
-| whisper-small-en | 5s-b | 406 | 399 | 410 | 0.0% |
-| whisper-small-en | 5s-c | 407 | 395 | 419 | 9.1% |
-| whisper-small-en | 30s | 2325 | 2313 | 2345 | 1.4% |
-| whisper-small-en | 30s-b | 2358 | 2347 | 2378 | 5.3% |
-| whisper-small-en | 30s-c | 2362 | 2324 | 2420 | 2.4% |
-| whisper-small-en | 60s | 6285 | 6222 | 6331 | 4.9% |
-| whisper-small-en | 60s-b | 5908 | 5853 | 5940 | 10.8% |
-| whisper-small-en | 60s-c | 5970 | 5965 | 5978 | 2.8% |
-| whisper-small-en | 90s | 10588 | 10573 | 10600 | 8.1% |
-| whisper-small-en | 90s-b | 12557 | 12467 | 12606 | 14.5% |
-| whisper-small-en | 90s-c | 10007 | 9993 | 10030 | 5.2% |
-| whisper-large-v3-turbo | 5s | 1238 | 1229 | 1253 | 0.0% |
-| whisper-large-v3-turbo | 5s-b | 1208 | 1208 | 1209 | 0.0% |
-| whisper-large-v3-turbo | 5s-c | 1217 | 1206 | 1224 | 9.1% |
-| whisper-large-v3-turbo | 30s | 7220 | 7171 | 7263 | 1.4% |
-| whisper-large-v3-turbo | 30s-b | 7213 | 7197 | 7228 | 5.3% |
-| whisper-large-v3-turbo | 30s-c | 7301 | 7287 | 7316 | 2.4% |
-| whisper-large-v3-turbo | 60s | 21709 | 21394 | 21878 | 5.4% |
-| whisper-large-v3-turbo | 60s-b | 19106 | 18865 | 19387 | 10.8% |
-| whisper-large-v3-turbo | 60s-c | 18981 | 18369 | 19502 | 1.9% |
-| whisper-large-v3-turbo | 90s | 33154 | 33135 | 33189 | 8.4% |
-| whisper-large-v3-turbo | 90s-b | 43484 | 41931 | 45772 | 12.8% |
-| whisper-large-v3-turbo | 90s-c | 30927 | 30139 | 32449 | 5.7% |
-| whisper-distil-large-v3.5 | 5s | 1219 | 1208 | 1230 | 0.0% |
-| whisper-distil-large-v3.5 | 5s-b | 1203 | 1192 | 1220 | 0.0% |
-| whisper-distil-large-v3.5 | 5s-c | 1171 | 1167 | 1177 | 9.1% |
-| whisper-distil-large-v3.5 | 30s | 6992 | 6966 | 7011 | 4.3% |
-| whisper-distil-large-v3.5 | 30s-b | 7196 | 7113 | 7296 | 9.2% |
-| whisper-distil-large-v3.5 | 30s-c | 7749 | 7383 | 8402 | 4.9% |
-| whisper-distil-large-v3.5 | 60s | 21185 | 21043 | 21406 | 4.3% |
-| whisper-distil-large-v3.5 | 60s-b | 17837 | 17778 | 17895 | 10.8% |
-| whisper-distil-large-v3.5 | 60s-c | 18121 | 17926 | 18426 | 1.4% |
-| whisper-distil-large-v3.5 | 90s | 32616 | 31931 | 33305 | 7.8% |
-| whisper-distil-large-v3.5 | 90s-b | 41466 | 41235 | 41834 | 14.0% |
-| whisper-distil-large-v3.5 | 90s-c | 30649 | 30069 | 30951 | 5.4% |
-| parakeet-tdt-v2 | 5s | 458 | 428 | 500 | 0.0% |
-| parakeet-tdt-v2 | 5s-b | 362 | 324 | 396 | 0.0% |
-| parakeet-tdt-v2 | 5s-c | 407 | 384 | 429 | 9.1% |
-| parakeet-tdt-v2 | 30s | 1824 | 1800 | 1850 | 1.4% |
-| parakeet-tdt-v2 | 30s-b | 1935 | 1887 | 2003 | 6.6% |
-| parakeet-tdt-v2 | 30s-c | 2154 | 2050 | 2265 | 2.4% |
-| parakeet-tdt-v2 | 60s | 5097 | 4964 | 5185 | 4.9% |
-| parakeet-tdt-v2 | 60s-b | 5069 | 5008 | 5191 | 10.8% |
-| parakeet-tdt-v2 | 60s-c | 5939 | 5815 | 6067 | 1.9% |
-| parakeet-tdt-v2 | 90s | 9898 | 9571 | 10466 | 8.4% |
-| parakeet-tdt-v2 | 90s-b | 10779 | 10654 | 11010 | 13.3% |
-| parakeet-tdt-v2 | 90s-c | 10009 | 9559 | 10377 | 4.5% |
-| moonshine-tiny | 5s | 224 | 209 | 240 | 0.0% |
-| moonshine-tiny | 5s-b | 155 | 151 | 162 | 0.0% |
-| moonshine-tiny | 5s-c | 195 | 183 | 208 | 9.1% |
-| moonshine-tiny | 30s | 818 | 794 | 843 | 1.4% |
-| moonshine-tiny | 30s-b | 1005 | 970 | 1043 | 13.2% |
-| moonshine-tiny | 30s-c | 1204 | 1180 | 1229 | 3.7% |
-| moonshine-tiny | 60s | 2258 | 2243 | 2281 | 7.0% |
-| moonshine-tiny | 60s-b | 2846 | 2748 | 2912 | 15.2% |
-| moonshine-tiny | 60s-c | 3122 | 3082 | 3173 | 3.7% |
-| moonshine-tiny | 90s | 5320 | 5243 | 5410 | 10.8% |
-| moonshine-tiny | 90s-b | 5224 | 5163 | 5298 | 15.2% |
-| moonshine-tiny | 90s-c | 5619 | 5494 | 5738 | 7.2% |
-| moonshine-base | 5s | 371 | 356 | 381 | 0.0% |
-| moonshine-base | 5s-b | 285 | 278 | 292 | 0.0% |
-| moonshine-base | 5s-c | 339 | 334 | 345 | 9.1% |
-| moonshine-base | 30s | 1395 | 1386 | 1405 | 2.9% |
-| moonshine-base | 30s-b | 1782 | 1717 | 1868 | 5.3% |
-| moonshine-base | 30s-c | 1954 | 1906 | 2012 | 3.7% |
-| moonshine-base | 60s | 4183 | 4111 | 4317 | 7.0% |
-| moonshine-base | 60s-b | 5350 | 5267 | 5472 | 14.3% |
-| moonshine-base | 60s-c | 5786 | 5749 | 5809 | 2.8% |
-| moonshine-base | 90s | 9549 | 9315 | 9672 | 10.8% |
-| moonshine-base | 90s-b | 9317 | 9266 | 9386 | 15.0% |
-| moonshine-base | 90s-c | 10379 | 10113 | 10845 | 6.4% |
-| moonshine-streaming-tiny | 5s | 556 | 543 | 573 | 0.0% |
-| moonshine-streaming-tiny | 5s-b | 409 | 378 | 431 | 0.0% |
-| moonshine-streaming-tiny | 5s-c | 484 | 469 | 511 | 27.3% |
-| moonshine-streaming-tiny | 30s | 2214 | 2157 | 2259 | 11.6% |
-| moonshine-streaming-tiny | 30s-b | 2649 | 2543 | 2778 | 13.2% |
-| moonshine-streaming-tiny | 30s-c | 3025 | 2887 | 3204 | 6.1% |
-| moonshine-streaming-tiny | 60s | 6249 | 6210 | 6270 | 10.3% |
-| moonshine-streaming-tiny | 60s-b | 7344 | 7259 | 7450 | 13.9% |
-| moonshine-streaming-tiny | 60s-c | 7884 | 7745 | 8038 | 2.8% |
-| moonshine-streaming-tiny | 90s | 13395 | 13132 | 13570 | 16.2% |
-| moonshine-streaming-tiny | 90s-b | 13567 | 13396 | 13679 | 15.7% |
-| moonshine-streaming-tiny | 90s-c | 13234 | 13104 | 13483 | 6.7% |
-| moonshine-streaming-small | 5s | 1023 | 928 | 1151 | 0.0% |
-| moonshine-streaming-small | 5s-b | 725 | 696 | 767 | 0.0% |
-| moonshine-streaming-small | 5s-c | 881 | 853 | 922 | 9.1% |
-| moonshine-streaming-small | 30s | 3790 | 3658 | 3931 | 1.4% |
-| moonshine-streaming-small | 30s-b | 4543 | 4469 | 4691 | 7.9% |
-| moonshine-streaming-small | 30s-c | 5315 | 5256 | 5413 | 3.7% |
-| moonshine-streaming-small | 60s | 10635 | 10414 | 10862 | 5.4% |
-| moonshine-streaming-small | 60s-b | 14952 | 14456 | 15394 | 12.6% |
-| moonshine-streaming-small | 60s-c | 15182 | 14750 | 15690 | 0.9% |
-| moonshine-streaming-small | 90s | 24984 | 24741 | 25406 | 8.9% |
-| moonshine-streaming-small | 90s-b | 25408 | 25031 | 25643 | 14.7% |
-| moonshine-streaming-small | 90s-c | 26345 | 25621 | 27511 | 6.2% |
-| moonshine-streaming-medium | 5s | 1741 | 1677 | 1839 | 0.0% |
-| moonshine-streaming-medium | 5s-b | 1180 | 1133 | 1268 | 0.0% |
-| moonshine-streaming-medium | 5s-c | 1344 | 1257 | 1436 | 9.1% |
-| moonshine-streaming-medium | 30s | 5971 | 5534 | 6629 | 1.4% |
-| moonshine-streaming-medium | 30s-b | 6954 | 6816 | 7026 | 9.2% |
-| moonshine-streaming-medium | 30s-c | 7606 | 7423 | 7890 | 1.2% |
-| moonshine-streaming-medium | 60s | 15475 | 15356 | 15682 | 6.5% |
-| moonshine-streaming-medium | 60s-b | 20584 | 20105 | 21054 | 11.2% |
-| moonshine-streaming-medium | 60s-c | 20361 | 19870 | 21244 | 0.9% |
-| moonshine-streaming-medium | 90s | 37106 | 35916 | 39363 | 9.2% |
-| moonshine-streaming-medium | 90s-b | 36477 | 35826 | 37421 | 14.3% |
-| moonshine-streaming-medium | 90s-c | 38941 | 37945 | 40673 | 5.4% |
-| sensevoice-small | 5s | 221 | 214 | 233 | 0.0% |
-| sensevoice-small | 5s-b | 165 | 162 | 169 | 0.0% |
-| sensevoice-small | 5s-c | 183 | 180 | 188 | 9.1% |
-| sensevoice-small | 30s | 856 | 850 | 866 | 5.8% |
-| sensevoice-small | 30s-b | 902 | 888 | 914 | 10.5% |
-| sensevoice-small | 30s-c | 979 | 966 | 999 | 4.9% |
-| sensevoice-small | 60s | 2372 | 2347 | 2414 | 6.5% |
-| sensevoice-small | 60s-b | 2703 | 2642 | 2812 | 13.0% |
-| sensevoice-small | 60s-c | 2814 | 2781 | 2846 | 3.7% |
-| sensevoice-small | 90s | 4769 | 4741 | 4815 | 11.3% |
-| sensevoice-small | 90s-b | 4975 | 4956 | 4995 | 17.4% |
-| sensevoice-small | 90s-c | 5369 | 5314 | 5398 | 6.4% |
+| whisper-small-en | 5s | 514 | 427 | 669 | 5.9% |
+| whisper-small-en | 5s-b | 373 | 365 | 379 | 0.0% |
+| whisper-small-en | 5s-c | 375 | 370 | 380 | 9.1% |
+| whisper-small-en | 30s | 2179 | 2144 | 2239 | 1.4% |
+| whisper-small-en | 30s-b | 2204 | 2183 | 2242 | 5.3% |
+| whisper-small-en | 30s-c | 2278 | 2262 | 2294 | 2.4% |
+| whisper-small-en | 60s | 6946 | 6212 | 7499 | 4.9% |
+| whisper-small-en | 60s-b | 5905 | 5869 | 5956 | 10.8% |
+| whisper-small-en | 60s-c | 6074 | 6009 | 6145 | 2.8% |
+| whisper-small-en | 90s | 10864 | 10759 | 10918 | 8.1% |
+| whisper-small-en | 90s-b | 13800 | 12971 | 15454 | 14.5% |
+| whisper-small-en | 90s-c | 10265 | 10010 | 10397 | 5.2% |
+| whisper-large-v3-turbo | 5s | 1313 | 1306 | 1324 | 0.0% |
+| whisper-large-v3-turbo | 5s-b | 1714 | 1268 | 2450 | 0.0% |
+| whisper-large-v3-turbo | 5s-c | 1322 | 1297 | 1338 | 9.1% |
+| whisper-large-v3-turbo | 30s | 7821 | 7803 | 7852 | 1.4% |
+| whisper-large-v3-turbo | 30s-b | 7856 | 7811 | 7926 | 5.3% |
+| whisper-large-v3-turbo | 30s-c | 8210 | 7770 | 8991 | 2.4% |
+| whisper-large-v3-turbo | 60s | 22578 | 21834 | 23240 | 5.4% |
+| whisper-large-v3-turbo | 60s-b | 19064 | 18561 | 19778 | 10.8% |
+| whisper-large-v3-turbo | 60s-c | 18528 | 18506 | 18557 | 1.9% |
+| whisper-large-v3-turbo | 90s | 46144 | 35027 | 55486 | 8.4% |
+| whisper-large-v3-turbo | 90s-b | 46153 | 44745 | 48838 | 12.8% |
+| whisper-large-v3-turbo | 90s-c | 32438 | 32225 | 32698 | 5.7% |
+| whisper-distil-large-v3.5 | 5s | 1323 | 1321 | 1326 | 0.0% |
+| whisper-distil-large-v3.5 | 5s-b | 1292 | 1290 | 1293 | 0.0% |
+| whisper-distil-large-v3.5 | 5s-c | 1291 | 1286 | 1296 | 9.1% |
+| whisper-distil-large-v3.5 | 30s | 7659 | 7631 | 7683 | 4.3% |
+| whisper-distil-large-v3.5 | 30s-b | 7711 | 7688 | 7730 | 9.2% |
+| whisper-distil-large-v3.5 | 30s-c | 7773 | 7761 | 7789 | 4.9% |
+| whisper-distil-large-v3.5 | 60s | 22939 | 22919 | 22962 | 4.3% |
+| whisper-distil-large-v3.5 | 60s-b | 19464 | 19378 | 19558 | 10.8% |
+| whisper-distil-large-v3.5 | 60s-c | 23639 | 19463 | 31773 | 1.4% |
+| whisper-distil-large-v3.5 | 90s | 57251 | 38356 | 69342 | 7.8% |
+| whisper-distil-large-v3.5 | 90s-b | 43978 | 43798 | 44249 | 14.0% |
+| whisper-distil-large-v3.5 | 90s-c | 32423 | 31997 | 33050 | 5.4% |
+| parakeet-tdt-v2 | 5s | 457 | 419 | 525 | 0.0% |
+| parakeet-tdt-v2 | 5s-b | 370 | 347 | 392 | 0.0% |
+| parakeet-tdt-v2 | 5s-c | 400 | 373 | 427 | 9.1% |
+| parakeet-tdt-v2 | 30s | 1955 | 1875 | 2004 | 1.4% |
+| parakeet-tdt-v2 | 30s-b | 2049 | 1961 | 2132 | 6.6% |
+| parakeet-tdt-v2 | 30s-c | 2246 | 2178 | 2324 | 2.4% |
+| parakeet-tdt-v2 | 60s | 5581 | 5367 | 5731 | 4.9% |
+| parakeet-tdt-v2 | 60s-b | 6441 | 6056 | 6972 | 10.8% |
+| parakeet-tdt-v2 | 60s-c | 6578 | 6239 | 6815 | 1.9% |
+| parakeet-tdt-v2 | 90s | 10838 | 10604 | 11268 | 8.4% |
+| parakeet-tdt-v2 | 90s-b | 12506 | 11979 | 12951 | 13.3% |
+| parakeet-tdt-v2 | 90s-c | 12209 | 12083 | 12283 | 4.5% |
+| moonshine-tiny | 5s | 310 | 259 | 402 | 0.0% |
+| moonshine-tiny | 5s-b | 200 | 187 | 211 | 0.0% |
+| moonshine-tiny | 5s-c | 240 | 225 | 269 | 9.1% |
+| moonshine-tiny | 30s | 995 | 884 | 1052 | 1.4% |
+| moonshine-tiny | 30s-b | 1074 | 1022 | 1150 | 13.2% |
+| moonshine-tiny | 30s-c | 1347 | 1249 | 1447 | 3.7% |
+| moonshine-tiny | 60s | 2795 | 2634 | 2937 | 7.0% |
+| moonshine-tiny | 60s-b | 3461 | 3193 | 3835 | 15.2% |
+| moonshine-tiny | 60s-c | 3923 | 3671 | 4382 | 3.7% |
+| moonshine-tiny | 90s | 6424 | 6192 | 6623 | 10.8% |
+| moonshine-tiny | 90s-b | 6268 | 6156 | 6432 | 15.2% |
+| moonshine-tiny | 90s-c | 6294 | 6100 | 6516 | 7.2% |
+| moonshine-base | 5s | 421 | 402 | 433 | 0.0% |
+| moonshine-base | 5s-b | 305 | 298 | 311 | 0.0% |
+| moonshine-base | 5s-c | 363 | 359 | 369 | 9.1% |
+| moonshine-base | 30s | 1586 | 1548 | 1662 | 2.9% |
+| moonshine-base | 30s-b | 1909 | 1830 | 1961 | 5.3% |
+| moonshine-base | 30s-c | 2301 | 2252 | 2396 | 3.7% |
+| moonshine-base | 60s | 4779 | 4593 | 5092 | 7.0% |
+| moonshine-base | 60s-b | 5964 | 5866 | 6133 | 14.3% |
+| moonshine-base | 60s-c | 6191 | 6106 | 6257 | 2.8% |
+| moonshine-base | 90s | 10850 | 10669 | 11050 | 10.8% |
+| moonshine-base | 90s-b | 10741 | 10455 | 11107 | 15.0% |
+| moonshine-base | 90s-c | 11142 | 11006 | 11334 | 6.4% |
+| moonshine-streaming-tiny | 5s | 660 | 646 | 674 | 0.0% |
+| moonshine-streaming-tiny | 5s-b | 481 | 430 | 544 | 0.0% |
+| moonshine-streaming-tiny | 5s-c | 525 | 496 | 577 | 27.3% |
+| moonshine-streaming-tiny | 30s | 2415 | 2376 | 2458 | 11.6% |
+| moonshine-streaming-tiny | 30s-b | 3028 | 2878 | 3125 | 13.2% |
+| moonshine-streaming-tiny | 30s-c | 3036 | 2923 | 3149 | 6.1% |
+| moonshine-streaming-tiny | 60s | 6140 | 5991 | 6291 | 10.3% |
+| moonshine-streaming-tiny | 60s-b | 7948 | 7695 | 8239 | 13.9% |
+| moonshine-streaming-tiny | 60s-c | 8156 | 7847 | 8523 | 2.8% |
+| moonshine-streaming-tiny | 90s | 16107 | 15757 | 16584 | 16.2% |
+| moonshine-streaming-tiny | 90s-b | 16743 | 15773 | 17718 | 15.7% |
+| moonshine-streaming-tiny | 90s-c | 13967 | 13583 | 14479 | 6.7% |
+| moonshine-streaming-small | 5s | 1122 | 1015 | 1262 | 0.0% |
+| moonshine-streaming-small | 5s-b | 897 | 891 | 903 | 0.0% |
+| moonshine-streaming-small | 5s-c | 1074 | 974 | 1252 | 9.1% |
+| moonshine-streaming-small | 30s | 4599 | 4196 | 4938 | 1.4% |
+| moonshine-streaming-small | 30s-b | 5277 | 5238 | 5341 | 7.9% |
+| moonshine-streaming-small | 30s-c | 6177 | 6012 | 6415 | 3.7% |
+| moonshine-streaming-small | 60s | 11863 | 10574 | 12889 | 5.4% |
+| moonshine-streaming-small | 60s-b | 13168 | 12854 | 13565 | 12.6% |
+| moonshine-streaming-small | 60s-c | 14548 | 14392 | 14693 | 0.9% |
+| moonshine-streaming-small | 90s | 28040 | 27543 | 28670 | 8.9% |
+| moonshine-streaming-small | 90s-b | 28223 | 27817 | 28918 | 14.7% |
+| moonshine-streaming-small | 90s-c | 24898 | 24429 | 25721 | 6.2% |
+| moonshine-streaming-medium | 5s | 1664 | 1531 | 1813 | 0.0% |
+| moonshine-streaming-medium | 5s-b | 1153 | 1120 | 1180 | 0.0% |
+| moonshine-streaming-medium | 5s-c | 1423 | 1324 | 1488 | 9.1% |
+| moonshine-streaming-medium | 30s | 5438 | 4934 | 6203 | 1.4% |
+| moonshine-streaming-medium | 30s-b | 6821 | 6666 | 7102 | 9.2% |
+| moonshine-streaming-medium | 30s-c | 8829 | 8668 | 9030 | 1.2% |
+| moonshine-streaming-medium | 60s | 16630 | 15814 | 17868 | 6.5% |
+| moonshine-streaming-medium | 60s-b | 20879 | 20210 | 21351 | 11.2% |
+| moonshine-streaming-medium | 60s-c | 22447 | 21598 | 23837 | 0.9% |
+| moonshine-streaming-medium | 90s | 38257 | 36483 | 40019 | 9.2% |
+| moonshine-streaming-medium | 90s-b | 37658 | 36514 | 38975 | 14.3% |
+| moonshine-streaming-medium | 90s-c | 41531 | 39775 | 43695 | 5.4% |
+| sensevoice-small | 5s | 233 | 222 | 243 | 0.0% |
+| sensevoice-small | 5s-b | 177 | 173 | 186 | 0.0% |
+| sensevoice-small | 5s-c | 192 | 190 | 196 | 9.1% |
+| sensevoice-small | 30s | 1084 | 894 | 1244 | 5.8% |
+| sensevoice-small | 30s-b | 891 | 879 | 914 | 10.5% |
+| sensevoice-small | 30s-c | 1018 | 1009 | 1025 | 4.9% |
+| sensevoice-small | 60s | 2339 | 2327 | 2349 | 6.5% |
+| sensevoice-small | 60s-b | 2495 | 2481 | 2508 | 13.0% |
+| sensevoice-small | 60s-c | 2728 | 2698 | 2786 | 3.7% |
+| sensevoice-small | 90s | 4796 | 4754 | 4831 | 11.3% |
+| sensevoice-small | 90s-b | 5191 | 5181 | 5200 | 17.4% |
+| sensevoice-small | 90s-c | 5740 | 5712 | 5797 | 6.4% |
 
 ## Model Rankings
 
 | Model | Avg Lat. | Avg WER | Accuracy | Speed | Score |
 |-------|----------|---------|----------|-------|-------|
-| sensevoice-small | 2192ms | 7.4% | 92.6% | 100.0/100 | 98.9/100 |
-| moonshine-tiny | 2332ms | 7.2% | 92.8% | 94.0/100 | 95.9/100 |
-| moonshine-base | 4224ms | 6.4% | 93.6% | 51.9/100 | 71.6/100 |
-| parakeet-tdt-v2 | 4494ms | 5.3% | 94.7% | 48.8/100 | 69.8/100 |
-| whisper-small-en | 4977ms | 5.9% | 94.1% | 44.1/100 | 66.2/100 |
-| moonshine-streaming-tiny | 5918ms | 10.3% | 89.7% | 37.0/100 | 59.2/100 |
-| moonshine-streaming-small | 11149ms | 5.9% | 94.1% | 19.7/100 | 44.2/100 |
-| whisper-distil-large-v3.5 | 15617ms | 5.9% | 94.1% | 14.0/100 | 37.3/100 |
-| whisper-large-v3-turbo | 16063ms | 5.3% | 94.7% | 13.6/100 | 36.9/100 |
-| moonshine-streaming-medium | 16145ms | 5.7% | 94.3% | 13.6/100 | 36.8/100 |
+| sensevoice-small | 2240ms | 7.4% | 92.6% | 100.0/100 | 98.9/100 |
+| moonshine-tiny | 2778ms | 7.2% | 92.8% | 80.7/100 | 88.9/100 |
+| moonshine-base | 4713ms | 6.4% | 93.6% | 47.5/100 | 68.5/100 |
+| parakeet-tdt-v2 | 5136ms | 5.3% | 94.7% | 43.6/100 | 66.0/100 |
+| whisper-small-en | 5148ms | 5.9% | 94.1% | 43.5/100 | 65.8/100 |
+| moonshine-streaming-tiny | 6600ms | 10.3% | 89.7% | 33.9/100 | 56.7/100 |
+| moonshine-streaming-small | 11657ms | 5.9% | 94.1% | 19.2/100 | 43.7/100 |
+| moonshine-streaming-medium | 16894ms | 5.7% | 94.3% | 13.3/100 | 36.3/100 |
+| whisper-large-v3-turbo | 17762ms | 5.3% | 94.7% | 12.6/100 | 35.5/100 |
+| whisper-distil-large-v3.5 | 18895ms | 5.9% | 94.1% | 11.9/100 | 34.3/100 |
 
-Speed: 100 = fastest model, scaled relative to best avg latency (2192ms)
+Speed: 100 = fastest model, scaled relative to best avg latency (2240ms)
 Score: geometric mean of speed and accuracy (balanced ranking)
 
 ## Latency by Duration (avg ms across clip variants)
 
 | Model | 5s | 30s | 60s | 90s |
 |-------|----|-----|-----|-----|
-| whisper-small-en | 453 | 2348 | 6054 | 11051 |
-| whisper-large-v3-turbo | 1221 | 7245 | 19932 | 35855 |
-| whisper-distil-large-v3.5 | 1198 | 7312 | 19048 | 34910 |
-| parakeet-tdt-v2 | 409 | 1971 | 5368 | 10229 |
-| moonshine-tiny | 191 | 1009 | 2742 | 5388 |
-| moonshine-base | 332 | 1710 | 5106 | 9748 |
-| moonshine-streaming-tiny | 483 | 2629 | 7159 | 13399 |
-| moonshine-streaming-small | 876 | 4549 | 13590 | 25579 |
-| moonshine-streaming-medium | 1422 | 6844 | 18807 | 37508 |
-| sensevoice-small | 190 | 912 | 2630 | 5038 |
+| whisper-small-en | 421 | 2220 | 6308 | 11643 |
+| whisper-large-v3-turbo | 1450 | 7962 | 20057 | 41578 |
+| whisper-distil-large-v3.5 | 1302 | 7714 | 22014 | 44551 |
+| parakeet-tdt-v2 | 409 | 2083 | 6200 | 11851 |
+| moonshine-tiny | 250 | 1139 | 3393 | 6329 |
+| moonshine-base | 363 | 1932 | 5645 | 10911 |
+| moonshine-streaming-tiny | 555 | 2826 | 7415 | 15606 |
+| moonshine-streaming-small | 1031 | 5351 | 13193 | 27054 |
+| moonshine-streaming-medium | 1413 | 7029 | 19985 | 39149 |
+| sensevoice-small | 201 | 998 | 2521 | 5242 |
 
 ## WER by Duration (avg % across clip variants)
 
@@ -377,143 +377,3 @@ Score: geometric mean of speed and accuracy (balanced ranking)
 - **90s-b**: "The history of powered flight began on a cold December morning in 1903 at Kitty Hawk, North Carolina. Orville and Wilbright achieved the first sustained controlled flight lasting 12 seconds and covering 37 m. Their success depended on three years of systematic experiments with kites, gliders, and wind tunnel models. Early aircraft were constructed from sprucewood, cotton fabric, and bicycle chain drives connected to pusher propellers. World War I accelerated aviation technology as military commanders recognized the strategic value of aerial reconnaissance. By 1918. Aircraft could carry bombs. Mount machine guns. And dog fight at altitudes exceeding 5000 meters. Charles Lindbergh crossed the Atlantic Solo in 1927. Completing the 33 hour journey in the spirit of St. Louis. Commercial aviation grew rapidly through the 1930s as airlines introduced pressurist cabins and all metal airframes. Frank Whitttle in Britain and Hansvaah Hain in Germany independently developed the jet engine in the late 1930s. The first operational jet fighter. The Meer Schmidt262. Entered service near the end of World War II. Breaking the sound barrier in October 1947. Chuckeager flew the bell X1 to mock 1.06. The Boeing 707 entered commercial service in 1958. Making transatlantic travel accessible to millions. Concord. The supersonic passenger jet developed jointly by Britain and France. Cruzed at twice the speed of sound. Widebody aircraft such as the Boeing 747 transformed air travel by dramatically reducing ticket prices through scale. Modern jet engines burn fuel far more efficiently than their predecessors. Reducing carbon dioxide emissions per passenger kilometer. Flyby wire systems replaced mechanical control linkages with electronic signals processed by flight computers. Composite materials, including carbon fiber reinforced polymers now make up more than half of the structural weight of new airliners. Unmanned aerial vehicles range from miniature consumer drones to high altitude surveillance platforms with wingspans exceeding 40 meters. Electric aircraft are emerging as a viable option for short regional routes where battery energy density is sufficient. Autonomous flight management systems can now land commercial aircraft in near zero visibility using instrument landing arrays. Space planes capable of taking off from conventional runways and reaching orbital velocity represent the next frontier in aviation. More than 4 billion passengers board commercial flights each year. Making aviation one of the most transformative technologies in human history."
 - **90s-c**: "Renewable energy systems harness naturally replenishing resources to generate electricity without depleting finite fossil fuel reserves. Solar photovoltaic cells convert sunlight directly into electrical current through the photoelectric effect discovered by Albert Einstein. Silicon wafers doped with phosphorus and Boron create a semiconductor junction that releases electrons when struck by photons. The cost of solar panels has fallen by more than 90% over the past 15 years due to manufacturing scale and efficiency gains. Concentrating solar power plants use mirrors or lenses to focus sunlight onto a heat exchanger that drives a steam turbine. Wind turbines extract kinetic energy from moving air masses through rotating blades connected to an electrical generator. Offshore wind installations benefit from stronger and more consistent wind speeds than land based sites. Increasing capacity factors. Modern turbines stand over 200 meters tall with blades spanning more than 100 meters tip to tip. Gridscale battery storage using lithium ion or iron phosphate chemistry allows excess renewable generation to be shifted to peak demand periods. Pumped hydro storage remains the largest form of grid storage globally. Using surplus electricity to pump water uphill into reservoirs. Hydrogen produced by electrolyer units powered by renewables can store energy seasonally and fuel industrial processes. Smart grid technologies use real time data and automated switching to balance supply and demand across interconnected networks. Power purchase agreements allow corporations to fund new renewable projects in exchange for long term fixed electricity pricing. Variable renewable generation requires flexible backup capacity from gas turbines or demand response programs to maintain grid stability. Gethermal energy taps heat stored in rock and water beneath the Earth's surface to generate baseload electricity. Tital stream generators capture energy from predictable ocean currents driven by the gravitational pull of the moon. Community energy cooperatives enable households to collectively own and operate local wind and solar installations. Net metering policies allow residential solar owners to sell surplus generation back to the utility grid at retail rates. ALevlea cost of energy from onshore wind and utility scale solar now undercuts new coal and gas plants in most markets. Transmission constraints limit how much renewable energy can be delivered from generation hotspots to population centers. International Energy agencies project that renewablenews could supply more than 80% of global electricity by 2050. Transitioning to clean energy at the required scale demand's coordinated investment in generation, storage, transmission, and grid modernization."
 
-
-## Progressive vs Batch Comparison
-
-| Model | Clip | Batch (ms) | Prog Total | Post-Release (ms) | Chunks | dWER |
-|-------|------|-----------|-----------|------------------|--------|------|
-| whisper-small-en | 5s | 547 | 710 | 351 | 2 | +0.0% |
-| whisper-small-en | 5s-b | 406 | 393 | 394 | 1 | +0.0% |
-| whisper-small-en | 5s-c | 407 | 736 | 331 | 2 | +0.0% |
-| whisper-small-en | 30s | 2325 | 2518 | 378 | 6 | +0.0% |
-| whisper-small-en | 30s-b | 2358 | 2488 | 368 | 6 | +0.0% |
-| whisper-small-en | 30s-c | 2362 | 2602 | 649 | 6 | +0.0% |
-| whisper-small-en | 60s | 6285 | 6793 | 583 | 18 | +0.0% |
-| whisper-small-en | 60s-b | 5908 | 6252 | 587 | 15 | +0.0% |
-| whisper-small-en | 60s-c | 5970 | 6394 | 367 | 15 | +0.0% |
-| whisper-small-en | 90s | 10588 | 11619 | 339 | 27 | +0.0% |
-| whisper-small-en | 90s-b | 12557 | 13516 | 355 | 34 | +0.0% |
-| whisper-small-en | 90s-c | 10007 | 11232 | 782 | 24 | +0.0% |
-| whisper-large-v3-turbo | 5s | 1238 | 2358 | 1193 | 2 | +0.0% |
-| whisper-large-v3-turbo | 5s-b | 1208 | 1208 | 1209 | 1 | +0.0% |
-| whisper-large-v3-turbo | 5s-c | 1217 | 2323 | 1153 | 2 | +0.0% |
-| whisper-large-v3-turbo | 30s | 7220 | 7187 | 1194 | 6 | +0.0% |
-| whisper-large-v3-turbo | 30s-b | 7213 | 7414 | 1196 | 6 | +0.0% |
-| whisper-large-v3-turbo | 30s-c | 7301 | 7513 | 1214 | 6 | +0.0% |
-| whisper-large-v3-turbo | 60s | 21709 | 22341 | 1185 | 18 | +0.0% |
-| whisper-large-v3-turbo | 60s-b | 19106 | 19368 | 1224 | 15 | +0.0% |
-| whisper-large-v3-turbo | 60s-c | 18981 | 20214 | 1220 | 15 | +0.0% |
-| whisper-large-v3-turbo | 90s | 33154 | 34843 | 1316 | 27 | +0.0% |
-| whisper-large-v3-turbo | 90s-b | 43484 | 45168 | 1189 | 34 | +0.0% |
-| whisper-large-v3-turbo | 90s-c | 30927 | 30856 | 1306 | 24 | +0.0% |
-| whisper-distil-large-v3.5 | 5s | 1219 | 2284 | 1153 | 2 | +0.0% |
-| whisper-distil-large-v3.5 | 5s-b | 1203 | 1163 | 1163 | 1 | +0.0% |
-| whisper-distil-large-v3.5 | 5s-c | 1171 | 2255 | 1131 | 2 | +0.0% |
-| whisper-distil-large-v3.5 | 30s | 6992 | 7250 | 1173 | 6 | +0.0% |
-| whisper-distil-large-v3.5 | 30s-b | 7196 | 7503 | 1203 | 6 | +0.0% |
-| whisper-distil-large-v3.5 | 30s-c | 7749 | 7919 | 1190 | 6 | +0.0% |
-| whisper-distil-large-v3.5 | 60s | 21185 | 21179 | 1156 | 18 | +0.0% |
-| whisper-distil-large-v3.5 | 60s-b | 17837 | 18237 | 1176 | 15 | +0.0% |
-| whisper-distil-large-v3.5 | 60s-c | 18121 | 18369 | 1178 | 15 | +0.0% |
-| whisper-distil-large-v3.5 | 90s | 32616 | 33213 | 1207 | 27 | +0.0% |
-| whisper-distil-large-v3.5 | 90s-b | 41466 | 42728 | 1168 | 34 | +0.0% |
-| whisper-distil-large-v3.5 | 90s-c | 30649 | 33267 | 1343 | 24 | +0.0% |
-| parakeet-tdt-v2 | 5s | 458 | 465 | 229 | 2 | +0.0% |
-| parakeet-tdt-v2 | 5s-b | 362 | 299 | 300 | 1 | +0.0% |
-| parakeet-tdt-v2 | 5s-c | 407 | 445 | 209 | 2 | +0.0% |
-| parakeet-tdt-v2 | 30s | 1824 | 1898 | 331 | 6 | +0.0% |
-| parakeet-tdt-v2 | 30s-b | 1935 | 1836 | 290 | 6 | +0.0% |
-| parakeet-tdt-v2 | 30s-c | 2154 | 2073 | 353 | 6 | +0.0% |
-| parakeet-tdt-v2 | 60s | 5097 | 4969 | 262 | 18 | +0.0% |
-| parakeet-tdt-v2 | 60s-b | 5069 | 5271 | 355 | 15 | +0.0% |
-| parakeet-tdt-v2 | 60s-c | 5939 | 5793 | 382 | 15 | +0.0% |
-| parakeet-tdt-v2 | 90s | 9898 | 9637 | 254 | 27 | +0.0% |
-| parakeet-tdt-v2 | 90s-b | 10779 | 10470 | 308 | 34 | +0.0% |
-| parakeet-tdt-v2 | 90s-c | 10009 | 10226 | 487 | 24 | +0.0% |
-| moonshine-tiny | 5s | 224 | 183 | 88 | 2 | +0.0% |
-| moonshine-tiny | 5s-b | 155 | 151 | 151 | 1 | +0.0% |
-| moonshine-tiny | 5s-c | 195 | 160 | 71 | 2 | +0.0% |
-| moonshine-tiny | 30s | 818 | 797 | 151 | 6 | +0.0% |
-| moonshine-tiny | 30s-b | 1005 | 1056 | 164 | 6 | +0.0% |
-| moonshine-tiny | 30s-c | 1204 | 1117 | 190 | 6 | +0.0% |
-| moonshine-tiny | 60s | 2258 | 2181 | 111 | 18 | +0.0% |
-| moonshine-tiny | 60s-b | 2846 | 2745 | 213 | 15 | +0.0% |
-| moonshine-tiny | 60s-c | 3122 | 2846 | 193 | 15 | +0.0% |
-| moonshine-tiny | 90s | 5320 | 5102 | 102 | 27 | +0.0% |
-| moonshine-tiny | 90s-b | 5224 | 5285 | 141 | 34 | +0.0% |
-| moonshine-tiny | 90s-c | 5619 | 5611 | 337 | 24 | +0.0% |
-| moonshine-base | 5s | 371 | 321 | 159 | 2 | +5.9% |
-| moonshine-base | 5s-b | 285 | 264 | 264 | 1 | +0.0% |
-| moonshine-base | 5s-c | 339 | 258 | 112 | 2 | +0.0% |
-| moonshine-base | 30s | 1395 | 1429 | 286 | 6 | +0.0% |
-| moonshine-base | 30s-b | 1782 | 1703 | 238 | 6 | +0.0% |
-| moonshine-base | 30s-c | 1954 | 1941 | 331 | 6 | +0.0% |
-| moonshine-base | 60s | 4183 | 4266 | 219 | 18 | +0.0% |
-| moonshine-base | 60s-b | 5350 | 5291 | 377 | 15 | +0.0% |
-| moonshine-base | 60s-c | 5786 | 5835 | 397 | 15 | +0.0% |
-| moonshine-base | 90s | 9549 | 9147 | 176 | 27 | +0.0% |
-| moonshine-base | 90s-b | 9317 | 9280 | 271 | 34 | +0.0% |
-| moonshine-base | 90s-c | 10379 | 9988 | 515 | 24 | +0.0% |
-| moonshine-streaming-tiny | 5s | 556 | 496 | 248 | 2 | +0.0% |
-| moonshine-streaming-tiny | 5s-b | 409 | 371 | 372 | 1 | +0.0% |
-| moonshine-streaming-tiny | 5s-c | 484 | 393 | 172 | 2 | -9.1% |
-| moonshine-streaming-tiny | 30s | 2214 | 1945 | 332 | 6 | +0.0% |
-| moonshine-streaming-tiny | 30s-b | 2649 | 2552 | 377 | 6 | +0.0% |
-| moonshine-streaming-tiny | 30s-c | 3025 | 2839 | 483 | 6 | +0.0% |
-| moonshine-streaming-tiny | 60s | 6249 | 5583 | 331 | 18 | +0.0% |
-| moonshine-streaming-tiny | 60s-b | 7344 | 6744 | 497 | 15 | +0.0% |
-| moonshine-streaming-tiny | 60s-c | 7884 | 7442 | 501 | 15 | +0.0% |
-| moonshine-streaming-tiny | 90s | 13395 | 12884 | 310 | 27 | +0.0% |
-| moonshine-streaming-tiny | 90s-b | 13567 | 12663 | 341 | 34 | +0.0% |
-| moonshine-streaming-tiny | 90s-c | 13234 | 12242 | 587 | 24 | +0.0% |
-| moonshine-streaming-small | 5s | 1023 | 845 | 404 | 2 | +0.0% |
-| moonshine-streaming-small | 5s-b | 725 | 709 | 710 | 1 | +0.0% |
-| moonshine-streaming-small | 5s-c | 881 | 781 | 340 | 2 | +0.0% |
-| moonshine-streaming-small | 30s | 3790 | 3414 | 673 | 6 | +0.0% |
-| moonshine-streaming-small | 30s-b | 4543 | 4313 | 626 | 6 | +0.0% |
-| moonshine-streaming-small | 30s-c | 5315 | 5181 | 921 | 6 | +0.0% |
-| moonshine-streaming-small | 60s | 10635 | 11190 | 604 | 18 | +0.0% |
-| moonshine-streaming-small | 60s-b | 14952 | 14668 | 1128 | 15 | +0.0% |
-| moonshine-streaming-small | 60s-c | 15182 | 14106 | 996 | 15 | +0.0% |
-| moonshine-streaming-small | 90s | 24984 | 24731 | 522 | 27 | +0.0% |
-| moonshine-streaming-small | 90s-b | 25408 | 24986 | 653 | 34 | +0.0% |
-| moonshine-streaming-small | 90s-c | 26345 | 24722 | 1210 | 24 | +0.0% |
-| moonshine-streaming-medium | 5s | 1741 | 1387 | 683 | 2 | +0.0% |
-| moonshine-streaming-medium | 5s-b | 1180 | 1092 | 1092 | 1 | +0.0% |
-| moonshine-streaming-medium | 5s-c | 1344 | 1309 | 561 | 2 | +0.0% |
-| moonshine-streaming-medium | 30s | 5971 | 5329 | 987 | 6 | +0.0% |
-| moonshine-streaming-medium | 30s-b | 6954 | 6742 | 1118 | 6 | +0.0% |
-| moonshine-streaming-medium | 30s-c | 7606 | 7135 | 1312 | 6 | +0.0% |
-| moonshine-streaming-medium | 60s | 15475 | 14956 | 810 | 18 | +0.0% |
-| moonshine-streaming-medium | 60s-b | 20584 | 19626 | 1454 | 15 | +0.0% |
-| moonshine-streaming-medium | 60s-c | 20361 | 20271 | 1416 | 15 | +0.0% |
-| moonshine-streaming-medium | 90s | 37106 | 34468 | 667 | 27 | +0.0% |
-| moonshine-streaming-medium | 90s-b | 36477 | 35592 | 901 | 34 | +0.0% |
-| moonshine-streaming-medium | 90s-c | 38941 | 38271 | 2008 | 24 | +0.0% |
-| sensevoice-small | 5s | 221 | 195 | 97 | 2 | +5.9% |
-| sensevoice-small | 5s-b | 165 | 148 | 148 | 1 | +0.0% |
-| sensevoice-small | 5s-c | 183 | 183 | 89 | 2 | +0.0% |
-| sensevoice-small | 30s | 856 | 856 | 139 | 6 | +0.0% |
-| sensevoice-small | 30s-b | 902 | 863 | 130 | 6 | +0.0% |
-| sensevoice-small | 30s-c | 979 | 956 | 164 | 6 | +0.0% |
-| sensevoice-small | 60s | 2372 | 2358 | 136 | 18 | +0.0% |
-| sensevoice-small | 60s-b | 2703 | 2514 | 176 | 15 | +0.0% |
-| sensevoice-small | 60s-c | 2814 | 2692 | 178 | 15 | +0.0% |
-| sensevoice-small | 90s | 4769 | 4603 | 122 | 27 | +0.0% |
-| sensevoice-small | 90s-b | 4975 | 4879 | 138 | 34 | +0.0% |
-| sensevoice-small | 90s-c | 5369 | 5241 | 313 | 24 | +0.0% |
-
-## Post-Release Latency by Duration (avg ms across clip variants)
-
-| Model | 5s | 30s | 60s | 90s |
-|-------|----|-----|-----|-----|
-| whisper-small-en | 359 | 465 | 512 | 492 |
-| whisper-large-v3-turbo | 1185 | 1201 | 1210 | 1270 |
-| whisper-distil-large-v3.5 | 1149 | 1189 | 1170 | 1239 |
-| parakeet-tdt-v2 | 246 | 325 | 333 | 350 |
-| moonshine-tiny | 103 | 168 | 172 | 193 |
-| moonshine-base | 178 | 285 | 331 | 321 |
-| moonshine-streaming-tiny | 264 | 397 | 443 | 413 |
-| moonshine-streaming-small | 485 | 740 | 909 | 795 |
-| moonshine-streaming-medium | 779 | 1139 | 1227 | 1192 |
-| sensevoice-small | 111 | 144 | 163 | 191 |
