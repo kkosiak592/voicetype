@@ -1,16 +1,11 @@
-import { useEffect, useState } from 'react';
-import { getVersion } from '@tauri-apps/api/app';
 import { HotkeyCapture } from '../HotkeyCapture';
 import { RecordingModeToggle } from '../RecordingModeToggle';
-import type { UpdateState } from '../../lib/updater';
 
 interface GeneralSectionProps {
   hotkey: string;
   onHotkeyChange: (key: string) => void;
   recordingMode: 'hold' | 'toggle';
   onRecordingModeChange: (mode: 'hold' | 'toggle') => void;
-  updaterState: UpdateState;
-  onCheckForUpdates: () => Promise<void>;
   hookAvailable: boolean;
 }
 
@@ -19,108 +14,50 @@ export function GeneralSection({
   onHotkeyChange,
   recordingMode,
   onRecordingModeChange,
-  updaterState,
-  onCheckForUpdates,
   hookAvailable,
 }: GeneralSectionProps) {
-  const [appVersion, setAppVersion] = useState<string>('');
-
-  useEffect(() => {
-    getVersion().then(setAppVersion).catch(() => setAppVersion(''));
-  }, []);
-
-  const { status, lastChecked } = updaterState;
-  const isChecking = status === 'checking';
-  const hasUpdate = status === 'available' || status === 'ready';
-  const isUpToDate = status === 'idle' && lastChecked > 0;
-
-  function renderCheckButton() {
-    if (isChecking) {
-      return (
-        <button
-          disabled
-          className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed"
-        >
-          Checking...
-        </button>
-      );
-    }
-
-    if (hasUpdate) {
-      return (
-        <span className="text-sm font-medium text-green-600 dark:text-green-400">
-          Update available
-        </span>
-      );
-    }
-
-    return (
-      <button
-        onClick={onCheckForUpdates}
-        className="text-sm text-indigo-600 hover:underline focus:outline-none dark:text-indigo-400"
-      >
-        Check for Updates
-      </button>
-    );
-  }
-
   return (
     <div>
-      <h1 className="mb-5 text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-        General
-      </h1>
+      <div className="mb-4">
+        <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
+          General Settings
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          Configure how and when VoiceType listens to your voice.
+        </p>
+      </div>
 
-      <div className="space-y-5">
-        {/* Hotkey subsection */}
-        <section>
-          <h2 className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-            Hotkey
-          </h2>
-          <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
-            Click the box below then press your desired key combination.
-          </p>
-          <HotkeyCapture value={hotkey} onChange={onHotkeyChange} />
-          {!hookAvailable && hotkey.split('+').every(k => ['ctrl', 'alt', 'shift', 'meta', 'win', 'super'].includes(k)) && (
-            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-              Hook unavailable — using standard shortcut fallback
+      <div className="space-y-4">
+        {/* Card 1: Activation */}
+        <div className="bg-white dark:bg-gray-900 ring-1 ring-gray-200 dark:ring-gray-800 rounded-2xl p-4 shadow-sm">
+          <section>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Activation Hotkey
+            </h2>
+            <p className="mb-4 mt-1 text-sm text-gray-500 dark:text-gray-400">
+              Click the box below then press your desired key combination to trigger recording.
             </p>
-          )}
-        </section>
-
-        <hr className="border-gray-200 dark:border-gray-700" />
-
-        {/* Recording Mode subsection */}
-        <section>
-          <h2 className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-            Recording Mode
-          </h2>
-          <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
-            Choose how the hotkey controls recording.
-          </p>
-          <RecordingModeToggle value={recordingMode} onChange={onRecordingModeChange} />
-        </section>
-
-        <hr className="border-gray-200 dark:border-gray-700" />
-
-        {/* Updates subsection */}
-        <section>
-          <h2 className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-            Updates
-          </h2>
-
-          <div className="mt-2 flex items-center gap-3">
-            {renderCheckButton()}
-            {isUpToDate && !hasUpdate && !isChecking && (
-              <span className="text-sm text-gray-400 dark:text-gray-500">Up to date</span>
+            <HotkeyCapture value={hotkey} onChange={onHotkeyChange} />
+            {!hookAvailable && hotkey.split('+').every(k => ['ctrl', 'alt', 'shift', 'meta', 'win', 'super'].includes(k)) && (
+              <p className="mt-3 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-amber-500"></span>
+                Hook unavailable — using standard shortcut fallback
+              </p>
             )}
-          </div>
+          </section>
 
-          {appVersion && (
-            <p className="mt-4 text-xs text-gray-400 dark:text-gray-500">
-              VoiceType v{appVersion}
+          <div className="my-5 border-t border-gray-100 dark:border-gray-800" />
+
+          <section>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Recording Mode
+            </h2>
+            <p className="mb-4 mt-1 text-sm text-gray-500 dark:text-gray-400">
+              Choose how the hotkey controls your recording session.
             </p>
-          )}
-        </section>
+            <RecordingModeToggle value={recordingMode} onChange={onRecordingModeChange} />
+          </section>
+        </div>
       </div>
     </div>
   );

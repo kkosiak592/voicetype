@@ -68,7 +68,7 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
       const isMoonshineVariant = modelId === 'moonshine-tiny';
       const engine = isParakeetVariant ? 'parakeet'
         : isMoonshineVariant ? 'moonshine'
-        : 'whisper';
+          : 'whisper';
 
       if (isParakeetVariant) {
         // Always call set_engine for Parakeet — reloads the model on every switch.
@@ -177,61 +177,65 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
 
   return (
     <div>
-      <h1 className="mb-1 text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-        Model
-      </h1>
-      <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-        Select the transcription model. Additional models can be downloaded here.
-      </p>
+      <div className="mb-4">
+        <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
+          Model
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          Select the transcription model. Additional models can be downloaded here.
+        </p>
+      </div>
 
-      <ModelSelector
-        models={models}
-        selectedId={selectedModel}
-        onSelect={handleModelSelect}
-        loading={loading}
-        onDownloadComplete={handleDownloadComplete}
-        onFp32Download={handleFp32Download}
-        fp32Downloading={fp32Downloading}
-        fp32Percent={fp32Percent}
-        fp32Error={fp32Error}
-        onMoonshineDownload={handleMoonshineDownload}
-        moonshineDownloading={moonshineDownloading}
-        moonshinePercent={moonshinePercent}
-        moonshineError={moonshineError}
-      />
-
-      {gpuInfo && (
-        <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-4 py-3">
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-            Inference Status
-          </p>
-          <div className="space-y-1">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500 dark:text-gray-400">GPU</span>
-              <span className="text-gray-900 dark:text-gray-100 font-medium">{gpuInfo.gpuName}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500 dark:text-gray-400">Provider</span>
-              <span className="text-gray-900 dark:text-gray-100 font-medium">{gpuInfo.executionProvider}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500 dark:text-gray-400">Engine</span>
-              <span className="text-gray-900 dark:text-gray-100 font-medium capitalize">{gpuInfo.activeEngine}</span>
+      <div className="space-y-4">
+        {gpuInfo && (
+          <div className="bg-white dark:bg-gray-900 ring-1 ring-gray-200 dark:ring-gray-800 rounded-2xl p-4 shadow-sm flex flex-col">
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+              Inference Status
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 ring-1 ring-gray-200/50 dark:ring-gray-700/50">
+                <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">GPU</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{gpuInfo.gpuName}</p>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 ring-1 ring-gray-200/50 dark:ring-gray-700/50">
+                <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">Provider</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{gpuInfo.executionProvider}</p>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 ring-1 ring-gray-200/50 dark:ring-gray-700/50">
+                <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">Engine</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 capitalize truncate">{gpuInfo.activeEngine}</p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {currentEngine === 'parakeet' && (
-        <p className="mt-3 text-xs text-gray-400 dark:text-gray-500">
-          Parakeet doesn't support vocabulary prompting. Your corrections dictionary still applies.
-        </p>
-      )}
-      {currentEngine === 'moonshine' && (
-        <p className="mt-3 text-xs text-gray-400 dark:text-gray-500">
-          Moonshine doesn't support vocabulary prompting. Your corrections dictionary still applies.
-        </p>
-      )}
+        <div className="bg-white dark:bg-gray-900 ring-1 ring-gray-200 dark:ring-gray-800 rounded-2xl p-4 shadow-sm">
+          <ModelSelector
+            models={models}
+            selectedId={selectedModel}
+            onSelect={handleModelSelect}
+            loading={loading}
+            onDownloadComplete={handleDownloadComplete}
+            onFp32Download={handleFp32Download}
+            fp32Downloading={fp32Downloading}
+            fp32Percent={fp32Percent}
+            fp32Error={fp32Error}
+            onMoonshineDownload={handleMoonshineDownload}
+            moonshineDownloading={moonshineDownloading}
+            moonshinePercent={moonshinePercent}
+            moonshineError={moonshineError}
+          />
+        </div>
+
+
+
+        {(currentEngine === 'parakeet' || currentEngine === 'moonshine') && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 px-2">
+            <span className="size-1.5 rounded-full bg-amber-500"></span>
+            {currentEngine.charAt(0).toUpperCase() + currentEngine.slice(1)} doesn't support vocabulary prompting. Your corrections dictionary still applies.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
