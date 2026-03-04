@@ -49,4 +49,7 @@ pub fn append_history(app: &tauri::AppHandle, text: &str, engine: &str) {
     guard.insert(0, entry); // newest first
     guard.truncate(50); // cap at 50 per locked decision
     save_history(app, &guard);
+    
+    use tauri::Emitter;
+    app.emit("history-updated", ()).ok();
 }
