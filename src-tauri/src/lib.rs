@@ -1174,7 +1174,6 @@ fn model_id_to_path(model_id: &str) -> Result<std::path::PathBuf, String> {
     let filename = match model_id {
         "large-v3-turbo" => "ggml-large-v3-turbo-q5_0.bin",
         "small-en" => "ggml-small.en-q5_1.bin",
-        "distil-large-v3.5" => "ggml-distil-large-v3.5.bin",
         _ => return Err(format!("Unknown model id: {}", model_id)),
     };
     Ok(models_dir().join(filename))
@@ -1197,44 +1196,33 @@ struct ModelInfo {
 /// List available transcription models (Whisper + Parakeet) with download status.
 #[cfg(feature = "whisper")]
 #[tauri::command]
-fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
-    use crate::transcribe::{models_dir, ModelMode};
-    let cached = app.state::<CachedGpuMode>();
-    let gpu_mode = matches!(cached.0, ModelMode::Gpu);
+fn list_models() -> Result<Vec<ModelInfo>, String> {
+    use crate::transcribe::models_dir;
     let dir = models_dir();
 
     let mut models = vec![
         ModelInfo {
             id: "large-v3-turbo".to_string(),
             name: "Large v3 Turbo".to_string(),
-            description: "Most accurate — 574 MB — requires NVIDIA GPU".to_string(),
+            description: "High accuracy · 5.3% WER · ~16s avg · 574 MB · NVIDIA GPU required".to_string(),
             recommended: false,
             downloaded: dir.join("ggml-large-v3-turbo-q5_0.bin").exists(),
         },
         ModelInfo {
             id: "small-en".to_string(),
             name: "Small (English)".to_string(),
-            description: "Lightweight — 190 MB — GPU accelerated when available".to_string(),
-            recommended: !gpu_mode,
+            description: "Lightweight · 5.9% WER · ~5.0s avg · 190 MB".to_string(),
+            recommended: false,
             downloaded: dir.join("ggml-small.en-q5_1.bin").exists(),
         },
     ];
 
-    // Distil Large v3.5 — high accuracy fp16, works on CPU and GPU
-    models.push(ModelInfo {
-        id: "distil-large-v3.5".to_string(),
-        name: "Distil Large v3.5".to_string(),
-        description: "High accuracy — 513 MB — GPU accelerated when available".to_string(),
-        recommended: false,
-        downloaded: dir.join("ggml-distil-large-v3.5.bin").exists(),
-    });
-
-    // Parakeet TDT fp32 — fast and accurate, supports CUDA, DirectML, and CPU
+    // Parakeet TDT fp32 — best accuracy, works on all hardware (CUDA, DirectML, CPU)
     models.push(ModelInfo {
         id: "parakeet-tdt-v2-fp32".to_string(),
         name: "Parakeet TDT (fp32)".to_string(),
-        description: "Fast and accurate — 2.56 GB — GPU accelerated (CUDA or DirectML)".to_string(),
-        recommended: gpu_mode,
+        description: "Best accuracy · 5.3% WER · ~4.5s avg · 2.56 GB".to_string(),
+        recommended: true,
         downloaded: crate::download::parakeet_fp32_model_exists(),
     });
 
@@ -1242,7 +1230,7 @@ fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
     models.push(ModelInfo {
         id: "moonshine-tiny".to_string(),
         name: "Moonshine Tiny".to_string(),
-        description: "Fastest — 108 MB — ONNX-based, works on any hardware".to_string(),
+        description: "Fastest · 7.2% WER · ~2.3s avg · 108 MB".to_string(),
         recommended: false,
         downloaded: crate::download::moonshine_tiny_model_exists(),
     });
@@ -1339,25 +1327,17 @@ fn check_first_run(app: tauri::AppHandle) -> FirstRunStatus {
     let small_exists = dir.join("ggml-small.en-q5_1.bin").exists();
     // Parakeet fp32 is also a valid installed model — skip first-run if it is present
     let parakeet_fp32_exists = crate::download::parakeet_fp32_model_exists();
-    // Distil Large v3.5 is also a valid installed model — skip first-run if it is present
-    let distil_v35_exists = dir.join("ggml-distil-large-v3.5.bin").exists();
     // Moonshine Tiny is also a valid installed model — skip first-run if it is present
     let moonshine_exists = crate::download::moonshine_tiny_model_exists();
     // directml_available: only true when a discrete non-NVIDIA GPU exists (AMD RX, Intel Arc).
     // Integrated-only GPUs (Intel UHD, AMD APU) cannot run Parakeet at useful speed via DirectML.
     let directml_available = detection.0.has_discrete_gpu && !detection.0.is_nvidia;
     FirstRunStatus {
-        needs_setup: !large_exists && !small_exists && !parakeet_fp32_exists && !distil_v35_exists && !moonshine_exists,
+        needs_setup: !large_exists && !small_exists && !parakeet_fp32_exists && !moonshine_exists,
         gpu_detected: gpu_mode,
         gpu_name: detection.0.gpu_name.clone(),
         directml_available,
-        recommended_model: if gpu_mode {
-            "parakeet-tdt-v2-fp32".to_string()
-        } else if detection.0.has_discrete_gpu {
-            "parakeet-tdt-v2-fp32".to_string()
-        } else {
-            "small-en".to_string()
-        },
+        recommended_model: "parakeet-tdt-v2-fp32".to_string(),
     }
 }
 

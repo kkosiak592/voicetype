@@ -49,9 +49,8 @@ fn models_dir() -> PathBuf {
 /// Returns (filename, url, expected_sha256_hex, expected_size_bytes) for a known model_id,
 /// or None if the model_id is not recognised.
 ///
-/// Each model embeds its own HuggingFace URL so that models from different repos
-/// (e.g. ggerganov/whisper.cpp vs distil-whisper/distil-large-v3.5-ggml) are handled
-/// uniformly without a separate URL routing function.
+/// Each model embeds its own download URL so that models from different repos
+/// are handled uniformly without a separate URL routing function.
 fn model_info(model_id: &str) -> Option<(&'static str, &'static str, &'static str, u64)> {
     match model_id {
         "large-v3-turbo" => Some((
@@ -65,13 +64,6 @@ fn model_info(model_id: &str) -> Option<(&'static str, &'static str, &'static st
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q5_1.bin",
             "bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30",
             199_229_440,
-        )),
-        // q5_0 quantized — ~513 MB (down from 1.52 GB fp16)
-        "distil-large-v3.5" => Some((
-            "ggml-distil-large-v3.5.bin",
-            "https://github.com/kkosiak592/voicetype/releases/download/v1.2-models/ggml-distil-large-v3.5-q5_0.bin",
-            "e1cd9d36ee8628206fe0c8f9e067ee2679409b5845b4c4a14a7e2dd906fb9a19",
-            537_819_875,
         )),
         _ => None,
     }
