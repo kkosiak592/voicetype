@@ -4,10 +4,10 @@ interface FrequencyBarsProps {
   level: number; // 0.0 - 1.0 normalized RMS from backend
 }
 
-const BAR_COUNT = 24;
+const BAR_COUNT = 12;
 
-// Per-bar sinusoidal frequencies (Hz) — mirrored pattern: ascending first 12, descending last 12
-const BAR_FREQS = [1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.3, 2.6, 2.9, 3.2, 3.4, 3.5, 3.5, 3.4, 3.2, 2.9, 2.6, 2.3, 2.0, 1.8, 1.6, 1.4, 1.2, 1.0];
+// Per-bar sinusoidal frequencies (Hz) — mirrored pattern: ascending first 6, descending last 6
+const BAR_FREQS = [1.0, 1.4, 2.0, 2.8, 3.4, 3.5, 3.5, 3.4, 2.8, 2.0, 1.4, 1.0];
 
 // Per-bar phase offsets — spread evenly across 2π so bars wave in sequence
 const BAR_PHASES = BAR_FREQS.map((_, i) => (i / BAR_COUNT) * Math.PI * 2);
@@ -36,14 +36,14 @@ export function FrequencyBars({ level }: FrequencyBarsProps) {
     const container = containerRef.current;
     if (!container) return;
 
-    // Build bar elements once — each bar gets a rainbow hue based on position
+    // Build bar elements once — each bar gets a subtle aesthetic gradient hue
     const bars: HTMLDivElement[] = [];
     for (let i = 0; i < BAR_COUNT; i++) {
-      const hue = Math.round((i / BAR_COUNT) * 300); // 0 (red) → 300 (magenta)
+      const hue = Math.round(200 + (i / BAR_COUNT) * 60); // 200 (blue) → 260 (purple)
       const bar = document.createElement("div");
-      bar.style.width = "3px";
+      bar.style.width = "4px";
       bar.style.borderRadius = "9999px";
-      bar.style.background = `hsl(${hue}, 90%, 65%)`;
+      bar.style.background = `hsl(${hue}, 85%, 65%)`; /* slightly softer colors */
       bar.style.flexShrink = "0";
       container.appendChild(bar);
       bars.push(bar);
@@ -56,26 +56,22 @@ export function FrequencyBars({ level }: FrequencyBarsProps) {
       const t = (now - startTimeRef.current) / 1000; // seconds
       const lv = levelRef.current;
 
-      // Non-linear amplification: boosts quiet-to-mid levels, keeps loud levels near max
-      // Maps: 0.1 -> 0.28, 0.3 -> 0.51, 0.5 -> 0.68, 0.8 -> 0.88, 1.0 -> 1.0
-      const amplified = Math.pow(lv, 0.55);
+      // Non-linear amplification: boosts quiet-to-mid levels significantly for more sensitivity
+      const amplified = Math.min(1.0, Math.pow(lv * 2.0, 0.45));
 
       for (let i = 0; i < BAR_COUNT; i++) {
         // Sinusoidal wave contribution scaled by level
         const wave = Math.sin(2 * Math.PI * BAR_FREQS[i] * t + BAR_PHASES[i]);
-        // Active height: 0.3 floor ensures bars stay visibly tall during speech,
-        // 0.7 * wave adds bouncy sinusoidal variation on top
-        const activeHeight = amplified * BELL[i] * (0.3 + 0.7 * ((wave + 1) / 2));
-        // Idle wave: reduced amplitude increases contrast between idle and active states
+        // Active height: lower floor (0.1) and higher variation (0.9) for more "bounce"
+        const activeHeight = amplified * BELL[i] * (0.1 + 0.9 * ((wave + 1) / 2));
+        // Idle wave
         const idleWave = 0.08 * BELL[i] * ((Math.sin(2 * Math.PI * 1.2 * t + BAR_PHASES[i]) + 1) / 2);
-        // Composite height as fraction of container (0–1), then to px
-        // Minimum lowered to 0.04 for thinner silent bars and greater dynamic range
-        const fraction = Math.max(0.04, activeHeight + idleWave);
-        // Container is 30px; use 32 multiplier so bars can slightly overflow for liveliness
-        const heightPx = Math.round(fraction * 32);
+
+        const fraction = Math.max(0.1, activeHeight + idleWave);
+        // Container is 20px
+        const heightPx = Math.round(fraction * 20);
         bars[i].style.height = `${heightPx}px`;
-        // Opacity: bars stay more visible at mid heights
-        bars[i].style.opacity = String(0.5 + fraction * 0.5);
+        bars[i].style.opacity = String(0.6 + fraction * 0.4);
       }
 
       rafRef.current = requestAnimationFrame(tick);
@@ -89,13 +85,13 @@ export function FrequencyBars({ level }: FrequencyBarsProps) {
       bars.forEach((bar) => container.removeChild(bar));
       startTimeRef.current = null;
     };
-  }, []); // Empty deps — RAF loop never restarts; reads level via ref
+  }, []);
 
   return (
     <div
       ref={containerRef}
-      className="flex items-center gap-[1.5px]"
-      style={{ height: "30px" }}
+      className="flex items-center justify-center gap-[2px] w-full"
+      style={{ height: "20px" }}
     />
   );
 }
