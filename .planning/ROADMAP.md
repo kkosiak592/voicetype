@@ -98,7 +98,7 @@ Phases execute in numeric order: 15 → 16 → 17 → 19 → 19.1 → 20 → 21
 | 17. Frontend Capture UI | v1.2 | 1/1 | Complete | 2026-03-03 |
 | 18. Integration and Distribution | v1.2 | — | Voided | 2026-03-03 |
 | 19. Distil-large-v3.5 | 1/1 | Complete   | 2026-03-03 | - |
-| 19.1. Moonshine Tiny | 1/2 | In Progress|  | - |
+| 19.1. Moonshine Tiny | 2/2 | Complete   | 2026-03-04 | - |
 | 20. Bundle CUDA DLLs | v1.2 | 0/1 | Not started | - |
 | 21. Integration and Distribution | v1.2 | 0/1 | Not started | - |
 
@@ -120,7 +120,7 @@ Plans:
 **Goal:** Moonshine Tiny works as a selectable transcription engine in VoiceType — users can download it, select it, and dictate with it, including on recordings longer than 30 seconds via VAD chunking, with GPU acceleration when available
 **Requirements**: MOON-01, MOON-02, MOON-03, MOON-04, MOON-05, MOON-06, MOON-07
 **Depends on:** Phase 19
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 19.1-01-PLAN.md — Backend engine core, VAD chunking, pipeline dispatch, download command, IPC wiring, startup loading

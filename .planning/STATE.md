@@ -3,6 +3,19 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Keyboard Hook
 status: completed
+last_updated: "2026-03-04T13:56:06.761Z"
+progress:
+  total_phases: 8
+  completed_phases: 5
+  total_plans: 12
+  completed_plans: 9
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.2
+milestone_name: Keyboard Hook
+status: completed
 last_updated: "2026-03-04T13:06:53.061Z"
 progress:
   total_phases: 8
@@ -50,12 +63,12 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Milestone:** v1.2 Keyboard Hook
 **Phase:** 19.1 — Integrate Moonshine Tiny model into main app with VAD chunking and GPU support
-**Plan:** 01 complete (2026-03-04)
-**Status:** Plan 01 complete
+**Plan:** 02 complete (2026-03-04)
+**Status:** Phase 19.1 complete (both plans done)
 
 [##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
 
-Last activity: 2026-03-04 - Completed Phase 19.1 Plan 01: Moonshine Tiny backend integration
+Last activity: 2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny frontend integration verified end-to-end
 
 ## Performance Metrics
 
@@ -72,6 +85,7 @@ Last activity: 2026-03-04 - Completed Phase 19.1 Plan 01: Moonshine Tiny backend
 | Phase 17-frontend-capture-ui P01 | 5 | 2 tasks | 4 files |
 | Phase 19 P01 | 4 | 2 tasks | 3 files |
 | Phase 19.1 P01 | 35 | 2 tasks | 6 files |
+| Phase 19.1 P02 | 0 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -113,6 +127,9 @@ Last activity: 2026-03-04 - Completed Phase 19.1 Plan 01: Moonshine Tiny backend
 - [Phase 19.1]: 19.1-01: TranscribeRsEngine trait alias used to avoid collision with crate-level TranscriptionEngine enum
 - [Phase 19.1]: 19.1-01: DirectML EP for Moonshine falls back to CPU — ort DirectML EP availability for ONNX Moonshine not validated
 - [Phase 19.1]: 19.1-01: decoder_model_merged.onnx as sentinel file for Moonshine download existence check (largest file, last to complete)
+- [Phase 19.1]: 19.1-02: Moonshine download props mirror the Parakeet fp32 pattern — onMoonshineDownload/moonshineDownloading/moonshinePercent/moonshineError passed through ModelSelector
+- [Phase 19.1]: 19.1-02: Moonshine Tiny placed first in FirstRun MODELS array — smallest/fastest, best default for first-time users
+- [Phase 19.1]: 19.1-02: currentEngine === 'moonshine' guard renders note that vocabulary prompting is unsupported (corrections dictionary still applies)
 
 ### Research Flags (from SUMMARY.md)
 
@@ -154,5 +171,5 @@ None active.
 ## Session Continuity
 
 Last session: 2026-03-04
-Stopped at: Phase 19.1 Plan 01 complete — Moonshine Tiny backend integration (transcribe_moonshine.rs, vad chunking, download command, IPC wiring)
+Stopped at: Phase 19.1 Plan 02 complete — Moonshine Tiny frontend integration (ModelSection engine routing, ModelSelector download props, FirstRun model card, end-to-end verified)
 Resume file: None
