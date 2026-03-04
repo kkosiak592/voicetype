@@ -644,7 +644,7 @@ fn main() {
 
     // Run benchmarks
     let mut results: Vec<BenchResult> = Vec::new();
-    const ITERATIONS: usize = 5;
+    const ITERATIONS: usize = 3;
 
     // -----------------------------------------------------------------------
     // Whisper models
@@ -1627,6 +1627,64 @@ fn print_summary(results: &[BenchResult]) {
     println!("{}", "=".repeat(88));
     println!("Speed:  100 = fastest model, scaled relative to best avg latency ({:.0}ms)", best_latency);
     println!("Score:  geometric mean of speed and accuracy (balanced ranking)");
+
+    // -------------------------------------------------------------------
+    // Pivot tables: Latency and WER by duration group
+    // -------------------------------------------------------------------
+    let duration_groups = ["5s", "30s", "60s"];
+
+    // Collect unique model names preserving order
+    let mut pivot_models: Vec<String> = Vec::new();
+    for r in results {
+        if !pivot_models.contains(&r.model) {
+            pivot_models.push(r.model.clone());
+        }
+    }
+
+    // Helper: average a metric across clips matching a duration prefix for a model
+    let avg_metric = |model: &str, prefix: &str, metric: fn(&BenchResult) -> f64| -> Option<f64> {
+        let matching: Vec<f64> = results.iter()
+            .filter(|r| r.model == model && r.clip.starts_with(prefix) && !r.clip[prefix.len()..].starts_with("s"))
+            .map(metric)
+            .collect();
+        if matching.is_empty() { None } else { Some(matching.iter().sum::<f64>() / matching.len() as f64) }
+    };
+
+    // Latency pivot
+    println!("\n");
+    println!("================================================================================");
+    println!("LATENCY BY DURATION (avg ms across clip variants)");
+    println!("================================================================================");
+    println!("{:<30} | {:>10} | {:>10} | {:>10}", "Model", "5s", "30s", "60s");
+    println!("{}", "-".repeat(68));
+    for model in &pivot_models {
+        let cols: Vec<String> = duration_groups.iter().map(|d| {
+            match avg_metric(model, d, |r| r.avg_ms as f64) {
+                Some(v) => format!("{:.0}", v),
+                None => "-".to_string(),
+            }
+        }).collect();
+        println!("{:<30} | {:>10} | {:>10} | {:>10}", model, cols[0], cols[1], cols[2]);
+    }
+    println!("{}", "=".repeat(68));
+
+    // WER pivot
+    println!("\n");
+    println!("================================================================================");
+    println!("WER BY DURATION (avg % across clip variants)");
+    println!("================================================================================");
+    println!("{:<30} | {:>10} | {:>10} | {:>10}", "Model", "5s", "30s", "60s");
+    println!("{}", "-".repeat(68));
+    for model in &pivot_models {
+        let cols: Vec<String> = duration_groups.iter().map(|d| {
+            match avg_metric(model, d, |r| r.wer) {
+                Some(v) => format!("{:.1}%", v),
+                None => "-".to_string(),
+            }
+        }).collect();
+        println!("{:<30} | {:>10} | {:>10} | {:>10}", model, cols[0], cols[1], cols[2]);
+    }
+    println!("{}", "=".repeat(68));
 }
 
 // ---------------------------------------------------------------------------
@@ -1743,6 +1801,43 @@ fn write_markdown_report(results: &[BenchResult]) {
         }
         let _ = writeln!(file, "\nSpeed: 100 = fastest model, scaled relative to best avg latency ({:.0}ms)", best_latency);
         let _ = writeln!(file, "Score: geometric mean of speed and accuracy (balanced ranking)");
+    }
+
+    // --- Pivot tables: Latency and WER by duration ---
+    let duration_groups = ["5s", "30s", "60s"];
+
+    let avg_metric_md = |model: &str, prefix: &str, metric: fn(&BenchResult) -> f64| -> Option<f64> {
+        let matching: Vec<f64> = results.iter()
+            .filter(|r| r.model == model && r.clip.starts_with(prefix) && !r.clip[prefix.len()..].starts_with("s"))
+            .map(metric)
+            .collect();
+        if matching.is_empty() { None } else { Some(matching.iter().sum::<f64>() / matching.len() as f64) }
+    };
+
+    let _ = writeln!(file, "\n## Latency by Duration (avg ms across clip variants)\n");
+    let _ = writeln!(file, "| Model | 5s | 30s | 60s |");
+    let _ = writeln!(file, "|-------|----|-----|-----|");
+    for name in &model_names {
+        let cols: Vec<String> = duration_groups.iter().map(|d| {
+            match avg_metric_md(name, d, |r| r.avg_ms as f64) {
+                Some(v) => format!("{:.0}", v),
+                None => "-".to_string(),
+            }
+        }).collect();
+        let _ = writeln!(file, "| {} | {} | {} | {} |", name, cols[0], cols[1], cols[2]);
+    }
+
+    let _ = writeln!(file, "\n## WER by Duration (avg % across clip variants)\n");
+    let _ = writeln!(file, "| Model | 5s | 30s | 60s |");
+    let _ = writeln!(file, "|-------|----|-----|-----|");
+    for name in &model_names {
+        let cols: Vec<String> = duration_groups.iter().map(|d| {
+            match avg_metric_md(name, d, |r| r.wer) {
+                Some(v) => format!("{:.1}%", v),
+                None => "-".to_string(),
+            }
+        }).collect();
+        let _ = writeln!(file, "| {} | {} | {} | {} |", name, cols[0], cols[1], cols[2]);
     }
 
     // --- Reference Transcriptions ---
