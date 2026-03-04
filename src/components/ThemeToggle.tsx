@@ -29,18 +29,20 @@ export function ThemeToggle({ theme, onChange }: ThemeToggleProps) {
     <button
       onClick={handleToggle}
       className={[
-        'relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none',
+        'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900',
         isDark
-          ? 'bg-blue-600'
-          : 'bg-gray-300 dark:bg-gray-600',
+          ? 'bg-emerald-500'
+          : 'bg-gray-200 dark:bg-gray-700',
       ].join(' ')}
       role="switch"
       aria-checked={isDark}
     >
+      <span className="sr-only">Toggle theme</span>
       <span
+        aria-hidden="true"
         className={[
-          'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200',
-          isDark ? 'translate-x-6' : 'translate-x-1',
+          'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+          isDark ? 'translate-x-5' : 'translate-x-0',
         ].join(' ')}
       />
     </button>

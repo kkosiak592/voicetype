@@ -58,7 +58,7 @@ export function DictionaryEditor({ corrections, onChange }: DictionaryEditorProp
   }
 
   const inputClass =
-    'w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:border-indigo-400 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100';
+    'w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:border-emerald-400 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100';
 
   return (
     <div>
@@ -119,7 +119,7 @@ export function DictionaryEditor({ corrections, onChange }: DictionaryEditorProp
 
       <button
         onClick={handleAdd}
-        className="mt-3 text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 focus:outline-none"
+        className="mt-3 text-sm text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 focus:outline-none"
       >
         + Add entry
       </button>

@@ -36,33 +36,42 @@ export function MicrophoneSection({ selectedMic, onSelectedMicChange }: Micropho
 
   return (
     <div>
-      <h1 className="mb-1 text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-        Microphone
-      </h1>
-      <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-        Select the input device for audio capture.
-      </p>
+      <div className="mb-4">
+        <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
+          Microphone
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          Select the input device for audio capture.
+        </p>
+      </div>
 
-      {loading ? (
-        <div className="h-9 w-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
-      ) : (
-        <div>
-          <select
-            value={selectedMic}
-            onChange={(e) => handleDeviceChange(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-          >
-            {devices.map((device) => (
-              <option key={device} value={device}>
-                {device}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-            Audio stream will restart with the selected device.
-          </p>
-        </div>
-      )}
+      <div className="bg-white dark:bg-gray-900 ring-1 ring-gray-200 dark:ring-gray-800 rounded-2xl p-4 shadow-sm">
+        {loading ? (
+          <div className="h-11 w-full animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
+        ) : (
+          <div>
+            <label htmlFor="mic-select" className="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+              Input Device
+            </label>
+            <select
+              id="mic-select"
+              value={selectedMic}
+              onChange={(e) => handleDeviceChange(e.target.value)}
+              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-emerald-500/50 shadow-inner"
+            >
+              {devices.map((device) => (
+                <option key={device} value={device}>
+                  {device}
+                </option>
+              ))}
+            </select>
+            <p className="mt-3 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+              <span className="size-1.5 rounded-full bg-emerald-500"></span>
+              Audio stream will automatically restart when you change the device.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

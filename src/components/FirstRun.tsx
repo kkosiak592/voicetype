@@ -219,8 +219,8 @@ export function FirstRun({ gpuDetected, gpuName, directmlAvailable, recommendedM
               {gpuName || 'NVIDIA GPU Detected'}
             </span>
           ) : directmlAvailable ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
-              <span className="h-2 w-2 rounded-full bg-blue-500" />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
               GPU Detected (DirectML)
             </span>
           ) : (
@@ -250,12 +250,12 @@ export function FirstRun({ gpuDetected, gpuName, directmlAvailable, recommendedM
                 className={[
                   'relative rounded-xl border-2 p-4 transition-colors',
                   isRecommended
-                    ? 'border-indigo-400 bg-indigo-50 dark:border-indigo-500 dark:bg-indigo-950/40'
+                    ? 'border-emerald-400 bg-emerald-50 dark:border-emerald-500 dark:bg-emerald-950/40'
                     : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800',
                 ].join(' ')}
               >
                 {isRecommended && (
-                  <span className="absolute -top-2.5 left-3 rounded-full bg-indigo-500 px-2 py-0.5 text-xs font-semibold text-white">
+                  <span className="absolute -top-2.5 left-3 rounded-full bg-emerald-500 px-2 py-0.5 text-xs font-semibold text-white">
                     Recommended
                   </span>
                 )}
@@ -275,7 +275,7 @@ export function FirstRun({ gpuDetected, gpuName, directmlAvailable, recommendedM
                   <div className="mb-3">
                     <div className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-indigo-500 transition-all duration-200"
+                        className="h-full rounded-full bg-emerald-500 transition-all duration-200"
                         style={{ width: percent !== null ? `${percent}%` : '100%' }}
                       />
                     </div>
@@ -323,7 +323,7 @@ export function FirstRun({ gpuDetected, gpuName, directmlAvailable, recommendedM
                     className={[
                       'w-full rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
                       isRecommended
-                        ? 'bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed'
+                        ? 'bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed'
                         : 'border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed',
                     ].join(' ')}
                   >

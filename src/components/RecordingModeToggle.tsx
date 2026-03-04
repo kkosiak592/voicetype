@@ -11,17 +11,17 @@ const OPTIONS: Array<{
   label: string;
   description: string;
 }> = [
-  {
-    value: 'hold',
-    label: 'Hold to talk',
-    description: 'Hold the hotkey while speaking. Release to transcribe.',
-  },
-  {
-    value: 'toggle',
-    label: 'Toggle',
-    description: 'Tap to start. Tap again or wait for auto-stop.',
-  },
-];
+    {
+      value: 'hold',
+      label: 'Hold to talk',
+      description: 'Hold the hotkey while speaking. Release to transcribe.',
+    },
+    {
+      value: 'toggle',
+      label: 'Toggle',
+      description: 'Tap to start. Tap again or wait for auto-stop.',
+    },
+  ];
 
 export function RecordingModeToggle({ value, onChange }: RecordingModeToggleProps) {
   async function handleSelect(mode: 'hold' | 'toggle') {
@@ -38,7 +38,7 @@ export function RecordingModeToggle({ value, onChange }: RecordingModeToggleProp
   }
 
   return (
-    <div className="flex gap-3">
+    <div className="flex gap-4">
       {OPTIONS.map((option) => {
         const isSelected = value === option.value;
         return (
@@ -46,23 +46,27 @@ export function RecordingModeToggle({ value, onChange }: RecordingModeToggleProp
             key={option.value}
             onClick={() => handleSelect(option.value)}
             className={[
-              'flex flex-1 flex-col rounded-lg border-2 px-3 py-2.5 text-left transition-colors duration-150 focus:outline-none',
+              'relative flex flex-1 flex-col rounded-xl px-4 py-3.5 text-left transition-all duration-200 focus:outline-none',
               isSelected
-                ? 'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-950'
-                : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600',
+                ? 'bg-emerald-50 dark:bg-emerald-500/10 ring-2 ring-emerald-500 dark:ring-emerald-500/80 shadow-sm'
+                : 'bg-gray-50 dark:bg-gray-800/50 ring-1 ring-gray-200 dark:ring-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 hover:ring-gray-300 dark:hover:ring-gray-600',
             ].join(' ')}
           >
+            {/* Optional dot indicator for selected state */}
+            {isSelected && (
+              <div className="absolute top-4 right-4 size-2 rounded-full bg-emerald-500" />
+            )}
             <span
               className={[
-                'text-sm font-medium',
+                'text-sm font-semibold',
                 isSelected
-                  ? 'text-indigo-700 dark:text-indigo-300'
+                  ? 'text-emerald-700 dark:text-emerald-300'
                   : 'text-gray-900 dark:text-gray-100',
               ].join(' ')}
             >
               {option.label}
             </span>
-            <span className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+            <span className={['mt-1 text-xs leading-relaxed', isSelected ? 'text-emerald-600/70 dark:text-emerald-300/70' : 'text-gray-500 dark:text-gray-400'].join(' ')}>
               {option.description}
             </span>
           </button>

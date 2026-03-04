@@ -104,7 +104,7 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
   // mode without a change (Escape / click-away).
   useEffect(() => {
     if (listening && value) {
-      invoke('unregister_hotkey', { key: value }).catch(() => {});
+      invoke('unregister_hotkey', { key: value }).catch(() => { });
     }
   }, [listening, value]);
 
@@ -125,7 +125,7 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
         setListening(false);
         // Re-register the original hotkey since the user cancelled.
         if (value) {
-          invoke('register_hotkey', { key: value }).catch(() => {});
+          invoke('register_hotkey', { key: value }).catch(() => { });
         }
         return;
       }
@@ -155,7 +155,7 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
 
       if (combo === value) {
         // Same key pressed — just re-register it, no persist needed.
-        invoke('register_hotkey', { key: value }).catch(() => {});
+        invoke('register_hotkey', { key: value }).catch(() => { });
         return;
       }
 
@@ -168,7 +168,7 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
       } catch (err) {
         // Registration failed — restore the original hotkey.
         if (value) {
-          invoke('register_hotkey', { key: value }).catch(() => {});
+          invoke('register_hotkey', { key: value }).catch(() => { });
         }
         setError(String(err));
       }
@@ -202,7 +202,7 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
 
         if (combo === value) {
           // Same combo — just re-register it, no persist needed.
-          invoke('register_hotkey', { key: value }).catch(() => {});
+          invoke('register_hotkey', { key: value }).catch(() => { });
           return;
         }
 
@@ -214,7 +214,7 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
         } catch (err) {
           // Registration failed — restore the original hotkey.
           if (value) {
-            invoke('register_hotkey', { key: value }).catch(() => {});
+            invoke('register_hotkey', { key: value }).catch(() => { });
           }
           setError(String(err));
         }
@@ -236,7 +236,7 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
         setHeldDisplay('');
         setListening(false);
         if (value) {
-          invoke('register_hotkey', { key: value }).catch(() => {});
+          invoke('register_hotkey', { key: value }).catch(() => { });
         }
       }
     };
@@ -271,7 +271,7 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
   }
 
   return (
-    <div>
+    <div className="w-full">
       <div
         ref={boxRef}
         tabIndex={0}
@@ -281,21 +281,30 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
           boxRef.current?.focus();
         }}
         className={[
-          'cursor-pointer select-none rounded-md px-4 py-2 text-sm font-mono',
-          'border-2 transition-colors duration-150 outline-none',
+          'cursor-pointer select-none rounded-xl px-5 py-3.5 text-sm font-medium font-mono',
+          'transition-all duration-200 outline-none flex items-center justify-center max-w-sm',
           listening
-            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-400'
-            : 'border-gray-300 bg-gray-100 text-gray-800 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200',
+            ? 'ring-2 ring-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/80 shadow-[0_0_15px_rgba(99,102,241,0.2)]'
+            : 'ring-1 ring-gray-300 bg-gray-50 text-gray-800 hover:ring-gray-400 hover:bg-white dark:ring-gray-700 dark:bg-gray-800/50 dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:ring-gray-600 shadow-inner',
         ].join(' ')}
       >
-        {listening
-          ? heldDisplay
-            ? `${heldDisplay}...`
-            : 'Press a key combo...'
-          : formatHotkey(value)}
+        <div className="flex gap-1.5 items-center justify-center">
+          {listening
+            ? heldDisplay
+              ? <span className="animate-pulse">{`${heldDisplay}...`}</span>
+              : 'Press a key combo...'
+            : formatHotkey(value).split(' + ').map((key, i, arr) => (
+              <span key={i} className="flex items-center">
+                <span className="bg-white dark:bg-gray-700 px-2 py-1 rounded shadow-sm border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300">
+                  {key}
+                </span>
+                {i < arr.length - 1 && <span className="mx-1.5 text-gray-400 dark:text-gray-500">+</span>}
+              </span>
+            ))}
+        </div>
       </div>
       {error && (
-        <p className="mt-1 text-xs text-red-500">{error}</p>
+        <p className="mt-2 text-sm text-red-500 dark:text-red-400">{error}</p>
       )}
     </div>
   );

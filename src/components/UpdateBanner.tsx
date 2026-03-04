@@ -52,14 +52,14 @@ export function UpdateBanner({
   // Checking: minimal status bar
   if (status === 'checking') {
     return (
-      <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-4 py-2 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+      <div className="absolute inset-x-0 top-0 z-50 flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-4 py-2 text-sm text-gray-500 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
         <Spinner />
         <span>Checking for updates...</span>
       </div>
     );
   }
 
-  // Available: indigo banner with version, release notes, download button
+  // Available: emerald banner with version, release notes, download button
   if (status === 'available') {
     const releaseNotesPreview = body
       .split('\n')
@@ -68,14 +68,14 @@ export function UpdateBanner({
       .join(' · ');
 
     return (
-      <div className="border-b border-indigo-100 bg-indigo-50 px-4 py-3 dark:border-indigo-900 dark:bg-indigo-950">
+      <div className="absolute inset-x-0 top-0 z-50 border-b border-emerald-100 bg-emerald-50 px-4 py-3 shadow-sm dark:border-emerald-900 dark:bg-emerald-950">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-indigo-900 dark:text-indigo-100">
+            <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
               VoiceType {version} is available
             </p>
             {releaseNotesPreview && (
-              <p className="mt-0.5 truncate text-xs text-indigo-700 dark:text-indigo-300">
+              <p className="mt-0.5 truncate text-xs text-emerald-700 dark:text-emerald-300">
                 {releaseNotesPreview}
               </p>
             )}
@@ -83,14 +83,14 @@ export function UpdateBanner({
           <div className="flex shrink-0 items-center gap-2">
             <button
               onClick={onDownload}
-              className="rounded bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+              className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 dark:bg-emerald-500 dark:hover:bg-emerald-400"
             >
               Download
             </button>
             <button
               onClick={onDismiss}
               aria-label="Dismiss update notification"
-              className="rounded p-0.5 text-indigo-400 hover:text-indigo-600 focus:outline-none dark:text-indigo-400 dark:hover:text-indigo-200"
+              className="rounded p-0.5 text-emerald-400 hover:text-emerald-600 focus:outline-none dark:text-emerald-400 dark:hover:text-emerald-200"
             >
               <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path
@@ -113,11 +113,11 @@ export function UpdateBanner({
     const totalFmt = contentLength > 0 ? formatBytes(contentLength) : '…';
 
     return (
-      <div className="border-b border-indigo-100 bg-indigo-50 px-4 py-3 dark:border-indigo-900 dark:bg-indigo-950">
+      <div className="absolute inset-x-0 top-0 z-50 border-b border-emerald-100 bg-emerald-50 px-4 py-3 shadow-sm dark:border-emerald-900 dark:bg-emerald-950">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-xs text-indigo-700 dark:text-indigo-300">
+              <span className="text-xs text-emerald-700 dark:text-emerald-300">
                 Downloading update...{' '}
                 {contentLength > 0 ? (
                   <span className="font-medium">{percent}%</span>
@@ -125,22 +125,22 @@ export function UpdateBanner({
                   <span>{downloadedFmt}</span>
                 )}
                 {contentLength > 0 && (
-                  <span className="ml-1 text-indigo-500 dark:text-indigo-400">
+                  <span className="ml-1 text-emerald-500 dark:text-emerald-400">
                     — {downloadedFmt} / {totalFmt}
                   </span>
                 )}
               </span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-indigo-200 dark:bg-indigo-800">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-emerald-200 dark:bg-emerald-800">
               <div
-                className="h-1.5 rounded-full bg-indigo-500 transition-all duration-200"
+                className="h-1.5 rounded-full bg-emerald-500 transition-all duration-200"
                 style={{ width: contentLength > 0 ? `${percent}%` : '0%' }}
               />
             </div>
           </div>
           <button
             onClick={onCancel}
-            className="shrink-0 text-xs text-indigo-500 hover:text-indigo-700 focus:outline-none dark:text-indigo-400 dark:hover:text-indigo-200"
+            className="shrink-0 text-xs text-emerald-500 hover:text-emerald-700 focus:outline-none dark:text-emerald-400 dark:hover:text-emerald-200"
           >
             Cancel
           </button>
@@ -152,7 +152,7 @@ export function UpdateBanner({
   // Ready: green banner with restart/later options
   if (status === 'ready') {
     return (
-      <div className="border-b border-green-100 bg-green-50 px-4 py-3 dark:border-green-900 dark:bg-green-950">
+      <div className="absolute inset-x-0 top-0 z-50 border-b border-green-100 bg-green-50 px-4 py-3 shadow-sm dark:border-green-900 dark:bg-green-950">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-green-900 dark:text-green-100">
@@ -165,7 +165,7 @@ export function UpdateBanner({
           <div className="flex shrink-0 items-center gap-3">
             <button
               onClick={onRestart}
-              className="rounded bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+              className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 dark:bg-emerald-500 dark:hover:bg-emerald-400"
             >
               Restart Now
             </button>
@@ -184,7 +184,7 @@ export function UpdateBanner({
   // Error: red banner with message and retry button
   if (status === 'error') {
     return (
-      <div className="border-b border-red-100 bg-red-50 px-4 py-3 dark:border-red-900 dark:bg-red-950">
+      <div className="absolute inset-x-0 top-0 z-50 border-b border-red-100 bg-red-50 px-4 py-3 shadow-sm dark:border-red-900 dark:bg-red-950">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-red-900 dark:text-red-100">Update check failed</p>
