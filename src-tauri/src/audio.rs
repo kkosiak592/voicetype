@@ -80,20 +80,24 @@ impl ResamplingState {
 /// `buffer` accumulates 16kHz mono samples while recording is active.
 /// `resampling` is the staging + resampler state, locked separately from `buffer`
 /// so the callback can push samples without contending on the main buffer.
+
+/// Wrapper that allows cpal::Stream to be held in Sync contexts.
+/// cpal::Stream is Send but not Sync. We only hold it for RAII cleanup
+/// (drop stops the stream) — we never access it from shared references.
+struct SendStream(cpal::Stream);
+
+// SAFETY: cpal::Stream is Send. We never expose &cpal::Stream across threads;
+// the stream is only held for its Drop impl (which stops recording).
+unsafe impl Sync for SendStream {}
+
 pub struct AudioCapture {
-    _stream: cpal::Stream,
+    _stream: SendStream,
     pub recording: Arc<AtomicBool>,
     pub buffer: Arc<Mutex<Vec<f32>>>,
     /// Resampling state for flush-on-stop. Guarded by Mutex because the audio
     /// callback (background thread) writes to it, and Tauri commands read it.
     resampling: Arc<Mutex<ResamplingState>>,
 }
-
-// SAFETY: cpal::Stream is Send but not Sync.
-// AudioCapture is stored as Tauri managed state which requires Send + Sync.
-// We never share a &cpal::Stream reference across threads — only Arc clones of
-// the AtomicBool and Mutex-guarded fields are accessed from other threads.
-unsafe impl Sync for AudioCapture {}
 
 /// Mutex wrapper around AudioCapture for runtime device switching.
 ///
@@ -105,10 +109,6 @@ unsafe impl Sync for AudioCapture {}
 /// Commands that need audio must check for `Some` and return a user-friendly error
 /// if the capture is `None`.
 pub struct AudioCaptureMutex(pub std::sync::Mutex<Option<AudioCapture>>);
-
-// SAFETY: AudioCaptureMutex wraps AudioCapture (which is already Sync via unsafe impl).
-// The Mutex ensures exclusive access for replacement operations.
-unsafe impl Sync for AudioCaptureMutex {}
 
 /// Internal: build an input stream from a specific device.
 ///
@@ -179,7 +179,7 @@ fn build_stream_from_device(
     );
 
     Ok(AudioCapture {
-        _stream: stream,
+        _stream: SendStream(stream),
         recording,
         buffer,
         resampling,
