@@ -13,8 +13,8 @@
       {
         "label": "settings",
         "title": "VoiceType Settings",
-        "width": 720,
-        "height": 500,
+        "width": 800,
+        "height": 650,
         "resizable": false,
         "visible": false
       },
@@ -47,7 +47,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "createUpdaterArtifacts": "v1Compatible",
     "icon": [
       "icons/32x32.png",
