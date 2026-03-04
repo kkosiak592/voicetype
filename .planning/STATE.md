@@ -168,8 +168,9 @@ Last activity: 2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny fronten
 
 ### Pending Todos
 
-1. Implement sub-500ms transcription latency improvements (area: backend)
+1. Debug multiple duplicate tray icons appearing in system tray (area: ui)
 2. Remove structural profile and simplify to single profile with editable prompt (area: ui)
+3. Add transcription history panel to settings (area: ui)
 
 ### Roadmap Evolution
 
