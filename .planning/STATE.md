@@ -200,6 +200,7 @@ Last activity: 2026-03-04 - Completed quick task 39: Add ALL CAPS toggle to the 
 5. Learn from user corrections to auto-improve dictionary (area: general)
 6. Long-press pill to drag reposition and double-click to reset home (area: ui)
 7. Add always-listen mode to reduce activation latency (area: general)
+8. Add local LLM intent-to-text cleanup pass over raw transcription (area: general)
 
 ### Roadmap Evolution
 
