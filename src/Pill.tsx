@@ -83,18 +83,18 @@ export function Pill() {
     <div
       className={`
         pill-glass
-        w-[170px] h-[38px] rounded-full
+        w-[110px] h-[32px] rounded-full
         flex items-center justify-center
-        select-none
+        select-none shadow-md overflow-hidden relative
         ${animState === "exiting" ? "pill-exiting" : ""}
         ${animState === "hidden" ? "opacity-0 pointer-events-none" : ""}
         ${displayState === "processing" ? "pill-processing" : ""}
-        ${displayState === "recording" ? "pill-rainbow-border" : ""}
+        ${displayState === "recording" ? "pill-recording" : ""}
       `}
     >
       {/* Recording state: frequency bars only — no red dot */}
       {displayState === "recording" && (
-        <div className="flex items-center justify-center px-3 pill-content-fade-in">
+        <div className="flex items-center justify-center px-2 w-full h-full pill-content-fade-in relative z-10">
           <FrequencyBars level={level} />
         </div>
       )}
