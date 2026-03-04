@@ -109,7 +109,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 [##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
 
-Last activity: 2026-03-04 - Completed quick task 39: Add ALL CAPS toggle to the frontend UI
+Last activity: 2026-03-04 - Completed quick task 40: Add always-listen mode to reduce activation latency
 
 ## Performance Metrics
 
