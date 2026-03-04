@@ -3,6 +3,19 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Keyboard Hook
 status: planning
+last_updated: "2026-03-04T19:25:33.412Z"
+progress:
+  total_phases: 9
+  completed_phases: 6
+  total_plans: 13
+  completed_plans: 10
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.2
+milestone_name: Keyboard Hook
+status: planning
 last_updated: "2026-03-04T14:02:49.549Z"
 progress:
   total_phases: 8
@@ -99,6 +112,7 @@ Last activity: 2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny fronten
 | Phase 19 P01 | 4 | 2 tasks | 3 files |
 | Phase 19.1 P01 | 35 | 2 tasks | 6 files |
 | Phase 19.1 P02 | 0 | 2 tasks | 3 files |
+| Phase 19.2 P01 | 4 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -143,6 +157,9 @@ Last activity: 2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny fronten
 - [Phase 19.1]: 19.1-02: Moonshine download props mirror the Parakeet fp32 pattern — onMoonshineDownload/moonshineDownloading/moonshinePercent/moonshineError passed through ModelSelector
 - [Phase 19.1]: 19.1-02: Moonshine Tiny placed first in FirstRun MODELS array — smallest/fastest, best default for first-time users
 - [Phase 19.1]: 19.1-02: currentEngine === 'moonshine' guard renders note that vocabulary prompting is unsupported (corrections dictionary still applies)
+- [Phase 19.2]: 19.2-01: parakeet-tdt-v2-fp32 recommended unconditionally — benchmark data shows best accuracy/latency balance on all hardware
+- [Phase 19.2]: 19.2-01: distil-large-v3.5 removal from model_id_to_path() causes graceful auto-fallback for existing users via startup error chain — no migration code needed
+- [Phase 19.2]: 19.2-01: list_models() gpu_mode variable removed entirely — all recommended flags are now compile-time constants
 
 ### Research Flags (from SUMMARY.md)
 
@@ -160,6 +177,7 @@ Last activity: 2026-03-04 - Completed Phase 19.1 Plan 02: Moonshine Tiny fronten
 - Phase 20 added: Implement dual CPU/GPU installers with variant-specific auto-updates
 - Phase 21 added: Integration and Distribution (moved from Phase 18 — voided Phase 18 to allow 19-20 to execute first)
 - Phase 19.1 inserted after Phase 19: Integrate Moonshine Tiny model into main app with VAD chunking and GPU support (URGENT)
+- Phase 19.2 inserted after Phase 19.1: Revamp model selection with benchmark stats, recommend parakeet, remove distil-large-v3.5 (URGENT)
 
 ### Blockers/Concerns
 

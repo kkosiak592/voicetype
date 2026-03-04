@@ -131,7 +131,7 @@ Plans:
 **Goal:** Remove distil-large-v3.5 from all model surfaces, embed benchmark stats in model descriptions, and make parakeet-tdt-v2-fp32 the universal recommended model — data-driven model selection based on Quick 27-37 benchmark results
 **Requirements**: N/A (no formal requirement IDs — cleanup/UX improvement)
 **Depends on:** Phase 19.1
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 19.2-01-PLAN.md — Backend distil removal, benchmark stat descriptions, universal parakeet recommendation, FirstRun cleanup
