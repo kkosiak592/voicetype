@@ -25,6 +25,9 @@ export function Pill() {
   // Throttle ref for invoke calls during drag
   const lastInvokeRef = useRef<number>(0);
 
+  // Deferred hide: if a hide event fires mid-drag, queue it until drag ends
+  const pendingHideRef = useRef(false);
+
   function clearAllTimers() {
     if (exitTimerRef.current) {
       clearTimeout(exitTimerRef.current);
@@ -43,22 +46,28 @@ export function Pill() {
     // pill-show: make visible immediately (no entrance animation)
     appWindow.listen("pill-show", () => {
       clearAllTimers();
+      pendingHideRef.current = false;
       appWindow.show();
       setAnimState("visible");
     }).then((u) => unlisteners.push(u));
 
-    // pill-hide: exit animation then hide window
+    // pill-hide: exit animation then hide window (deferred if mid-drag)
     appWindow.listen("pill-hide", () => {
-      clearAllTimers();
-      setDragState("idle");
-      setAnimState("exiting");
-      // After exit animation completes (200ms), hide window and reset state
-      exitTimerRef.current = setTimeout(() => {
-        appWindow.hide();
-        setAnimState("hidden");
-        setDisplayState("hidden");
-        exitTimerRef.current = null;
-      }, 200);
+      setDragState((prev) => {
+        if (prev === "ready" || prev === "dragging") {
+          pendingHideRef.current = true;
+          return prev;
+        }
+        clearAllTimers();
+        setAnimState("exiting");
+        exitTimerRef.current = setTimeout(() => {
+          appWindow.hide();
+          setAnimState("hidden");
+          setDisplayState("hidden");
+          exitTimerRef.current = null;
+        }, 200);
+        return "idle";
+      });
     }).then((u) => unlisteners.push(u));
 
     // pill-state: update display state
@@ -76,16 +85,22 @@ export function Pill() {
       setLevel(e.payload);
     }).then((u) => unlisteners.push(u));
 
-    // pill-result: trigger exit animation on result
+    // pill-result: trigger exit animation on result (deferred if mid-drag)
     appWindow.listen<string>("pill-result", () => {
-      setDragState("idle");
-      setAnimState("exiting");
-      exitTimerRef.current = setTimeout(() => {
-        appWindow.hide();
-        setAnimState("hidden");
-        setDisplayState("hidden");
-        exitTimerRef.current = null;
-      }, 200);
+      setDragState((prev) => {
+        if (prev === "ready" || prev === "dragging") {
+          pendingHideRef.current = true;
+          return prev;
+        }
+        setAnimState("exiting");
+        exitTimerRef.current = setTimeout(() => {
+          appWindow.hide();
+          setAnimState("hidden");
+          setDisplayState("hidden");
+          exitTimerRef.current = null;
+        }, 200);
+        return "idle";
+      });
     }).then((u) => unlisteners.push(u));
 
     return () => {
@@ -152,6 +167,17 @@ export function Pill() {
           e.currentTarget.releasePointerCapture(e.pointerId);
         } catch {
           // ignore if capture was not active
+        }
+        // Flush deferred hide if pill-hide/pill-result fired mid-drag
+        if (pendingHideRef.current) {
+          pendingHideRef.current = false;
+          setAnimState("exiting");
+          exitTimerRef.current = setTimeout(() => {
+            appWindow.hide();
+            setAnimState("hidden");
+            setDisplayState("hidden");
+            exitTimerRef.current = null;
+          }, 200);
         }
         return "idle";
       }
