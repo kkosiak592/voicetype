@@ -187,6 +187,15 @@ export function useUpdater(): UseUpdaterReturn {
 
     setState(prev => ({ ...prev, errorMessage: '' }));
 
+    // Destroy tray icon before relaunch to prevent duplicate icons on Windows.
+    // Windows defers tray icon cleanup by ~200ms after process exit; the new
+    // process registers its icon before the OS removes the old one.
+    try {
+      await invoke('destroy_tray');
+    } catch {
+      // Non-critical — proceed with relaunch even if destroy fails
+    }
+
     try {
       await relaunch();
     } catch (e) {
