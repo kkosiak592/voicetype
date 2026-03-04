@@ -42,7 +42,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 [##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
 
-Last activity: 2026-03-03 - Completed quick task 33: Add Moonshine v2 streaming models to benchmark with GPU support
+Last activity: 2026-03-04 - Completed quick task 34: Add VAD-based chunking to parakeet model in benchmark
 
 ## Performance Metrics
 
