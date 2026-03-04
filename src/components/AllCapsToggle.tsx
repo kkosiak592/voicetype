@@ -1,16 +1,19 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useEffect, useState } from 'react';
+import { store } from '../lib/store';
 
 export function AllCapsToggle() {
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    invoke<boolean>('get_all_caps').then((val) => {
-      setEnabled(val);
+    // Read from settings store (safe before setup — returns null/false).
+    // Avoids calling get_all_caps which accesses ActiveProfile state
+    // that isn't manage()'d until deep in setup().
+    store.get<boolean>('all_caps').then((val) => {
+      setEnabled(val ?? false);
       setLoading(false);
-    }).catch(err => {
-      console.error('Failed to check all_caps:', err);
+    }).catch(() => {
       setLoading(false);
     });
   }, []);
