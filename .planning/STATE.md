@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Keyboard Hook
 status: planning
-stopped_at: "Checkpoint: 20-01 Task 2 human-verify — review three file changes before CI run"
-last_updated: "2026-03-05T17:50:29.339Z"
+stopped_at: Completed 20-01-PLAN.md
+last_updated: "2026-03-05T18:00:18.714Z"
 last_activity: "2026-03-05 - Completed quick task 45: Wire orphaned DictionaryEditor back into General settings"
 progress:
   total_phases: 10
@@ -218,6 +218,7 @@ Last activity: 2026-03-05 - Completed quick task 45: Wire orphaned DictionaryEdi
 - [Phase 19.3]: HistoryState loaded in setup() before build_tray — manage() call precedes all IPC access
 - [Phase 20]: bundle.resources uses MAP syntax (object) not array — array syntax preserves subdirectory structure putting DLLs off the DLL search path
 - [Phase 20]: CUDA DLL staging step positioned after CUDA toolkit install (ensures $CUDA_PATH set) and before tauri-action (ensures files exist for bundler)
+- [Phase 20]: TAURI_CONFIG env var used instead of static tauri.conf.json bundle.resources — static entry breaks local dev because cuda-libs/ only exists in CI; TAURI_CONFIG is injected only in release workflow
 
 ### Research Flags (from SUMMARY.md)
 
@@ -273,6 +274,6 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-05T17:50:29.333Z
-Stopped at: Checkpoint: 20-01 Task 2 human-verify — review three file changes before CI run
+Last session: 2026-03-05T18:00:18.707Z
+Stopped at: Completed 20-01-PLAN.md
 Resume file: None
