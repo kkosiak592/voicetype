@@ -27,11 +27,12 @@ fn release_win_keys(enigo: &mut Enigo) {
 ///
 /// Sequence:
 ///   1. Save existing clipboard content (None if non-text or empty)
-///   2. Write `text` to clipboard
-///   3. Sleep 50ms — Windows clipboard propagation delay
-///   4. Simulate Ctrl+V
-///   5. Sleep 80ms — let target app consume paste before restore
-///   6. Restore original clipboard (log warning on failure, do not error)
+///   2. Write `text` to clipboard with verify-and-retry loop (up to 5 attempts):
+///      - set_text() → sleep 25ms → get_text() → compare
+///      - Retries on mismatch (handles Chromium WebView clipboard races)
+///   3. Simulate Ctrl+V
+///   4. Sleep 80ms — let target app consume paste before restore
+///   5. Restore original clipboard (log warning on failure, do not error)
 ///
 /// Intentionally synchronous — callers must wrap in tokio::task::spawn_blocking.
 /// A fresh Enigo instance is created per call (do not share across invocations).
@@ -41,15 +42,73 @@ pub fn inject_text(text: &str) -> Result<(), String> {
     // Save existing clipboard content — .ok() converts Err (non-text content) to None
     let saved: Option<String> = clipboard.get_text().ok();
 
-    // Write transcription to clipboard
-    clipboard.set_text(text).map_err(|e| e.to_string())?;
+    // Write transcription to clipboard, then verify it was actually set.
+    //
+    // Why verify: Windows clipboard propagation is async. arboard::set_text() returning Ok()
+    // does not guarantee the data is visible to other processes. Additionally, if the Chromium
+    // WebView recently called navigator.clipboard.writeText() (e.g., user copied from history),
+    // it may reclaim clipboard ownership, silently overwriting our content. A fixed sleep (the
+    // previous 50ms approach) cannot detect this race. Instead, we read the clipboard back and
+    // confirm it matches the intended text before proceeding to Ctrl+V.
+    const MAX_CLIPBOARD_RETRIES: u32 = 5;
+    const CLIPBOARD_RETRY_DELAY_MS: u64 = 25;
 
-    // Allow clipboard write to propagate before paste (Windows requirement)
-    // 50ms clipboard propagation. Previously reduced to 30ms but intermittent paste failures
-    // were observed under CPU load (transcription). Reverted to 50ms per the documented
-    // fallback guidance. Windows clipboard propagation is async; arboard set_text() returning
-    // Ok() does not guarantee the data is visible to other processes yet.
-    thread::sleep(Duration::from_millis(50));
+    let mut clipboard_verified = false;
+    for attempt in 0..MAX_CLIPBOARD_RETRIES {
+        clipboard.set_text(text).map_err(|e| e.to_string())?;
+
+        // Small delay to allow clipboard propagation before read-back
+        thread::sleep(Duration::from_millis(CLIPBOARD_RETRY_DELAY_MS));
+
+        match clipboard.get_text() {
+            Ok(ref contents) if contents == text => {
+                if attempt > 0 {
+                    log::info!(
+                        "inject_text: clipboard verified on retry {} (after {} ms total)",
+                        attempt,
+                        (attempt + 1) as u64 * CLIPBOARD_RETRY_DELAY_MS
+                    );
+                }
+                clipboard_verified = true;
+                break;
+            }
+            Ok(ref contents) => {
+                log::warn!(
+                    "inject_text: clipboard mismatch on attempt {} — expected {} bytes, got {} bytes (first 80 chars: {:?})",
+                    attempt + 1,
+                    text.len(),
+                    contents.len(),
+                    &contents[..contents.len().min(80)]
+                );
+            }
+            Err(e) => {
+                log::warn!(
+                    "inject_text: clipboard read-back failed on attempt {}: {}",
+                    attempt + 1,
+                    e
+                );
+            }
+        }
+    }
+
+    if !clipboard_verified {
+        log::error!(
+            "inject_text: clipboard verification failed after {} attempts — proceeding with paste anyway (best-effort)",
+            MAX_CLIPBOARD_RETRIES
+        );
+    }
+
+    // Delay between clipboard write and Ctrl+V keystroke.
+    //
+    // Why: Some applications (notably Outlook and other Office apps) maintain an internal
+    // clipboard cache and process WM_CLIPBOARDUPDATE asynchronously. Even though the OS
+    // clipboard is verified correct at this point, Outlook may not have ingested the new
+    // content yet. Without this delay, the synthetic Ctrl+V arrives before Outlook reads
+    // the updated clipboard, causing it to paste stale cached content.
+    //
+    // 150ms is chosen as a conservative value — WM_CLIPBOARDUPDATE processing in Office
+    // apps typically completes within 50-100ms, but we add margin for slower machines.
+    thread::sleep(Duration::from_millis(150));
 
     // Simulate Ctrl+V — fresh Enigo instance per call (anti-pattern: sharing instances)
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
