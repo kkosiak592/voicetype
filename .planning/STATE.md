@@ -247,7 +247,7 @@ None active.
 | 38 | Remove entire Vocabulary section from settings UI and all vocabulary_prompt/initial_prompt plumbing from Rust backend | 2026-03-04 | 6c3616b | Complete | [38-remove-entire-vocabulary-section-from-se](./quick/38-remove-entire-vocabulary-section-from-se/) |
 | 39 | Add ALL CAPS toggle to the frontend UI | 2026-03-04 | 090526e | Complete | [39-add-all-caps-toggle-to-the-frontend-ui](./quick/39-add-all-caps-toggle-to-the-frontend-ui/) |
 | 40 | Add always-listen mode to reduce activation latency | 2026-03-04 | e94611a | Complete | [40-add-always-listen-mode-to-reduce-activat](./quick/40-add-always-listen-mode-to-reduce-activat/) |
-| 41 | Long-press pill to drag reposition and double-click to reset home | 2026-03-04 | fa5dc52 | Needs Review | [41-long-press-pill-to-drag-reposition-and-d](./quick/41-long-press-pill-to-drag-reposition-and-d/) |
+| 41 | Long-press pill to drag reposition and double-click to reset home | 2026-03-04 | 70df12c | Verified | [41-long-press-pill-to-drag-reposition-and-d](./quick/41-long-press-pill-to-drag-reposition-and-d/) |
 | 42 | Add System settings tab and move inference status there | 2026-03-04 | d85529b | Complete | [42-add-system-settings-tab-and-move-inferen](./quick/42-add-system-settings-tab-and-move-inferen/) |
 | 43 | Move microphone/audio input device selector to System settings tab | 2026-03-05 | 47f9f15 | Complete | [43-move-microphone-audio-input-device-selec](./quick/43-move-microphone-audio-input-device-selec/) |
 
