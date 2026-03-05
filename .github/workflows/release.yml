@@ -75,6 +75,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Inject CUDA DLL resources only in CI where cuda-libs/ exists.
+          # Keeps tauri.conf.json clean so local dev doesn't fail on missing files.
+          TAURI_CONFIG: '{"bundle":{"resources":{"cuda-libs/cudart64_12.dll":"cudart64_12.dll","cuda-libs/cublas64_12.dll":"cublas64_12.dll","cuda-libs/cublasLt64_12.dll":"cublasLt64_12.dll"}}}'
         with:
           # Use the pushed tag directly (e.g. v0.1.0) as the release tag
           tagName: ${{ github.ref_name }}
