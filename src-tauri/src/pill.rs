@@ -162,13 +162,17 @@ pub async fn enter_pill_move_mode(app: tauri::AppHandle) -> Result<(), String> {
     state.0.store(true, std::sync::atomic::Ordering::Relaxed);
     log::info!("Pill move mode: ACTIVE");
 
-    // Spawn the cursor tracking loop
+    // Spawn the cursor tracking loop using Win32 GetCursorPos for absolute
+    // screen coordinates. Tauri's cursor_position() returns window-relative
+    // coords which break on multi-monitor setups.
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
         use std::sync::atomic::Ordering;
+        use windows::Win32::Foundation::POINT;
+        use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
 
-        let pill_width: f64 = 178.0;
-        let pill_height: f64 = 46.0;
+        let pill_half_w: i32 = 89;  // 178/2
+        let pill_half_h: i32 = 23;  // 46/2
 
         loop {
             let pill_move = app_clone.state::<crate::PillMoveActive>();
@@ -176,10 +180,12 @@ pub async fn enter_pill_move_mode(app: tauri::AppHandle) -> Result<(), String> {
                 break;
             }
 
-            if let Some(pill_window) = app_clone.get_webview_window("pill") {
-                if let Ok(cursor) = pill_window.cursor_position() {
-                    let x = (cursor.x - pill_width / 2.0).round() as i32;
-                    let y = (cursor.y - pill_height / 2.0).round() as i32;
+            let mut pt = POINT { x: 0, y: 0 };
+            let ok = unsafe { GetCursorPos(&mut pt) };
+            if ok.is_ok() {
+                if let Some(pill_window) = app_clone.get_webview_window("pill") {
+                    let x = pt.x - pill_half_w;
+                    let y = pt.y - pill_half_h;
                     let _ = pill_window.set_position(tauri::PhysicalPosition::new(x, y));
                 }
             }
