@@ -8,6 +8,13 @@ pub struct HistoryEntry {
     pub text: String,
     pub timestamp_ms: u64,
     pub engine: String,
+    /// Raw (pre-correction) text from the transcription pipeline.
+    /// Only present when at least one correction was applied — None means the
+    /// formatted text is identical to the raw transcription (or entry predates this feature).
+    /// `#[serde(default)]` ensures existing history.json files without this field
+    /// deserialize cleanly as None.
+    #[serde(default)]
+    pub raw_text: Option<String>,
 }
 
 /// Mutex-backed managed state for transcription history.
@@ -35,7 +42,10 @@ fn save_history(app: &tauri::AppHandle, entries: &[HistoryEntry]) {
 ///
 /// Inserts newest-first, caps at 50 entries, and persists to disk.
 /// Called from pipeline.rs after successful injection.
-pub fn append_history(app: &tauri::AppHandle, text: &str, engine: &str) {
+///
+/// `raw_text`: the pre-correction text. Pass `Some(raw)` when corrections were applied
+/// (raw != formatted). Pass `None` when no corrections changed the text.
+pub fn append_history(app: &tauri::AppHandle, text: &str, engine: &str, raw_text: Option<&str>) {
     let entry = HistoryEntry {
         text: text.to_string(),
         timestamp_ms: std::time::SystemTime::now()
@@ -43,6 +53,7 @@ pub fn append_history(app: &tauri::AppHandle, text: &str, engine: &str) {
             .unwrap_or_default()
             .as_millis() as u64,
         engine: engine.to_string(),
+        raw_text: raw_text.map(|s| s.to_string()),
     };
     let state = app.state::<HistoryState>();
     let mut guard = state.0.lock().unwrap_or_else(|e: std::sync::PoisonError<_>| e.into_inner());
