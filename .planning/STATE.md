@@ -124,7 +124,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 [##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
 
-Last activity: 2026-03-04 - Completed quick task 40: Add always-listen mode to reduce activation latency
+Last activity: 2026-03-04 - Completed quick task 41: Long-press pill to drag reposition and double-click to reset home
 
 ## Performance Metrics
 
@@ -247,6 +247,7 @@ None active.
 | 38 | Remove entire Vocabulary section from settings UI and all vocabulary_prompt/initial_prompt plumbing from Rust backend | 2026-03-04 | 6c3616b | Complete | [38-remove-entire-vocabulary-section-from-se](./quick/38-remove-entire-vocabulary-section-from-se/) |
 | 39 | Add ALL CAPS toggle to the frontend UI | 2026-03-04 | 090526e | Complete | [39-add-all-caps-toggle-to-the-frontend-ui](./quick/39-add-all-caps-toggle-to-the-frontend-ui/) |
 | 40 | Add always-listen mode to reduce activation latency | 2026-03-04 | e94611a | Complete | [40-add-always-listen-mode-to-reduce-activat](./quick/40-add-always-listen-mode-to-reduce-activat/) |
+| 41 | Long-press pill to drag reposition and double-click to reset home | 2026-03-04 | fa5dc52 | Needs Review | [41-long-press-pill-to-drag-reposition-and-d](./quick/41-long-press-pill-to-drag-reposition-and-d/) |
 
 ## Session Continuity
 
