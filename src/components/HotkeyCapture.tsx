@@ -263,6 +263,7 @@ export function HotkeyCapture({ value, onChange }: HotkeyCaptureProps) {
           case 'alt': return 'Alt';
           case 'shift': return 'Shift';
           case 'meta': return 'Win';
+          case 'win': return 'Win';
           case 'space': return 'Space';
           default: return part.toUpperCase();
         }

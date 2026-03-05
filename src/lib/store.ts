@@ -10,7 +10,7 @@ export interface AppSettings {
 }
 
 export const DEFAULTS: AppSettings = {
-  hotkey: 'ctrl+shift+space',
+  hotkey: 'ctrl+win',
   theme: 'light',
   autostart: false,
   recordingMode: 'hold',

@@ -2090,6 +2090,13 @@ pub fn run() {
                             let hook_state = app.state::<HookHandleState>();
                             let mut guard = hook_state.0.lock().unwrap_or_else(|e| e.into_inner());
                             *guard = Some(handle);
+                            // Persist hotkey so frontend displays the correct active shortcut
+                            if let Ok(mut json) = read_settings(app.handle()) {
+                                if json.get("hotkey").and_then(|v| v.as_str()).is_none() {
+                                    json["hotkey"] = serde_json::Value::String(hotkey.clone());
+                                    let _ = write_settings(app.handle(), &json);
+                                }
+                            }
                             effective_hotkey = std::borrow::Cow::Borrowed("");  // no plugin shortcuts needed
                         }
                         Err(e) => {
