@@ -393,14 +393,7 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
                         crate::TranscriptionEngine::Moonshine => "moonshine",
                     }
                 };
-                // Pass raw (pre-correction) text when corrections changed the output.
-                // None when corrections did not change anything (nothing for user to correct).
-                let raw_text_opt = if defillered != formatted_for_tooltip {
-                    Some(defillered.as_str())
-                } else {
-                    None
-                };
-                crate::history::append_history(&app, &formatted_for_tooltip, engine_name, raw_text_opt);
+                crate::history::append_history(&app, &formatted_for_tooltip, engine_name);
             }
         }
         Ok(Err(e)) => {

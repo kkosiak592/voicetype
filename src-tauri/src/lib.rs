@@ -1,5 +1,4 @@
 mod audio;
-mod correction_log;
 mod corrections;
 mod download;
 mod filler;
@@ -1002,103 +1001,6 @@ fn save_corrections(app: tauri::AppHandle, corrections: std::collections::HashMa
     Ok(())
 }
 
-/// Record a user-submitted correction (from -> to word pair).
-///
-/// Increments the occurrence count in the correction log. When the count reaches
-/// the promotion threshold (3), the correction is auto-added to the active profile's
-/// corrections dictionary and persisted to settings.json. Returns
-/// `Some(PromotedCorrection)` so the frontend can show an inline notification.
-#[tauri::command]
-fn submit_correction(
-    app: tauri::AppHandle,
-    from: String,
-    to: String,
-) -> Result<Option<correction_log::PromotedCorrection>, String> {
-    let promoted = {
-        let state = app.state::<correction_log::CorrectionLogState>();
-        let mut guard = state.0.lock().map_err(|e| format!("correction log lock failed: {}", e))?;
-        let promoted = guard.record(from.clone(), to.clone());
-        guard.save(&app);
-        promoted
-    };
-
-    if let Some(ref p) = promoted {
-        // Auto-promote: add to ActiveProfile.corrections
-        {
-            let profile = app.state::<profiles::ActiveProfile>();
-            let mut guard = profile.0.lock().map_err(|e| format!("profile lock failed: {}", e))?;
-            guard.corrections.insert(p.from.clone(), p.to.clone());
-        }
-        // Rebuild corrections engine
-        let engine = {
-            let profile = app.state::<profiles::ActiveProfile>();
-            let guard = profile.0.lock().map_err(|e| format!("profile lock failed: {}", e))?;
-            corrections::CorrectionsEngine::from_map(&guard.corrections)?
-        };
-        {
-            let corrections_state = app.state::<corrections::CorrectionsState>();
-            let mut guard = corrections_state.0.lock().map_err(|e| format!("corrections state lock failed: {}", e))?;
-            *guard = engine;
-        }
-        // Persist updated corrections to settings.json
-        let updated_corrections = {
-            let profile = app.state::<profiles::ActiveProfile>();
-            let guard = profile.0.lock().map_err(|e| format!("profile lock failed: {}", e))?;
-            guard.corrections.clone()
-        };
-        let mut json = read_settings(&app)?;
-        json["corrections.default"] = serde_json::to_value(&updated_corrections).unwrap();
-        write_settings(&app, &json)?;
-        log::info!("Auto-promoted correction '{}' -> '{}' to dictionary", p.from, p.to);
-    }
-
-    Ok(promoted)
-}
-
-/// Undo an auto-promoted correction: remove it from the dictionary and the log.
-///
-/// Called when the user clicks "Undo" in the auto-promote notification banner.
-#[tauri::command]
-fn undo_promotion(app: tauri::AppHandle, from: String, to: String) -> Result<(), String> {
-    // Remove from corrections dictionary
-    {
-        let profile = app.state::<profiles::ActiveProfile>();
-        let mut guard = profile.0.lock().map_err(|e| format!("profile lock failed: {}", e))?;
-        guard.corrections.remove(&from);
-    }
-    // Rebuild corrections engine
-    let engine = {
-        let profile = app.state::<profiles::ActiveProfile>();
-        let guard = profile.0.lock().map_err(|e| format!("profile lock failed: {}", e))?;
-        corrections::CorrectionsEngine::from_map(&guard.corrections)?
-    };
-    {
-        let corrections_state = app.state::<corrections::CorrectionsState>();
-        let mut guard = corrections_state.0.lock().map_err(|e| format!("corrections state lock failed: {}", e))?;
-        *guard = engine;
-    }
-    // Persist updated corrections
-    let updated_corrections = {
-        let profile = app.state::<profiles::ActiveProfile>();
-        let guard = profile.0.lock().map_err(|e| format!("profile lock failed: {}", e))?;
-        guard.corrections.clone()
-    };
-    let mut json = read_settings(&app)?;
-    json["corrections.default"] = serde_json::to_value(&updated_corrections).unwrap();
-    write_settings(&app, &json)?;
-
-    // Remove from correction log
-    {
-        let state = app.state::<correction_log::CorrectionLogState>();
-        let mut guard = state.0.lock().map_err(|e| format!("correction log lock failed: {}", e))?;
-        guard.remove(&from, &to);
-        guard.save(&app);
-    }
-
-    log::info!("Undid promotion of '{}' -> '{}'", from, to);
-    Ok(())
-}
-
 /// Toggle ALL CAPS. Persists to flat `all_caps` key in settings.json.
 #[tauri::command]
 fn set_all_caps(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
@@ -1882,8 +1784,6 @@ pub fn run() {
             destroy_tray,
             is_pipeline_active,
             get_history,
-            submit_correction,
-            undo_promotion,
             pill::set_pill_position,
             pill::reset_pill_position,
             pill::enter_pill_move_mode,
@@ -1916,13 +1816,6 @@ pub fn run() {
             {
                 let entries = history::load_history(app.handle());
                 app.manage(history::HistoryState(std::sync::Mutex::new(entries)));
-            }
-
-            // Load correction log from disk. Manages user-submitted correction pairs
-            // with occurrence counts for auto-promotion to the corrections dictionary.
-            {
-                let log_state = correction_log::load_correction_log(app.handle());
-                app.manage(log_state);
             }
 
             build_tray(app)?;
