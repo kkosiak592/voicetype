@@ -326,12 +326,24 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
         return;
     }
 
+    // 4b. Filler word removal — strip hesitation sounds before corrections.
+    //     Order: fillers first, then corrections, so dictionary patterns need not account for fillers.
+    let defillered = {
+        let profile = app.state::<crate::profiles::ActiveProfile>();
+        let guard = profile.0.lock().unwrap_or_else(|e| e.into_inner());
+        if guard.filler_removal {
+            crate::filler::remove_fillers(trimmed)
+        } else {
+            trimmed.to_string()
+        }
+    };
+
     // 5. Apply corrections (word-level find-and-replace per active profile dictionary)
     //    Applied regardless of engine — corrections engine is engine-agnostic.
     let corrected = {
         let engine = app.state::<crate::corrections::CorrectionsState>();
         let guard = engine.0.lock().unwrap_or_else(|e| e.into_inner());
-        guard.apply(trimmed)
+        guard.apply(&defillered)
     };
 
     // Apply ALL CAPS if active profile flag is set (engine-agnostic).

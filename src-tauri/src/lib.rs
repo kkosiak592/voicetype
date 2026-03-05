@@ -1,6 +1,7 @@
 mod audio;
 mod corrections;
 mod download;
+mod filler;
 mod history;
 mod inject;
 mod pill;
@@ -13,6 +14,8 @@ mod updater;
 mod keyboard_hook;
 #[cfg(test)]
 mod corrections_tests;
+#[cfg(test)]
+mod filler_tests;
 
 // transcribe.rs requires whisper-rs which needs LIBCLANG_PATH + optional CUDA.
 // Gate it behind the "whisper" Cargo feature so the project builds without
@@ -539,6 +542,33 @@ pub(crate) fn handle_hotkey_event(app: &tauri::AppHandle, pressed: bool) {
             pill_move.0.store(false, Ordering::Relaxed);
             app.emit_to("pill", "pill-exit-move", ()).ok();
             log::info!("Hotkey intercepted: exiting pill move mode");
+
+            // If a recording was active when move mode was entered, the pipeline is still
+            // in RECORDING state (the key-release handler returns early while PillMoveActive
+            // is true, so RECORDING->PROCESSING never fired). Stop the audio stream and
+            // reset to IDLE now — the captured audio is discarded (it contains silence from
+            // dragging, not useful speech). Without this, the next hotkey press tries
+            // transition(IDLE, RECORDING) which fails silently because state is RECORDING.
+            if pipeline.transition(pipeline::RECORDING, pipeline::IDLE) {
+                let stream_active = app.state::<LevelStreamActive>();
+                stream_active.0.store(false, Ordering::Relaxed);
+                {
+                    let audio_mutex = app.state::<audio::AudioCaptureMutex>();
+                    let mut guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
+                    if let Some(ref capture) = *guard {
+                        let _ = capture.flush_and_stop();
+                        let always_listen = app.state::<AlwaysListenActive>();
+                        if !always_listen.0.load(Ordering::Relaxed) {
+                            *guard = None; // Release mic
+                        }
+                        // In always-listen mode: keep stream open but recording is already
+                        // stopped by flush_and_stop(); stream stays alive for next activation.
+                    }
+                }
+                tray::set_tray_state(app, tray::TrayState::Idle);
+                log::info!("Pill move mode exit: recording discarded, pipeline reset to IDLE");
+            }
+
             return;
         }
     }
@@ -985,6 +1015,31 @@ fn set_all_caps(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     write_settings(&app, &json)?;
 
     log::info!("ALL CAPS set to {}", enabled);
+    Ok(())
+}
+
+/// Get the filler removal flag from the active profile.
+#[tauri::command]
+fn get_filler_removal(app: tauri::AppHandle) -> Result<bool, String> {
+    let state = app.state::<profiles::ActiveProfile>();
+    let guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+    Ok(guard.filler_removal)
+}
+
+/// Toggle filler word removal. Persists to flat `filler_removal` key in settings.json.
+#[tauri::command]
+fn set_filler_removal(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    {
+        let state = app.state::<profiles::ActiveProfile>();
+        let mut guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+        guard.filler_removal = enabled;
+    }
+
+    let mut json = read_settings(&app)?;
+    json["filler_removal"] = serde_json::Value::Bool(enabled);
+    write_settings(&app, &json)?;
+
+    log::info!("Filler removal set to {}", enabled);
     Ok(())
 }
 
@@ -1713,6 +1768,8 @@ pub fn run() {
             get_corrections,
             save_corrections,
             set_all_caps,
+            get_filler_removal,
+            set_filler_removal,
             get_always_listen,
             set_always_listen,
             get_setting,
@@ -1987,6 +2044,11 @@ pub fn run() {
                     active_profile.all_caps = flag;
                 }
 
+                // Load flat filler_removal key
+                if let Some(flag) = json.get("filler_removal").and_then(|v| v.as_bool()) {
+                    active_profile.filler_removal = flag;
+                }
+
                 // Build corrections engine from corrections map
                 let engine = corrections::CorrectionsEngine::from_map(&active_profile.corrections)
                     .unwrap_or_else(|e| {
@@ -1994,8 +2056,9 @@ pub fn run() {
                         corrections::CorrectionsEngine::from_map(&std::collections::HashMap::new()).unwrap()
                     });
 
-                log::info!("Vocabulary profile loaded (all_caps={}, corrections={})",
+                log::info!("Vocabulary profile loaded (all_caps={}, filler_removal={}, corrections={})",
                     active_profile.all_caps,
+                    active_profile.filler_removal,
                     active_profile.corrections.len()
                 );
                 app.manage(profiles::ActiveProfile(std::sync::Mutex::new(active_profile)));
