@@ -3,6 +3,21 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Keyboard Hook
 status: planning
+stopped_at: "Checkpoint: 20-01 Task 2 human-verify — review three file changes before CI run"
+last_updated: "2026-03-05T17:50:29.339Z"
+last_activity: "2026-03-05 - Completed quick task 45: Wire orphaned DictionaryEditor back into General settings"
+progress:
+  total_phases: 10
+  completed_phases: 8
+  total_plans: 16
+  completed_plans: 14
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.2
+milestone_name: Keyboard Hook
+status: planning
 stopped_at: Completed quick-41-01-PLAN.md
 last_updated: "2026-03-04T23:57:17.589Z"
 last_activity: "2026-03-04 - Completed quick task 40: Add always-listen mode to reduce activation latency"
@@ -146,6 +161,7 @@ Last activity: 2026-03-05 - Completed quick task 45: Wire orphaned DictionaryEdi
 | Phase 19.3 P01 | 8 | 2 tasks | 3 files |
 | Phase 19.3 P02 | 7 | 2 tasks | 7 files |
 | Phase 19.3 P03 | 377 | 2 tasks | 5 files |
+| Phase 20-bundle-cuda-dlls-single-installer-with-runtime-gpu-fallback P01 | 5 | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -200,6 +216,8 @@ Last activity: 2026-03-05 - Completed quick task 45: Wire orphaned DictionaryEdi
 - [Phase 19.3]: history SectionId added to Sidebar in Plan 02 (not 03) — prevents file conflict between wave 2 and wave 3 plans
 - [Phase 19.3]: history.rs uses tauri::Manager import for app.state() — Manager trait must be in scope for method resolution
 - [Phase 19.3]: HistoryState loaded in setup() before build_tray — manage() call precedes all IPC access
+- [Phase 20]: bundle.resources uses MAP syntax (object) not array — array syntax preserves subdirectory structure putting DLLs off the DLL search path
+- [Phase 20]: CUDA DLL staging step positioned after CUDA toolkit install (ensures $CUDA_PATH set) and before tauri-action (ensures files exist for bundler)
 
 ### Research Flags (from SUMMARY.md)
 
@@ -255,6 +273,6 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-05T00:00:00.000Z
-Stopped at: Completed quick-45-01-PLAN.md
+Last session: 2026-03-05T17:50:29.333Z
+Stopped at: Checkpoint: 20-01 Task 2 human-verify — review three file changes before CI run
 Resume file: None

@@ -101,7 +101,7 @@ Phases execute in numeric order: 15 → 16 → 17 → 19 → 19.1 → 19.2 → 1
 | 19.1. Moonshine Tiny | 2/2 | Complete    | 2026-03-04 | - |
 | 19.2. Model Selection Revamp | 1/1 | Complete | 2026-03-04 | - |
 | 19.3. UI Polish | 3/3 | Complete    | 2026-03-04 | - |
-| 20. Bundle CUDA DLLs | v1.2 | 0/1 | Not started | - |
+| 20. Bundle CUDA DLLs | 1/1 | Complete   | 2026-03-05 | - |
 | 21. Integration and Distribution | v1.2 | 0/1 | Not started | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
@@ -155,7 +155,7 @@ Plans:
 **Goal:** Bundle redistributable CUDA DLLs (cudart, cublas, cublasLt) in the single installer so GGML/whisper-rs falls back to CPU at runtime on non-NVIDIA machines. No installer split, no updater changes — one installer works for all users.
 **Requirements**: N/A (no formal requirement IDs — scope is CI/config only)
 **Depends on:** Phase 19
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 20-01-PLAN.md — CI DLL staging, Tauri bundle.resources map, gitignore, human verification of installer output
