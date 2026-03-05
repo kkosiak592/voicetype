@@ -124,7 +124,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 [##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
 
-Last activity: 2026-03-05 - Completed quick task 44: Add filler word removal to transcription output
+Last activity: 2026-03-05 - Completed quick task 45: Learn from user corrections to auto-improve dictionary
 
 ## Performance Metrics
 
@@ -251,6 +251,7 @@ None active.
 | 42 | Add System settings tab and move inference status there | 2026-03-04 | d85529b | Complete | [42-add-system-settings-tab-and-move-inferen](./quick/42-add-system-settings-tab-and-move-inferen/) |
 | 43 | Move microphone/audio input device selector to System settings tab | 2026-03-05 | 47f9f15 | Complete | [43-move-microphone-audio-input-device-selec](./quick/43-move-microphone-audio-input-device-selec/) |
 | 44 | Add filler word removal to transcription output | 2026-03-05 | 60c8859 | Verified | [44-add-filler-word-removal-to-transcription](./quick/44-add-filler-word-removal-to-transcription/) |
+| 45 | Learn from user corrections to auto-improve dictionary | 2026-03-05 | 7221243 | Needs Review | [45-learn-from-user-corrections-to-auto-impr](./quick/45-learn-from-user-corrections-to-auto-impr/) |
 
 ## Session Continuity
 
