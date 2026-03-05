@@ -26,6 +26,9 @@ export function Pill() {
   // Deferred hide: if a hide event fires while in move mode, queue it
   const pendingHideRef = useRef(false);
 
+  // Sync ref for move mode so pointer handlers can check without async state
+  const inMoveModeRef = useRef(false);
+
   function clearAllTimers() {
     if (exitTimerRef.current) {
       clearTimeout(exitTimerRef.current);
@@ -77,6 +80,7 @@ export function Pill() {
     appWindow.listen("pill-show", () => {
       clearAllTimers();
       pendingHideRef.current = false;
+      inMoveModeRef.current = false;
       appWindow.show();
       setAnimState("visible");
     }).then((u) => unlisteners.push(u));
@@ -123,9 +127,9 @@ export function Pill() {
 
     // pill-exit-move: backend tells us to exit move mode (hotkey was pressed)
     appWindow.listen("pill-exit-move", () => {
+      inMoveModeRef.current = false;
       invoke("exit_pill_move_mode").catch(() => {});
       setDisplayState("hidden");
-      // Flush pending hide or just hide
       pendingHideRef.current = false;
       doHide();
     }).then((u) => unlisteners.push(u));
@@ -138,12 +142,26 @@ export function Pill() {
 
   // ---- Long-press to enter move mode ----
 
+  function exitMoveMode() {
+    inMoveModeRef.current = false;
+    invoke("exit_pill_move_mode").catch(() => {});
+    setDisplayState("hidden");
+    pendingHideRef.current = false;
+    doHide();
+  }
+
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0 && e.pointerType === "mouse") return;
 
+    // Click on pill while in move mode → exit move mode
+    if (inMoveModeRef.current) {
+      exitMoveMode();
+      return;
+    }
+
     longPressTimerRef.current = setTimeout(() => {
       longPressTimerRef.current = null;
-      // Enter move mode
+      inMoveModeRef.current = true;
       invoke("enter_pill_move_mode").catch(() => {});
       setDisplayState("moving");
     }, 600);
