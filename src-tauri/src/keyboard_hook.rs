@@ -269,7 +269,7 @@ unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) 
     }
 
     // --- Ctrl keydown ---
-    if is_down && (vk == VK_LCONTROL || vk == VK_RCONTROL) {
+    if is_down && (vk == VK_LCONTROL || vk == VK_RCONTROL || vk == VK_CONTROL) {
         STATE.ctrl_held.store(true, Ordering::Relaxed);
 
         if STATE.win_held.load(Ordering::Relaxed) && !STATE.combo_active.load(Ordering::Relaxed) {
@@ -296,7 +296,7 @@ unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) 
     }
 
     // --- Ctrl keyup ---
-    if is_up && (vk == VK_LCONTROL || vk == VK_RCONTROL) {
+    if is_up && (vk == VK_LCONTROL || vk == VK_RCONTROL || vk == VK_CONTROL) {
         STATE.ctrl_held.store(false, Ordering::Relaxed);
 
         if STATE.combo_active.load(Ordering::Relaxed) {
