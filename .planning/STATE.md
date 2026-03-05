@@ -124,7 +124,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 [##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
 
-Last activity: 2026-03-05 - Completed quick task 44: Add filler word removal to transcription output
+Last activity: 2026-03-05 - Completed quick task 45: Wire orphaned DictionaryEditor back into General settings
 
 ## Performance Metrics
 
@@ -251,9 +251,10 @@ None active.
 | 42 | Add System settings tab and move inference status there | 2026-03-04 | d85529b | Complete | [42-add-system-settings-tab-and-move-inferen](./quick/42-add-system-settings-tab-and-move-inferen/) |
 | 43 | Move microphone/audio input device selector to System settings tab | 2026-03-05 | 47f9f15 | Complete | [43-move-microphone-audio-input-device-selec](./quick/43-move-microphone-audio-input-device-selec/) |
 | 44 | Add filler word removal to transcription output | 2026-03-05 | 60c8859 | Verified | [44-add-filler-word-removal-to-transcription](./quick/44-add-filler-word-removal-to-transcription/) |
+| 45 | Wire orphaned DictionaryEditor back into General settings as Corrections Dictionary card | 2026-03-05 | 24e4edd | Complete | [45-wire-orphaned-dictionaryeditor-back-into](./quick/45-wire-orphaned-dictionaryeditor-back-into/) |
 
 ## Session Continuity
 
-Last session: 2026-03-04T23:57:17.581Z
-Stopped at: Completed quick-41-01-PLAN.md
+Last session: 2026-03-05T00:00:00.000Z
+Stopped at: Completed quick-45-01-PLAN.md
 Resume file: None
