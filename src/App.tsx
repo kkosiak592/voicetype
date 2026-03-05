@@ -6,7 +6,6 @@ import { getStore, DEFAULTS } from './lib/store';
 import { Sidebar, SectionId } from './components/Sidebar';
 import { GeneralSection } from './components/sections/GeneralSection';
 import { ModelSection } from './components/sections/ModelSection';
-import { MicrophoneSection } from './components/sections/MicrophoneSection';
 import { AppearanceSection } from './components/sections/AppearanceSection';
 import { HistorySection } from './components/sections/HistorySection';
 import { SystemSection } from './components/sections/SystemSection';
@@ -211,16 +210,15 @@ function App() {
                     onSelectedModelChange={setSelectedModel}
                   />
                 )}
-                {activeSection === 'microphone' && (
-                  <MicrophoneSection
+                {activeSection === 'appearance' && (
+                  <AppearanceSection theme={theme} onThemeChange={setTheme} />
+                )}
+                {activeSection === 'system' && (
+                  <SystemSection
                     selectedMic={selectedMic}
                     onSelectedMicChange={setSelectedMic}
                   />
                 )}
-                {activeSection === 'appearance' && (
-                  <AppearanceSection theme={theme} onThemeChange={setTheme} />
-                )}
-                {activeSection === 'system' && <SystemSection />}
               </motion.div>
             </AnimatePresence>
           </div>

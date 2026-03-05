@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { getVersion } from '@tauri-apps/api/app';
 import type { UpdateState } from '../lib/updater';
 
-export type SectionId = 'general' | 'model' | 'microphone' | 'appearance' | 'system' | 'history';
+export type SectionId = 'general' | 'model' | 'appearance' | 'system' | 'history';
 
 interface SidebarItem {
   id: SectionId;
@@ -15,7 +15,6 @@ interface SidebarItem {
 const ITEMS: SidebarItem[] = [
   { id: 'general', label: 'General', icon: Settings },
   { id: 'model', label: 'Model', icon: Cpu },
-  { id: 'microphone', label: 'Microphone', icon: Mic },
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'system', label: 'System', icon: Monitor },
   { id: 'history', label: 'History', icon: Clock },
