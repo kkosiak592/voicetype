@@ -2,6 +2,7 @@ import { HotkeyCapture } from '../HotkeyCapture';
 import { RecordingModeToggle } from '../RecordingModeToggle';
 import { AllCapsToggle } from '../AllCapsToggle';
 import { AlwaysListenToggle } from '../AlwaysListenToggle';
+import { FillerRemovalToggle } from '../FillerRemovalToggle';
 
 interface GeneralSectionProps {
   hotkey: string;
@@ -88,6 +89,18 @@ export function GeneralSection({
                 </p>
               </div>
               <AllCapsToggle />
+            </div>
+
+            <div className="my-4 border-t border-gray-100 dark:border-gray-800" />
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Remove Fillers</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Strip hesitation sounds (um, uh, hmm) from transcribed text
+                </p>
+              </div>
+              <FillerRemovalToggle />
             </div>
           </section>
         </div>
