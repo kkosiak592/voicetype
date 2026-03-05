@@ -28,10 +28,12 @@ pub fn start_level_stream(
     });
 }
 
-/// Compute the bottom-center position for the pill on the monitor the cursor is on.
-/// Returns None if monitors cannot be detected.
-fn compute_home_position(pill_window: &tauri::WebviewWindow) -> Option<(i32, i32)> {
-    // 1. Get cursor position
+const PILL_WIDTH: i32 = 178;
+const PILL_HEIGHT: i32 = 46;
+
+/// Find the work area of the monitor the cursor is on.
+/// Returns (wa_x, wa_y, wa_w, wa_h) or None if no monitors detected.
+fn cursor_work_area(pill_window: &tauri::WebviewWindow) -> Option<(i32, i32, i32, i32)> {
     let cursor = match pill_window.cursor_position() {
         Ok(pos) => pos,
         Err(e) => {
@@ -40,7 +42,6 @@ fn compute_home_position(pill_window: &tauri::WebviewWindow) -> Option<(i32, i32
         }
     };
 
-    // 2. Find which monitor the cursor is on
     let monitors = pill_window.available_monitors().unwrap_or_default();
     let target_monitor = monitors.iter().find(|m| {
         let pos = m.position();
@@ -50,7 +51,6 @@ fn compute_home_position(pill_window: &tauri::WebviewWindow) -> Option<(i32, i32
         cursor.x >= mx && cursor.x < mx + mw && cursor.y >= my && cursor.y < my + mh
     });
 
-    // 3. Get the work area (excludes taskbar) of that monitor.
     let work_area = if let Some(mon) = target_monitor {
         mon.work_area().clone()
     } else if let Some(primary) = monitors.first() {
@@ -59,55 +59,64 @@ fn compute_home_position(pill_window: &tauri::WebviewWindow) -> Option<(i32, i32
         return None;
     };
 
-    // 4. Calculate bottom-center position within work area.
-    // Pill dimensions: 178 x 46 (from tauri.conf.json)
-    let pill_width: i32 = 178;
-    let pill_height: i32 = 46;
-    let margin_bottom: i32 = 14; // pixels above bottom of work area
-    let wa_x = work_area.position.x;
-    let wa_y = work_area.position.y;
-    let wa_w = work_area.size.width as i32;
-    let wa_h = work_area.size.height as i32;
-
-    let x = wa_x + (wa_w - pill_width) / 2;
-    let y = wa_y + wa_h - pill_height - margin_bottom;
-    Some((x, y))
+    Some((
+        work_area.position.x,
+        work_area.position.y,
+        work_area.size.width as i32,
+        work_area.size.height as i32,
+    ))
 }
 
-/// Position the pill at bottom-center of the monitor the cursor is on,
-/// then emit pill-show to make it visible.
-/// If a saved position exists in settings, use that instead of recomputing.
+/// Compute the bottom-center (home) position for the pill on the given work area.
+fn home_position(wa_x: i32, wa_y: i32, wa_w: i32, wa_h: i32) -> (i32, i32) {
+    let margin_bottom: i32 = 14;
+    let x = wa_x + (wa_w - PILL_WIDTH) / 2;
+    let y = wa_y + wa_h - PILL_HEIGHT - margin_bottom;
+    (x, y)
+}
+
+/// Convert fractional offsets (0.0-1.0) to absolute position on the given work area.
+fn frac_to_abs(frac_x: f64, frac_y: f64, wa_x: i32, wa_y: i32, wa_w: i32, wa_h: i32) -> (i32, i32) {
+    let x = wa_x + (frac_x * (wa_w - PILL_WIDTH) as f64).round() as i32;
+    let y = wa_y + (frac_y * (wa_h - PILL_HEIGHT) as f64).round() as i32;
+    (x, y)
+}
+
+/// Position the pill on the monitor the cursor is on, then emit pill-show.
+/// If a saved fractional position exists in settings, apply it to the current
+/// monitor's work area. Otherwise, use bottom-center (home) position.
 pub fn show_pill(app: &tauri::AppHandle) {
     if let Some(pill_window) = app.get_webview_window("pill") {
-        // Check for a saved position first
-        let saved_pos = crate::read_settings(app)
+        let wa = match cursor_work_area(&pill_window) {
+            Some(wa) => wa,
+            None => {
+                log::warn!("No monitors detected, emitting pill-show without positioning");
+                app.emit_to("pill", "pill-show", ()).ok();
+                return;
+            }
+        };
+        let (wa_x, wa_y, wa_w, wa_h) = wa;
+
+        // Check for saved fractional position
+        let saved_frac = crate::read_settings(app)
             .ok()
             .and_then(|json| {
-                let x = json["pill_position"]["x"].as_i64()?;
-                let y = json["pill_position"]["y"].as_i64()?;
-                Some((x as i32, y as i32))
+                let fx = json["pill_position"]["frac_x"].as_f64()?;
+                let fy = json["pill_position"]["frac_y"].as_f64()?;
+                Some((fx, fy))
             });
 
-        let (x, y) = if let Some((sx, sy)) = saved_pos {
-            log::debug!("Pill restored to saved position ({}, {})", sx, sy);
-            (sx, sy)
+        let (x, y) = if let Some((fx, fy)) = saved_frac {
+            let pos = frac_to_abs(fx, fy, wa_x, wa_y, wa_w, wa_h);
+            log::debug!("Pill restored to frac ({:.3}, {:.3}) -> abs ({}, {})", fx, fy, pos.0, pos.1);
+            pos
         } else {
-            match compute_home_position(&pill_window) {
-                Some(pos) => {
-                    log::debug!("Pill positioned at bottom-center ({}, {})", pos.0, pos.1);
-                    pos
-                }
-                None => {
-                    log::warn!("No monitors detected, emitting pill-show without positioning");
-                    app.emit_to("pill", "pill-show", ()).ok();
-                    return;
-                }
-            }
+            let pos = home_position(wa_x, wa_y, wa_w, wa_h);
+            log::debug!("Pill positioned at bottom-center ({}, {})", pos.0, pos.1);
+            pos
         };
 
         let _ = pill_window.set_position(tauri::PhysicalPosition::new(x, y));
-
-        // Emit pill-show AFTER positioning
         app.emit_to("pill", "pill-show", ()).ok();
     } else {
         log::warn!("Pill window not found, cannot position or show pill");
@@ -134,10 +143,11 @@ pub async fn reset_pill_position(app: tauri::AppHandle) -> Result<(), String> {
     }
     crate::write_settings(&app, &json)?;
 
-    // Reposition to home
+    // Reposition to home on current monitor
     if let Some(pill_window) = app.get_webview_window("pill") {
-        match compute_home_position(&pill_window) {
-            Some((x, y)) => {
+        match cursor_work_area(&pill_window) {
+            Some((wa_x, wa_y, wa_w, wa_h)) => {
+                let (x, y) = home_position(wa_x, wa_y, wa_w, wa_h);
                 let _ = pill_window.set_position(tauri::PhysicalPosition::new(x, y));
                 log::debug!("Pill reset to bottom-center ({}, {})", x, y);
             }
@@ -200,20 +210,52 @@ pub async fn enter_pill_move_mode(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 /// Exit pill move mode — clears the flag (stopping the tracking loop) and persists
-/// the final pill position to settings.json.
+/// the final pill position as fractional offsets relative to the current monitor's
+/// work area. This allows the position to replicate on any monitor.
 #[tauri::command]
 pub async fn exit_pill_move_mode(app: tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<crate::PillMoveActive>();
     state.0.store(false, std::sync::atomic::Ordering::Relaxed);
     log::info!("Pill move mode: INACTIVE");
 
-    // Persist the final position so the pill reopens here next time
+    // Persist fractional position relative to the work area the pill is on
     if let Some(pill_window) = app.get_webview_window("pill") {
         if let Ok(pos) = pill_window.outer_position() {
-            let mut json = crate::read_settings(&app).unwrap_or_default();
-            json["pill_position"] = serde_json::json!({"x": pos.x, "y": pos.y});
-            let _ = crate::write_settings(&app, &json);
-            log::debug!("Pill position saved: ({}, {})", pos.x, pos.y);
+            // Find which monitor the pill is currently on
+            let monitors = pill_window.available_monitors().unwrap_or_default();
+            let target_monitor = monitors.iter().find(|m| {
+                let mpos = m.position();
+                let msize = m.size();
+                let center_x = pos.x + PILL_WIDTH / 2;
+                let center_y = pos.y + PILL_HEIGHT / 2;
+                center_x >= mpos.x
+                    && center_x < mpos.x + msize.width as i32
+                    && center_y >= mpos.y
+                    && center_y < mpos.y + msize.height as i32
+            });
+
+            let work_area = if let Some(mon) = target_monitor {
+                Some(mon.work_area().clone())
+            } else {
+                monitors.first().map(|m| m.work_area().clone())
+            };
+
+            if let Some(wa) = work_area {
+                let wa_x = wa.position.x;
+                let wa_y = wa.position.y;
+                let wa_w = wa.size.width as i32;
+                let wa_h = wa.size.height as i32;
+
+                let usable_w = (wa_w - PILL_WIDTH).max(1) as f64;
+                let usable_h = (wa_h - PILL_HEIGHT).max(1) as f64;
+                let frac_x = ((pos.x - wa_x) as f64 / usable_w).clamp(0.0, 1.0);
+                let frac_y = ((pos.y - wa_y) as f64 / usable_h).clamp(0.0, 1.0);
+
+                let mut json = crate::read_settings(&app).unwrap_or_default();
+                json["pill_position"] = serde_json::json!({"frac_x": frac_x, "frac_y": frac_y});
+                let _ = crate::write_settings(&app, &json);
+                log::debug!("Pill position saved as frac ({:.3}, {:.3})", frac_x, frac_y);
+            }
         }
     }
 
