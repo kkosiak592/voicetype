@@ -152,6 +152,26 @@ pub async fn reset_pill_position(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Enter pill move mode — sets the PillMoveActive flag so the hotkey handler
+/// knows to exit move mode instead of starting/stopping recording.
+#[tauri::command]
+pub async fn enter_pill_move_mode(app: tauri::AppHandle) -> Result<(), String> {
+    let state = app.state::<crate::PillMoveActive>();
+    state.0.store(true, std::sync::atomic::Ordering::Relaxed);
+    log::info!("Pill move mode: ACTIVE");
+    Ok(())
+}
+
+/// Exit pill move mode — clears the flag. Called from frontend when user
+/// finishes repositioning (hotkey press or other exit trigger).
+#[tauri::command]
+pub async fn exit_pill_move_mode(app: tauri::AppHandle) -> Result<(), String> {
+    let state = app.state::<crate::PillMoveActive>();
+    state.0.store(false, std::sync::atomic::Ordering::Relaxed);
+    log::info!("Pill move mode: INACTIVE");
+    Ok(())
+}
+
 /// Compute normalized RMS from the last `window` samples of the buffer.
 ///
 /// Returns 0.0-1.0 where typical speech is 0.45-1.0.

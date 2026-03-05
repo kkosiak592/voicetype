@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { invoke } from "@tauri-apps/api/core";
 import { FrequencyBars } from "./components/FrequencyBars";
@@ -6,15 +6,13 @@ import { ProcessingDots } from "./components/ProcessingDots";
 
 const appWindow = getCurrentWebviewWindow();
 
-type PillDisplayState = "hidden" | "recording" | "processing" | "error";
+type PillDisplayState = "hidden" | "recording" | "processing" | "moving" | "error";
 type AnimState = "hidden" | "visible" | "exiting";
-type DragState = "idle" | "ready" | "dragging";
 
 export function Pill() {
   const [displayState, setDisplayState] = useState<PillDisplayState>("hidden");
   const [animState, setAnimState] = useState<AnimState>("hidden");
   const [level, setLevel] = useState(0);
-  const [dragState, setDragState] = useState<DragState>("idle");
 
   // Timer for exit animation sequencing
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -22,10 +20,10 @@ export function Pill() {
   // Long-press timer
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Throttle ref for invoke calls during drag
+  // Throttle ref for invoke calls during move
   const lastInvokeRef = useRef<number>(0);
 
-  // Deferred hide: if a hide event fires mid-drag, queue it until drag ends
+  // Deferred hide: if a hide event fires while in move mode, queue it
   const pendingHideRef = useRef(false);
 
   function clearAllTimers() {
@@ -39,6 +37,38 @@ export function Pill() {
     }
   }
 
+  function doHide() {
+    clearAllTimers();
+    setAnimState("exiting");
+    exitTimerRef.current = setTimeout(() => {
+      appWindow.hide();
+      setAnimState("hidden");
+      setDisplayState("hidden");
+      exitTimerRef.current = null;
+    }, 200);
+  }
+
+  // Global mouse move handler for move mode — follows cursor everywhere
+  const handleGlobalMouseMove = useCallback((e: MouseEvent) => {
+    const now = Date.now();
+    if (now - lastInvokeRef.current >= 16) {
+      lastInvokeRef.current = now;
+      const x = Math.round(e.screenX) - 89; // 178/2
+      const y = Math.round(e.screenY) - 23; // 46/2
+      invoke("set_pill_position", { x, y }).catch(() => {});
+    }
+  }, []);
+
+  // Attach/detach global mouse listener when entering/leaving move mode
+  useEffect(() => {
+    if (displayState === "moving") {
+      document.addEventListener("mousemove", handleGlobalMouseMove);
+      return () => {
+        document.removeEventListener("mousemove", handleGlobalMouseMove);
+      };
+    }
+  }, [displayState, handleGlobalMouseMove]);
+
   // Event listeners for all pill events from backend
   useEffect(() => {
     const unlisteners: Array<() => void> = [];
@@ -51,33 +81,27 @@ export function Pill() {
       setAnimState("visible");
     }).then((u) => unlisteners.push(u));
 
-    // pill-hide: exit animation then hide window (deferred if mid-drag)
+    // pill-hide: exit animation then hide window (deferred if in move mode)
     appWindow.listen("pill-hide", () => {
-      setDragState((prev) => {
-        if (prev === "ready" || prev === "dragging") {
+      setDisplayState((prev) => {
+        if (prev === "moving") {
           pendingHideRef.current = true;
           return prev;
         }
-        clearAllTimers();
-        setAnimState("exiting");
-        exitTimerRef.current = setTimeout(() => {
-          appWindow.hide();
-          setAnimState("hidden");
-          setDisplayState("hidden");
-          exitTimerRef.current = null;
-        }, 200);
-        return "idle";
+        doHide();
+        return prev;
       });
     }).then((u) => unlisteners.push(u));
 
     // pill-state: update display state
     // Backend sends "recording" | "processing" | "idle" — "idle" is handled by pill-hide
     appWindow.listen<string>("pill-state", (e) => {
-      if (e.payload === "idle") {
-        // idle is handled by pill-hide — don't set directly to avoid race with success/error flash
-        return;
-      }
-      setDisplayState(e.payload as PillDisplayState);
+      if (e.payload === "idle") return;
+      setDisplayState((prev) => {
+        // Don't overwrite move mode with recording/processing
+        if (prev === "moving") return prev;
+        return e.payload as PillDisplayState;
+      });
     }).then((u) => unlisteners.push(u));
 
     // pill-level: update RMS level for frequency bars
@@ -85,22 +109,25 @@ export function Pill() {
       setLevel(e.payload);
     }).then((u) => unlisteners.push(u));
 
-    // pill-result: trigger exit animation on result (deferred if mid-drag)
+    // pill-result: trigger exit animation on result (deferred if in move mode)
     appWindow.listen<string>("pill-result", () => {
-      setDragState((prev) => {
-        if (prev === "ready" || prev === "dragging") {
+      setDisplayState((prev) => {
+        if (prev === "moving") {
           pendingHideRef.current = true;
           return prev;
         }
-        setAnimState("exiting");
-        exitTimerRef.current = setTimeout(() => {
-          appWindow.hide();
-          setAnimState("hidden");
-          setDisplayState("hidden");
-          exitTimerRef.current = null;
-        }, 200);
-        return "idle";
+        doHide();
+        return prev;
       });
+    }).then((u) => unlisteners.push(u));
+
+    // pill-exit-move: backend tells us to exit move mode (hotkey was pressed)
+    appWindow.listen("pill-exit-move", () => {
+      invoke("exit_pill_move_mode").catch(() => {});
+      setDisplayState("hidden");
+      // Flush pending hide or just hide
+      pendingHideRef.current = false;
+      doHide();
     }).then((u) => unlisteners.push(u));
 
     return () => {
@@ -109,84 +136,30 @@ export function Pill() {
     };
   }, []);
 
-  // ---- Drag handlers ----
+  // ---- Long-press to enter move mode ----
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    // Only primary button (left click / touch)
     if (e.button !== 0 && e.pointerType === "mouse") return;
 
     longPressTimerRef.current = setTimeout(() => {
       longPressTimerRef.current = null;
-      setDragState("ready");
-      e.currentTarget.setPointerCapture(e.pointerId);
+      // Enter move mode
+      invoke("enter_pill_move_mode").catch(() => {});
+      setDisplayState("moving");
     }, 600);
   }
 
-  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    setDragState((prev) => {
-      if (prev === "idle") return prev;
-
-      if (prev === "ready") {
-        // First move after long-press — transition to dragging
-        // (state update is async; we handle move in dragging branch too)
-        const now = Date.now();
-        if (now - lastInvokeRef.current >= 16) {
-          lastInvokeRef.current = now;
-          const x = Math.round(e.screenX) - 89; // 178/2
-          const y = Math.round(e.screenY) - 23; // 46/2
-          invoke("set_pill_position", { x, y }).catch(() => {});
-        }
-        return "dragging";
-      }
-
-      if (prev === "dragging") {
-        const now = Date.now();
-        if (now - lastInvokeRef.current >= 16) {
-          lastInvokeRef.current = now;
-          const x = Math.round(e.screenX) - 89;
-          const y = Math.round(e.screenY) - 23;
-          invoke("set_pill_position", { x, y }).catch(() => {});
-        }
-        return "dragging";
-      }
-
-      return prev;
-    });
-  }
-
-  function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
+  function handlePointerUp() {
     // Clear long-press timer if it hasn't fired yet
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
-
-    setDragState((prev) => {
-      if (prev === "dragging" || prev === "ready") {
-        try {
-          e.currentTarget.releasePointerCapture(e.pointerId);
-        } catch {
-          // ignore if capture was not active
-        }
-        // Flush deferred hide if pill-hide/pill-result fired mid-drag
-        if (pendingHideRef.current) {
-          pendingHideRef.current = false;
-          setAnimState("exiting");
-          exitTimerRef.current = setTimeout(() => {
-            appWindow.hide();
-            setAnimState("hidden");
-            setDisplayState("hidden");
-            exitTimerRef.current = null;
-          }, 200);
-        }
-        return "idle";
-      }
-      return prev;
-    });
+    // In move mode, pointer up does NOT exit — only hotkey exits
   }
 
-  function handlePointerCancel(e: React.PointerEvent<HTMLDivElement>) {
-    handlePointerUp(e);
+  function handlePointerCancel() {
+    handlePointerUp();
   }
 
   function handleDoubleClick() {
@@ -204,16 +177,14 @@ export function Pill() {
         ${animState === "hidden" ? "opacity-0 pointer-events-none" : ""}
         ${displayState === "processing" ? "pill-processing" : ""}
         ${displayState === "recording" ? "pill-recording" : ""}
-        ${dragState === "ready" ? "pill-drag-ready" : ""}
-        ${dragState === "dragging" ? "pill-dragging" : ""}
+        ${displayState === "moving" ? "pill-moving" : ""}
       `}
       onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
       onDoubleClick={handleDoubleClick}
     >
-      {/* Recording state: frequency bars only — no red dot */}
+      {/* Recording state: frequency bars only */}
       {displayState === "recording" && (
         <div className="flex items-center justify-center px-2 w-full h-full pill-content-fade-in relative z-10">
           <FrequencyBars level={level} />
@@ -224,6 +195,20 @@ export function Pill() {
       {displayState === "processing" && (
         <div className="pill-content-fade-in">
           <ProcessingDots />
+        </div>
+      )}
+
+      {/* Move mode: move indicator */}
+      {displayState === "moving" && (
+        <div className="pill-content-fade-in flex items-center justify-center gap-1.5 relative z-10">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="5 9 2 12 5 15" />
+            <polyline points="9 5 12 2 15 5" />
+            <polyline points="15 19 12 22 9 19" />
+            <polyline points="19 9 22 12 19 15" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <line x1="12" y1="2" x2="12" y2="22" />
+          </svg>
         </div>
       )}
 

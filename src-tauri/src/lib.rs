@@ -147,6 +147,10 @@ pub struct FrontendReady(pub std::sync::atomic::AtomicBool);
 /// zero mic-init latency. Persisted to settings.json key `always_listen`.
 pub struct AlwaysListenActive(pub std::sync::atomic::AtomicBool);
 
+/// Managed state: true when the pill is in "move mode" (user is repositioning it).
+/// When active, hotkey presses exit move mode instead of starting/stopping recording.
+pub struct PillMoveActive(pub std::sync::atomic::AtomicBool);
+
 /// Returns true if the hotkey string contains only modifier tokens and no base key.
 /// Used as the single routing predicate for hook vs global-shortcut backend.
 ///
@@ -528,6 +532,17 @@ pub(crate) fn handle_hotkey_event(app: &tauri::AppHandle, pressed: bool) {
 
     let pipeline = app.state::<pipeline::PipelineState>();
 
+    // If pill is in move mode, hotkey press exits move mode instead of recording
+    if pressed {
+        let pill_move = app.state::<PillMoveActive>();
+        if pill_move.0.load(Ordering::Relaxed) {
+            pill_move.0.store(false, Ordering::Relaxed);
+            app.emit_to("pill", "pill-exit-move", ()).ok();
+            log::info!("Hotkey intercepted: exiting pill move mode");
+            return;
+        }
+    }
+
     if pressed {
         let mode = app.state::<RecordingMode>().get();
 
@@ -611,6 +626,11 @@ pub(crate) fn handle_hotkey_event(app: &tauri::AppHandle, pressed: bool) {
         }
     } else {
         // pressed=false — Released
+        // Ignore release events while in pill move mode
+        let pill_move = app.state::<PillMoveActive>();
+        if pill_move.0.load(Ordering::Relaxed) {
+            return;
+        }
         let mode = app.state::<RecordingMode>().get();
         match mode {
             Mode::HoldToTalk => {
@@ -1671,6 +1691,9 @@ pub fn run() {
     // AlwaysListenActive — defaults to false, loaded from settings in setup()
     builder = builder.manage(AlwaysListenActive(std::sync::atomic::AtomicBool::new(false)));
 
+    // PillMoveActive — true when pill is in repositioning mode
+    builder = builder.manage(PillMoveActive(std::sync::atomic::AtomicBool::new(false)));
+
     builder.invoke_handler(tauri::generate_handler![
             rebind_hotkey,
             unregister_hotkey,
@@ -1706,6 +1729,8 @@ pub fn run() {
             get_history,
             pill::set_pill_position,
             pill::reset_pill_position,
+            pill::enter_pill_move_mode,
+            pill::exit_pill_move_mode,
             #[cfg(feature = "whisper")]
             check_first_run,
             #[cfg(feature = "whisper")]
