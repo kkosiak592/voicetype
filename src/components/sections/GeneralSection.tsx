@@ -1,11 +1,8 @@
-import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { HotkeyCapture } from '../HotkeyCapture';
 import { RecordingModeToggle } from '../RecordingModeToggle';
 import { AllCapsToggle } from '../AllCapsToggle';
 import { AlwaysListenToggle } from '../AlwaysListenToggle';
 import { FillerRemovalToggle } from '../FillerRemovalToggle';
-import { DictionaryEditor } from '../DictionaryEditor';
 
 interface GeneralSectionProps {
   hotkey: string;
@@ -22,23 +19,6 @@ export function GeneralSection({
   onRecordingModeChange,
   hookAvailable,
 }: GeneralSectionProps) {
-  const [corrections, setCorrections] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    invoke<Record<string, string>>('get_corrections')
-      .then((data) => setCorrections(data))
-      .catch((err) => console.error('Failed to load corrections:', err));
-  }, []);
-
-  async function handleCorrectionsChange(updated: Record<string, string>) {
-    setCorrections(updated);
-    try {
-      await invoke('save_corrections', { corrections: updated });
-    } catch (err) {
-      console.error('Failed to save corrections:', err);
-    }
-  }
-
   return (
     <div>
       <div className="mb-4">
@@ -122,18 +102,6 @@ export function GeneralSection({
               </div>
               <FillerRemovalToggle />
             </div>
-          </section>
-        </div>
-        {/* Card 3: Corrections Dictionary */}
-        <div className="bg-white dark:bg-gray-900 ring-1 ring-gray-200 dark:ring-gray-800 rounded-2xl p-4 shadow-sm">
-          <section>
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              Corrections Dictionary
-            </h2>
-            <p className="mb-4 mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Fix recurring transcription mistakes. Matched words are automatically replaced.
-            </p>
-            <DictionaryEditor corrections={corrections} onChange={handleCorrectionsChange} />
           </section>
         </div>
       </div>

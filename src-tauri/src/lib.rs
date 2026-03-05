@@ -964,7 +964,9 @@ fn get_all_caps(app: tauri::AppHandle) -> Result<bool, String> {
 /// Returns the current active profile's corrections dictionary (for the UI editor).
 #[tauri::command]
 fn get_corrections(app: tauri::AppHandle) -> Result<std::collections::HashMap<String, String>, String> {
-    let state = app.state::<profiles::ActiveProfile>();
+    let Some(state) = app.try_state::<profiles::ActiveProfile>() else {
+        return Ok(std::collections::HashMap::new());
+    };
     let guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
     Ok(guard.corrections.clone())
 }

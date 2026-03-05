@@ -9,6 +9,7 @@ import { ModelSection } from './components/sections/ModelSection';
 import { AppearanceSection } from './components/sections/AppearanceSection';
 import { HistorySection } from './components/sections/HistorySection';
 import { SystemSection } from './components/sections/SystemSection';
+import { DictionarySection } from './components/sections/DictionarySection';
 import { FirstRun } from './components/FirstRun';
 import { useUpdater } from './lib/updater';
 import { UpdateBanner } from './components/UpdateBanner';
@@ -203,6 +204,7 @@ function App() {
                     hookAvailable={hookAvailable}
                   />
                 )}
+                {activeSection === 'dictionary' && <DictionarySection />}
                 {activeSection === 'history' && <HistorySection />}
                 {activeSection === 'model' && (
                   <ModelSection
