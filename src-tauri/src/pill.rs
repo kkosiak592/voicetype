@@ -114,16 +114,13 @@ pub fn show_pill(app: &tauri::AppHandle) {
     }
 }
 
-/// Move the pill window to (x, y) and persist the position to settings.json.
+/// Move the pill window to (x, y). Does NOT persist — position is saved on exit_pill_move_mode.
 #[tauri::command]
 pub async fn set_pill_position(app: tauri::AppHandle, x: i32, y: i32) -> Result<(), String> {
     let pill_window = app.get_webview_window("pill").ok_or("pill window not found")?;
     pill_window
         .set_position(tauri::PhysicalPosition::new(x, y))
         .map_err(|e| e.to_string())?;
-    let mut json = crate::read_settings(&app)?;
-    json["pill_position"] = serde_json::json!({"x": x, "y": y});
-    crate::write_settings(&app, &json)?;
     Ok(())
 }
 
@@ -152,23 +149,68 @@ pub async fn reset_pill_position(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Enter pill move mode — sets the PillMoveActive flag so the hotkey handler
-/// knows to exit move mode instead of starting/stopping recording.
+/// Enter pill move mode — sets the PillMoveActive flag and spawns a backend cursor
+/// tracking loop. The loop polls cursor_position() every ~16ms and repositions the
+/// pill to follow the cursor until exit_pill_move_mode clears the flag.
+///
+/// Using a backend loop instead of frontend document.addEventListener("mousemove")
+/// because the pill webview is only 178x46px — DOM mouse events stop firing the
+/// instant the cursor leaves that tiny window, so frontend tracking is unusable.
 #[tauri::command]
 pub async fn enter_pill_move_mode(app: tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<crate::PillMoveActive>();
     state.0.store(true, std::sync::atomic::Ordering::Relaxed);
     log::info!("Pill move mode: ACTIVE");
+
+    // Spawn the cursor tracking loop
+    let app_clone = app.clone();
+    tauri::async_runtime::spawn(async move {
+        use std::sync::atomic::Ordering;
+
+        let pill_width: f64 = 178.0;
+        let pill_height: f64 = 46.0;
+
+        loop {
+            let pill_move = app_clone.state::<crate::PillMoveActive>();
+            if !pill_move.0.load(Ordering::Relaxed) {
+                break;
+            }
+
+            if let Some(pill_window) = app_clone.get_webview_window("pill") {
+                if let Ok(cursor) = pill_window.cursor_position() {
+                    let x = (cursor.x - pill_width / 2.0).round() as i32;
+                    let y = (cursor.y - pill_height / 2.0).round() as i32;
+                    let _ = pill_window.set_position(tauri::PhysicalPosition::new(x, y));
+                }
+            }
+
+            tokio::time::sleep(std::time::Duration::from_millis(16)).await;
+        }
+
+        log::info!("Pill move mode tracking loop: exited");
+    });
+
     Ok(())
 }
 
-/// Exit pill move mode — clears the flag. Called from frontend when user
-/// finishes repositioning (hotkey press or other exit trigger).
+/// Exit pill move mode — clears the flag (stopping the tracking loop) and persists
+/// the final pill position to settings.json.
 #[tauri::command]
 pub async fn exit_pill_move_mode(app: tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<crate::PillMoveActive>();
     state.0.store(false, std::sync::atomic::Ordering::Relaxed);
     log::info!("Pill move mode: INACTIVE");
+
+    // Persist the final position so the pill reopens here next time
+    if let Some(pill_window) = app.get_webview_window("pill") {
+        if let Ok(pos) = pill_window.outer_position() {
+            let mut json = crate::read_settings(&app).unwrap_or_default();
+            json["pill_position"] = serde_json::json!({"x": pos.x, "y": pos.y});
+            let _ = crate::write_settings(&app, &json);
+            log::debug!("Pill position saved: ({}, {})", pos.x, pos.y);
+        }
+    }
+
     Ok(())
 }
 

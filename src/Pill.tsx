@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { invoke } from "@tauri-apps/api/core";
 import { FrequencyBars } from "./components/FrequencyBars";
@@ -19,9 +19,6 @@ export function Pill() {
 
   // Long-press timer
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Throttle ref for invoke calls during move
-  const lastInvokeRef = useRef<number>(0);
 
   // Deferred hide: if a hide event fires while in move mode, queue it
   const pendingHideRef = useRef(false);
@@ -50,27 +47,6 @@ export function Pill() {
       exitTimerRef.current = null;
     }, 200);
   }
-
-  // Global mouse move handler for move mode — follows cursor everywhere
-  const handleGlobalMouseMove = useCallback((e: MouseEvent) => {
-    const now = Date.now();
-    if (now - lastInvokeRef.current >= 16) {
-      lastInvokeRef.current = now;
-      const x = Math.round(e.screenX) - 89; // 178/2
-      const y = Math.round(e.screenY) - 23; // 46/2
-      invoke("set_pill_position", { x, y }).catch(() => {});
-    }
-  }, []);
-
-  // Attach/detach global mouse listener when entering/leaving move mode
-  useEffect(() => {
-    if (displayState === "moving") {
-      document.addEventListener("mousemove", handleGlobalMouseMove);
-      return () => {
-        document.removeEventListener("mousemove", handleGlobalMouseMove);
-      };
-    }
-  }, [displayState, handleGlobalMouseMove]);
 
   // Event listeners for all pill events from backend
   useEffect(() => {
