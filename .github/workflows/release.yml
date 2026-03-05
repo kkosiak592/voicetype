@@ -5,6 +5,11 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v1.2.0-rc1)'
+        required: true
 
 jobs:
   publish-release:
@@ -80,9 +85,9 @@ jobs:
           TAURI_CONFIG: '{"bundle":{"resources":{"cuda-libs/cudart64_12.dll":"cudart64_12.dll","cuda-libs/cublas64_12.dll":"cublas64_12.dll","cuda-libs/cublasLt64_12.dll":"cublasLt64_12.dll"}}}'
         with:
           # Use the pushed tag directly (e.g. v0.1.0) as the release tag
-          tagName: ${{ github.ref_name }}
-          releaseName: 'VoiceType ${{ github.ref_name }}'
-          releaseBody: 'See the assets to download and install VoiceType ${{ github.ref_name }}.'
+          tagName: ${{ inputs.tag || github.ref_name }}
+          releaseName: 'VoiceType ${{ inputs.tag || github.ref_name }}'
+          releaseBody: 'See the assets to download and install VoiceType ${{ inputs.tag || github.ref_name }}.'
           # Publish immediately — no draft review step
           releaseDraft: false
           prerelease: false
