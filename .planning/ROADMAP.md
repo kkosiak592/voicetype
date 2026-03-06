@@ -88,7 +88,7 @@ Moved to Phase 21 to allow phases 19-20 to complete first.
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 15 → 16 → 17 → 19 → 19.1 → 19.2 → 19.3 → 20 → 21
+Phases execute in numeric order: 15 → 16 → 17 → 19 → 19.1 → 19.2 → 19.3 → 20 → 20.1 → 21
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -100,7 +100,8 @@ Phases execute in numeric order: 15 → 16 → 17 → 19 → 19.1 → 19.2 → 1
 | 19.1. Moonshine Tiny | 2/2 | Complete    | 2021-03-04 | - |
 | 19.2. Model Selection Revamp | 1/1 | Complete | 2021-03-04 | - |
 | 19.3. UI Polish | 3/3 | Complete    | 2021-03-04 | - |
-| 20. Bundle CUDA DLLs | 1/1 | Complete   | 2021-03-05 | - |
+| 20. Bundle CUDA DLLs | 1/1 | Complete   | 2026-03-06 | ✅ |
+| 20.1. VAD Chunking | 0/1 | Planning   | - | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
 Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
@@ -156,14 +157,14 @@ Plans:
 **Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 20-01-PLAN.md — CI DLL staging, Tauri bundle.resources map, gitignore, human verification of installer output
+- [x] 20-01-PLAN.md — CI DLL staging, Tauri bundle.resources map, gitignore, human verification of installer output (completed 2026-03-06)
 
-### Phase 20.1: implement the VAD chunking method (INSERTED)
+### Phase 20.1: Generalize VAD chunking for all transcription engines (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
+**Goal:** Generalize the Moonshine-specific VAD chunking algorithm into an engine-agnostic function and wire it into Whisper and Parakeet engine dispatch, so all three engines handle 60s+ recordings via VAD-based chunk splitting at silence boundaries
+**Requirements**: VAD-01, VAD-02, VAD-03, VAD-04, VAD-05, VAD-06
 **Depends on:** Phase 20
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 20.1 to break down)
+- [ ] 20.1-01-PLAN.md — Generalize vad_chunk_audio, refactor Moonshine caller, add chunk dispatch to Whisper and Parakeet in pipeline.rs
