@@ -101,7 +101,7 @@ Phases execute in numeric order: 15 → 16 → 17 → 19 → 19.1 → 19.2 → 1
 | 19.2. Model Selection Revamp | 1/1 | Complete | 2021-03-04 | - |
 | 19.3. UI Polish | 3/3 | Complete    | 2021-03-04 | - |
 | 20. Bundle CUDA DLLs | 1/1 | Complete   | 2026-03-06 | ✅ |
-| 20.1. VAD Chunking | 0/1 | Planning   | - | - |
+| 20.1. VAD Chunking | 1/1 | Complete   | 2026-03-06 | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
 Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
@@ -164,7 +164,7 @@ Plans:
 **Goal:** Generalize the Moonshine-specific VAD chunking algorithm into an engine-agnostic function and wire it into Whisper and Parakeet engine dispatch, so all three engines handle 60s+ recordings via VAD-based chunk splitting at silence boundaries
 **Requirements**: VAD-01, VAD-02, VAD-03, VAD-04, VAD-05, VAD-06
 **Depends on:** Phase 20
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 20.1-01-PLAN.md — Generalize vad_chunk_audio, refactor Moonshine caller, add chunk dispatch to Whisper and Parakeet in pipeline.rs

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Keyboard Hook
 status: planning
-stopped_at: Completed quick-46-01-PLAN.md
-last_updated: "2026-03-06T00:24:08.395Z"
+stopped_at: Completed 20.1-01-PLAN.md
+last_updated: "2026-03-06T22:33:49.754Z"
 last_activity: "2026-03-05 - Completed quick task 46: Add VK_CONTROL tracking to keyboard hook for Outlook/Office"
 progress:
   total_phases: 10
-  completed_phases: 8
-  total_plans: 15
-  completed_plans: 14
+  completed_phases: 9
+  total_plans: 16
+  completed_plans: 15
 ---
 
 ---
@@ -177,6 +177,7 @@ Last activity: 2026-03-05 - Completed quick task 46: Add VK_CONTROL tracking to 
 | Phase 19.3 P02 | 7 | 2 tasks | 7 files |
 | Phase 19.3 P03 | 377 | 2 tasks | 5 files |
 | Phase 20-bundle-cuda-dlls-single-installer-with-runtime-gpu-fallback P01 | 5 | 1 tasks | 3 files |
+| Phase 20.1 P01 | 5 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -234,6 +235,8 @@ Last activity: 2026-03-05 - Completed quick task 46: Add VK_CONTROL tracking to 
 - [Phase 20]: bundle.resources uses MAP syntax (object) not array — array syntax preserves subdirectory structure putting DLLs off the DLL search path
 - [Phase 20]: CUDA DLL staging step positioned after CUDA toolkit install (ensures $CUDA_PATH set) and before tauri-action (ensures files exist for bundler)
 - [Phase 20]: TAURI_CONFIG env var used instead of static tauri.conf.json bundle.resources — static entry breaks local dev because cuda-libs/ only exists in CI; TAURI_CONFIG is injected only in release workflow
+- [Phase 20.1]: vad_chunk_for_moonshine kept as thin wrapper delegating to vad_chunk_audio(samples, 30) for backward compatibility
+- [Phase 20.1]: VAD chunking computed BEFORE spawn_blocking in pipeline.rs — ONNX Runtime must run outside blocking context
 
 ### Research Flags (from SUMMARY.md)
 
@@ -291,6 +294,6 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-05T21:44:22Z
-Stopped at: Completed quick-46-01-PLAN.md
+Last session: 2026-03-06T22:33:49.749Z
+Stopped at: Completed 20.1-01-PLAN.md
 Resume file: None
