@@ -101,7 +101,7 @@ Phases execute in numeric order: 15 → 16 → 17 → 19 → 19.1 → 19.2 → 1
 | 19.2. Model Selection Revamp | 1/1 | Complete | 2021-03-04 | - |
 | 19.3. UI Polish | 3/3 | Complete    | 2021-03-04 | - |
 | 20. Bundle CUDA DLLs | 1/1 | Complete   | 2026-03-06 | ✅ |
-| 20.1. VAD Chunking | 1/1 | Complete   | 2026-03-06 | - |
+| 20.1. VAD Chunking | 1/1 | Complete    | 2026-03-06 | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
 Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
