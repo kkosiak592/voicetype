@@ -12,7 +12,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
 name = "benchmark"
-path = "src/bin/benchmark.rs"
+path = "tools/benchmark.rs"
 required-features = ["whisper", "parakeet", "build_benchmark"]
 # Standalone benchmark binary — does NOT depend on Tauri.
 # Run: cargo run --bin benchmark --features whisper,parakeet --release
