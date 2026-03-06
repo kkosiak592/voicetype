@@ -185,8 +185,31 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
                         }
                     }
                 };
+                // VAD chunk for audio >30s — compute chunks BEFORE spawn_blocking
+                // (VAD uses ONNX Runtime; keep it outside the blocking context)
+                const CHUNK_THRESHOLD_SAMPLES: usize = 30 * 16000;
+                let chunks = if samples.len() > CHUNK_THRESHOLD_SAMPLES {
+                    log::info!(
+                        "Pipeline: Whisper audio {:.1}s exceeds 30s — splitting with VAD",
+                        samples.len() as f32 / 16000.0
+                    );
+                    vad::vad_chunk_audio(&samples, 30)
+                } else {
+                    vec![samples]
+                };
                 match tauri::async_runtime::spawn_blocking(move || {
-                    crate::transcribe::transcribe_audio(&ctx, &samples)
+                    let mut combined = String::new();
+                    for chunk in &chunks {
+                        let text = crate::transcribe::transcribe_audio(&ctx, chunk)?;
+                        let trimmed = text.trim();
+                        if !trimmed.is_empty() {
+                            if !combined.is_empty() {
+                                combined.push(' ');
+                            }
+                            combined.push_str(trimmed);
+                        }
+                    }
+                    Ok::<String, String>(combined)
                 })
                 .await
                 {
@@ -231,9 +254,32 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
                         }
                     }
                 };
+                // VAD chunk for audio >30s — compute chunks BEFORE spawn_blocking
+                // (VAD uses ONNX Runtime; keep it outside the blocking context)
+                const CHUNK_THRESHOLD_SAMPLES: usize = 30 * 16000;
+                let chunks = if samples.len() > CHUNK_THRESHOLD_SAMPLES {
+                    log::info!(
+                        "Pipeline: Parakeet audio {:.1}s exceeds 30s — splitting with VAD",
+                        samples.len() as f32 / 16000.0
+                    );
+                    vad::vad_chunk_audio(&samples, 30)
+                } else {
+                    vec![samples]
+                };
                 match tauri::async_runtime::spawn_blocking(move || {
                     let mut guard = parakeet_arc.lock().unwrap_or_else(|e| e.into_inner());
-                    crate::transcribe_parakeet::transcribe_with_parakeet(&mut guard, &samples)
+                    let mut combined = String::new();
+                    for chunk in &chunks {
+                        let text = crate::transcribe_parakeet::transcribe_with_parakeet(&mut guard, chunk)?;
+                        let trimmed = text.trim();
+                        if !trimmed.is_empty() {
+                            if !combined.is_empty() {
+                                combined.push(' ');
+                            }
+                            combined.push_str(trimmed);
+                        }
+                    }
+                    Ok::<String, String>(combined)
                 })
                 .await
                 {
