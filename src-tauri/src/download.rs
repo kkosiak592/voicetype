@@ -136,6 +136,19 @@ pub async fn download_model(
             msg
         })?;
 
+    // Reject non-2xx responses (e.g. 404 for wrong paths, 5xx server errors)
+    if !response.status().is_success() {
+        let status = response.status();
+        let msg = format!(
+            "HTTP {} for {}: {}",
+            status.as_u16(),
+            filename,
+            status.canonical_reason().unwrap_or("Unknown error")
+        );
+        let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
+        return Err(msg);
+    }
+
     // Use content-length from response if available; otherwise fall back to expected size
     let total_bytes = response.content_length().unwrap_or(expected_size_bytes);
 
@@ -232,12 +245,12 @@ pub async fn download_model(
 
 /// Moonshine Tiny ONNX files from HuggingFace repo onnx-community/moonshine-tiny-ONNX.
 ///
-/// Three files: encoder (~4 MB), decoder_merged (~104 MB), tokenizer (~1 KB).
+/// Three files: encoder (~30 MB), decoder_merged (~78 MB), tokenizer (~3.6 MB).
 /// sentinel file is decoder_model_merged.onnx (largest file, last to complete).
 const MOONSHINE_TINY_FILES: &[(&str, &str, u64)] = &[
-    ("encoder_model.onnx", "encoder_model.onnx", 4_200_000),
-    ("decoder_model_merged.onnx", "decoder_model_merged.onnx", 109_000_000),
-    ("tokenizer.json", "tokenizer.json", 1_200),
+    ("onnx/encoder_model.onnx", "encoder_model.onnx", 30_882_331),
+    ("onnx/decoder_model_merged.onnx", "decoder_model_merged.onnx", 78_227_550),
+    ("tokenizer.json", "tokenizer.json", 3_761_754),
 ];
 
 /// Returns the directory where the Moonshine Tiny ONNX model files are stored.
@@ -321,6 +334,20 @@ pub async fn download_moonshine_tiny_model(
             });
             msg
         })?;
+
+        // Reject non-2xx responses (e.g. 404 for wrong paths, 5xx server errors)
+        if !response.status().is_success() {
+            let status = response.status();
+            let _ = tokio::fs::remove_dir_all(&dest_dir).await;
+            let msg = format!(
+                "HTTP {} for {}: {}",
+                status.as_u16(),
+                remote_name,
+                status.canonical_reason().unwrap_or("Unknown error")
+            );
+            let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
+            return Err(msg);
+        }
 
         // Use content-length from response to validate file size after download
         let content_length = response.content_length();
@@ -520,6 +547,20 @@ pub async fn download_parakeet_fp32_model(
             });
             msg
         })?;
+
+        // Reject non-2xx responses (e.g. 404 for wrong paths, 5xx server errors)
+        if !response.status().is_success() {
+            let status = response.status();
+            let _ = tokio::fs::remove_dir_all(&dest_dir).await;
+            let msg = format!(
+                "HTTP {} for {}: {}",
+                status.as_u16(),
+                remote_name,
+                status.canonical_reason().unwrap_or("Unknown error")
+            );
+            let _ = on_event.send(DownloadEvent::Error { message: msg.clone() });
+            return Err(msg);
+        }
 
         // Use content-length from response to validate file size after download
         let content_length = response.content_length();
