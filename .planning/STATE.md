@@ -3,6 +3,21 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Keyboard Hook
 status: planning
+stopped_at: Completed quick-46-01-PLAN.md
+last_updated: "2026-03-06T00:24:08.395Z"
+last_activity: "2026-03-05 - Completed quick task 46: Add VK_CONTROL tracking to keyboard hook for Outlook/Office"
+progress:
+  total_phases: 10
+  completed_phases: 8
+  total_plans: 15
+  completed_plans: 14
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.2
+milestone_name: Keyboard Hook
+status: planning
 stopped_at: Completed 20-01-PLAN.md
 last_updated: "2026-03-05T18:00:18.714Z"
 last_activity: "2026-03-05 - Completed quick task 46: Add VK_CONTROL tracking to keyboard hook for Outlook/Office"
@@ -242,6 +257,7 @@ Last activity: 2026-03-05 - Completed quick task 46: Add VK_CONTROL tracking to 
 - Phase 19.1 inserted after Phase 19: Integrate Moonshine Tiny model into main app with VAD chunking and GPU support (URGENT)
 - Phase 19.2 inserted after Phase 19.1: Revamp model selection with benchmark stats, recommend parakeet, remove distil-large-v3.5 (URGENT)
 - Phase 19.3 inserted after Phase 19.2: UI polish — tray icons, profile simplification, history panel, double-click settings (URGENT)
+- Phase 20.1 inserted after Phase 20: Implement the VAD chunking method (URGENT)
 
 ### Blockers/Concerns
 

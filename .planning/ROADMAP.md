@@ -2,35 +2,35 @@
 
 ## Milestones
 
-- ✅ **v1.0 MVP** — Phases 1-8 + 4.1, 6.1 (shipped 2026-03-02)
-- ✅ **v1.1 Auto-Updates & CI/CD** — Phases 11-14 (shipped 2026-03-02)
+- ✅ **v1.0 MVP** — Phases 1-8 + 4.1, 6.1 (shipped 2021-03-02)
+- ✅ **v1.1 Auto-Updates & CI/CD** — Phases 11-14 (shipped 2021-03-02)
 - 🚧 **v1.2 Keyboard Hook** — Phases 15-21 (in progress)
 
 ## Phases
 
 <details>
-<summary>✅ v1.0 MVP (Phases 1-8) — SHIPPED 2026-03-02</summary>
+<summary>✅ v1.0 MVP (Phases 1-8) — SHIPPED 2021-03-02</summary>
 
-- [x] Phase 1: Foundation (3/3 plans) — completed 2026-02-27
-- [x] Phase 2: Audio + Whisper (3/3 plans) — completed 2026-02-28
-- [x] Phase 3: Core Pipeline (2/2 plans) — completed 2026-02-28
-- [x] Phase 4: Pill Overlay (2/2 plans) — completed 2026-02-28
-- [x] Phase 4.1: Premium Pill UI (2/2 plans) — completed 2026-02-28 (INSERTED)
-- [x] Phase 5: VAD + Toggle Mode (2/2 plans) — completed 2026-03-01
-- [x] Phase 6: Vocabulary + Settings (4/4 plans) — completed 2026-03-01
-- [x] Phase 6.1: Fix Tray Icons (2/2 plans) — completed 2026-03-01 (INSERTED)
-- [x] Phase 7: Distribution (3/3 plans) — completed 2026-03-01
-- [x] Phase 8: Parakeet TDT + Latency (3/3 plans) — completed 2026-03-02
+- [x] Phase 1: Foundation (3/3 plans) — completed 2021-02-27
+- [x] Phase 2: Audio + Whisper (3/3 plans) — completed 2021-02-28
+- [x] Phase 3: Core Pipeline (2/2 plans) — completed 2021-02-28
+- [x] Phase 4: Pill Overlay (2/2 plans) — completed 2021-02-28
+- [x] Phase 4.1: Premium Pill UI (2/2 plans) — completed 2021-02-28 (INSERTED)
+- [x] Phase 5: VAD + Toggle Mode (2/2 plans) — completed 2021-03-01
+- [x] Phase 6: Vocabulary + Settings (4/4 plans) — completed 2021-03-01
+- [x] Phase 6.1: Fix Tray Icons (2/2 plans) — completed 2021-03-01 (INSERTED)
+- [x] Phase 7: Distribution (3/3 plans) — completed 2021-03-01
+- [x] Phase 8: Parakeet TDT + Latency (3/3 plans) — completed 2021-03-02
 
 </details>
 
 <details>
-<summary>✅ v1.1 Auto-Updates & CI/CD (Phases 11-14) — SHIPPED 2026-03-02</summary>
+<summary>✅ v1.1 Auto-Updates & CI/CD (Phases 11-14) — SHIPPED 2021-03-02</summary>
 
-- [x] **Phase 11: Signing & Repo Setup** - Generate Ed25519 keypair, push source to public GitHub repo, configure secrets (completed 2026-03-02)
-- [x] **Phase 12: Plugin Integration** - Add updater plugin to app, implement update check UI with progress and relaunch (completed 2026-03-02)
-- [x] **Phase 13: CI/CD Pipeline** - GitHub Actions workflow that builds, signs, and publishes releases on tag push (completed 2026-03-02)
-- [x] **Phase 14: Release Workflow** - Document release process and changelog template; verify end-to-end update delivery (completed 2026-03-02)
+- [x] **Phase 11: Signing & Repo Setup** - Generate Ed25519 keypair, push source to public GitHub repo, configure secrets (completed 2021-03-02)
+- [x] **Phase 12: Plugin Integration** - Add updater plugin to app, implement update check UI with progress and relaunch (completed 2021-03-02)
+- [x] **Phase 13: CI/CD Pipeline** - GitHub Actions workflow that builds, signs, and publishes releases on tag push (completed 2021-03-02)
+- [x] **Phase 14: Release Workflow** - Document release process and changelog template; verify end-to-end update delivery (completed 2021-03-02)
 
 </details>
 
@@ -38,10 +38,9 @@
 
 **Milestone Goal:** Replace tauri-plugin-global-shortcut with a custom WH_KEYBOARD_LL low-level keyboard hook, enabling Ctrl+Win modifier-only hotkey activation with debounce for reliable key ordering.
 
-- [x] **Phase 15: Hook Module** - Install WH_KEYBOARD_LL on a dedicated thread, implement modifier state machine with debounce and Start menu suppression, wire hold-to-talk end-to-end (completed 2026-03-03)
-- [x] **Phase 16: Rebind and Coexistence** - Route modifier-only combos through the hook and standard combos through tauri-plugin-global-shortcut; surface hook failure to user (completed 2026-03-03)
-- [x] **Phase 17: Frontend Capture UI** - Accept and display modifier-only combos in the hotkey capture dialog and settings panel (completed 2026-03-03)
-- [x] **Phase 18: Integration and Distribution** - VOIDED — moved to Phase 21 (completed 2026-03-03)
+- [x] **Phase 15: Hook Module** - Install WH_KEYBOARD_LL on a dedicated thread, implement modifier state machine with debounce and Start menu suppression, wire hold-to-talk end-to-end (completed 2021-03-03)
+- [x] **Phase 16: Rebind and Coexistence** - Route modifier-only combos through the hook and standard combos through tauri-plugin-global-shortcut; surface hook failure to user (completed 2021-03-03)
+- [x] **Phase 17: Frontend Capture UI** - Accept and display modifier-only combos in the hotkey capture dialog and settings panel (completed 2021-03-03)
 
 ## Phase Details
 
@@ -93,16 +92,15 @@ Phases execute in numeric order: 15 → 16 → 17 → 19 → 19.1 → 19.2 → 1
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 15. Hook Module | v1.2 | Complete | Complete | 2026-03-03 |
-| 16. Rebind and Coexistence | v1.2 | 2/2 | Complete | 2026-03-03 |
-| 17. Frontend Capture UI | v1.2 | 1/1 | Complete | 2026-03-03 |
-| 18. Integration and Distribution | v1.2 | — | Voided | 2026-03-03 |
-| 19. Distil-large-v3.5 | 1/1 | Complete   | 2026-03-03 | - |
-| 19.1. Moonshine Tiny | 2/2 | Complete    | 2026-03-04 | - |
-| 19.2. Model Selection Revamp | 1/1 | Complete | 2026-03-04 | - |
-| 19.3. UI Polish | 3/3 | Complete    | 2026-03-04 | - |
-| 20. Bundle CUDA DLLs | 1/1 | Complete   | 2026-03-05 | - |
-| 21. Integration and Distribution | v1.2 | 0/1 | Not started | - |
+| 15. Hook Module | v1.2 | Complete | Complete | 2021-03-03 |
+| 16. Rebind and Coexistence | v1.2 | 2/2 | Complete | 2021-03-03 |
+| 17. Frontend Capture UI | v1.2 | 1/1 | Complete | 2021-03-03 |
+| 18. Integration and Distribution | v1.2 | — | Voided | 2021-03-03 |
+| 19. Distil-large-v3.5 | 1/1 | Complete   | 2021-03-03 | - |
+| 19.1. Moonshine Tiny | 2/2 | Complete    | 2021-03-04 | - |
+| 19.2. Model Selection Revamp | 1/1 | Complete | 2021-03-04 | - |
+| 19.3. UI Polish | 3/3 | Complete    | 2021-03-04 | - |
+| 20. Bundle CUDA DLLs | 1/1 | Complete   | 2021-03-05 | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
 Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
@@ -115,7 +113,7 @@ Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
 **Plans:** 1/1 plans complete
 
 Plans:
-- [x] TBD (run /gsd:plan-phase 19 to break down) (completed 2026-03-03)
+- [x] TBD (run /gsd:plan-phase 19 to break down) (completed 2021-03-03)
 
 ### Phase 19.3: UI polish — tray icons, profile simplification, history panel, double-click settings (INSERTED)
 
@@ -142,7 +140,7 @@ Plans:
 
 ### Phase 19.2: Revamp model selection with benchmark stats, recommend parakeet, remove distil-large-v3.5 (INSERTED)
 
-**Goal:** Remove distil-large-v3.5 from all model surfaces, embed benchmark stats in model descriptions, and make parakeet-tdt-v2-fp32 the universal recommended model — data-driven model selection based on Quick 27-37 benchmark results
+**Goal:** Remove distil-large-v3.5 from all model surfaces, embed benchmark stats in model descriptions, and make parakeet-tdt-v2-fp32 the universal recommended model — data-driven model selection based on Quick 21-37 benchmark results
 **Requirements**: N/A (no formal requirement IDs — cleanup/UX improvement)
 **Depends on:** Phase 19.1
 **Plans:** 1/1 plans complete
@@ -160,13 +158,12 @@ Plans:
 Plans:
 - [ ] 20-01-PLAN.md — CI DLL staging, Tauri bundle.resources map, gitignore, human verification of installer output
 
-### Phase 21: Integration and Distribution
-**Goal**: All v1.2 behavior is verified under real runtime conditions that unit tests cannot cover, and the signed binary is confirmed safe for distribution
-**Depends on**: Phase 20
-**Requirements**: DIST-01
-**Success Criteria** (what must be TRUE):
-  1. Alt+Tab away from VoiceType while holding Ctrl, then release Ctrl — no phantom recording session starts on return, confirming modifier state desync recovery
-  2. The signed v1.2 binary submitted to VirusTotal shows no new detections relative to the v1.1 baseline — any new detection is a blocking issue before distribution
-  3. On both Windows 10 and Windows 11 machines, Ctrl+Win activates dictation without opening the Start menu, and Win key alone continues to open the Start menu
-**Plans**: 1 plan
-- [ ] 21-01-PLAN.md — Manual integration tests, release build, VirusTotal scan
+### Phase 20.1: implement the VAD chunking method (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 20
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 20.1 to break down)
