@@ -3,6 +3,7 @@
   "productName": "VoiceType",
   "version": "1.1.0",
   "identifier": "com.voicetype.desktop",
+  "mainBinaryName": "voice-to-text",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
