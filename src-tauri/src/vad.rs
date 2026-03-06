@@ -164,11 +164,28 @@ pub fn vad_trim_silence(samples: &[f32]) -> Vec<f32> {
 ///
 /// Creates a fresh VoiceActivityDetector per call (correct — Silero LSTM state must reset).
 pub fn vad_chunk_for_moonshine(samples: &[f32]) -> Vec<Vec<f32>> {
+    vad_chunk_audio(samples, 30)
+}
+
+/// Split audio into VAD-based chunks for engines with limited context windows.
+///
+/// Generic version of the Moonshine-specific chunker. `max_segment_secs` controls
+/// the maximum segment duration (e.g., 30 for Moonshine/Whisper/Parakeet).
+///
+/// Algorithm:
+/// 1. Run Silero VAD over entire audio in 512-sample chunks
+/// 2. Track consecutive silence chunks — split when >= SILENCE_SPLIT_CHUNKS (~320ms) of silence
+/// 3. Cap segments at `max_segment_secs * 16000` samples
+/// 4. Discard segments shorter than MIN_SEGMENT_SAMPLES (0.5s = 8000 samples)
+/// 5. Fallback: return full audio as single segment if chunking produces nothing
+///
+/// Creates a fresh VoiceActivityDetector per call (correct — Silero LSTM state must reset).
+pub fn vad_chunk_audio(samples: &[f32], max_segment_secs: u32) -> Vec<Vec<f32>> {
     const CHUNK_SIZE: usize = 512;
     const SPEECH_THRESHOLD: f32 = 0.5;
     /// ~320ms of silence triggers a split (300ms at 16kHz = ~9.4 chunks, rounded to 10)
     const SILENCE_SPLIT_CHUNKS: usize = 10;
-    const MAX_SEGMENT_SAMPLES: usize = 30 * 16000; // 30 seconds
+    let max_segment_samples: usize = max_segment_secs as usize * 16000;
     const MIN_SEGMENT_SAMPLES: usize = 8000; // 0.5 seconds
 
     let mut vad = match VoiceActivityDetector::builder()
@@ -213,7 +230,7 @@ pub fn vad_chunk_for_moonshine(samples: &[f32]) -> Vec<Vec<f32>> {
         // Split if: silence gap reached OR segment exceeds max duration
         let should_split = (silence_run >= SILENCE_SPLIT_CHUNKS
             && seg_len_samples > MIN_SEGMENT_SAMPLES)
-            || seg_len_samples >= MAX_SEGMENT_SAMPLES;
+            || seg_len_samples >= max_segment_samples;
 
         if should_split && i + 1 < num_chunks {
             // End segment at the start of the silence run (keep speech, trim trailing silence)
@@ -251,9 +268,10 @@ pub fn vad_chunk_for_moonshine(samples: &[f32]) -> Vec<Vec<f32>> {
     }
 
     log::info!(
-        "VAD chunk: {} segments from {:.1}s audio",
+        "VAD chunk: {} segments from {:.1}s audio (max_segment={}s)",
         segments.len(),
-        samples.len() as f32 / 16000.0
+        samples.len() as f32 / 16000.0,
+        max_segment_secs
     );
     for (i, seg) in segments.iter().enumerate() {
         log::info!(

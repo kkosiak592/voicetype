@@ -117,7 +117,7 @@ pub fn transcribe_with_moonshine(
             "Moonshine: audio {:.1}s exceeds 30s limit — splitting with VAD",
             audio.len() as f32 / 16000.0
         );
-        crate::vad::vad_chunk_for_moonshine(audio)
+        crate::vad::vad_chunk_audio(audio, 30)
     } else {
         vec![audio.to_vec()]
     };
