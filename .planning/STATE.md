@@ -4,6 +4,21 @@ milestone: v1.4
 milestone_name: Per-App Settings
 status: executing
 stopped_at: Completed 25-01-PLAN.md
+last_updated: "2026-03-07T18:19:36.196Z"
+last_activity: 2026-03-07 -- Completed 25-01 App Rules UI
+progress:
+  total_phases: 4
+  completed_phases: 3
+  total_plans: 4
+  completed_plans: 4
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.4
+milestone_name: Per-App Settings
+status: executing
+stopped_at: Completed 25-01-PLAN.md
 last_updated: "2026-03-07T18:13:41Z"
 last_activity: 2026-03-07 -- Completed 25-01 App Rules UI
 progress:
