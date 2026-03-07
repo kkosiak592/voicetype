@@ -163,6 +163,19 @@ unsafe extern "system" fn enum_child_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
     BOOL(1) // Continue enumeration
 }
 
+/// Resolve whether ALL CAPS should be applied, considering per-app overrides.
+///
+/// Resolution order:
+/// 1. If exe_name is Some and has a matching rule with all_caps = Some(v), return v
+/// 2. Otherwise, fall back to profile_all_caps
+pub fn resolve_all_caps(
+    profile_all_caps: bool,
+    exe_name: &Option<String>,
+    rules: &HashMap<String, AppRule>,
+) -> bool {
+    todo!("implement override resolution")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -250,5 +263,63 @@ mod tests {
         let json = serde_json::to_value(&app).unwrap();
         assert!(json["exe_name"].is_null());
         assert!(json["window_title"].is_null());
+    }
+
+    mod override_tests {
+        use super::*;
+
+        #[test]
+        fn no_rule_profile_on() {
+            let rules = HashMap::new();
+            assert!(resolve_all_caps(true, &Some("notepad.exe".to_string()), &rules));
+        }
+
+        #[test]
+        fn no_rule_profile_off() {
+            let rules = HashMap::new();
+            assert!(!resolve_all_caps(false, &Some("notepad.exe".to_string()), &rules));
+        }
+
+        #[test]
+        fn force_on_overrides_profile_off() {
+            let mut rules = HashMap::new();
+            rules.insert("notepad.exe".to_string(), AppRule { all_caps: Some(true) });
+            assert!(resolve_all_caps(false, &Some("notepad.exe".to_string()), &rules));
+        }
+
+        #[test]
+        fn force_off_overrides_profile_on() {
+            let mut rules = HashMap::new();
+            rules.insert("notepad.exe".to_string(), AppRule { all_caps: Some(false) });
+            assert!(!resolve_all_caps(true, &Some("notepad.exe".to_string()), &rules));
+        }
+
+        #[test]
+        fn inherit_uses_profile_on() {
+            let mut rules = HashMap::new();
+            rules.insert("notepad.exe".to_string(), AppRule { all_caps: None });
+            assert!(resolve_all_caps(true, &Some("notepad.exe".to_string()), &rules));
+        }
+
+        #[test]
+        fn inherit_uses_profile_off() {
+            let mut rules = HashMap::new();
+            rules.insert("notepad.exe".to_string(), AppRule { all_caps: None });
+            assert!(!resolve_all_caps(false, &Some("notepad.exe".to_string()), &rules));
+        }
+
+        #[test]
+        fn detection_failed_falls_back_to_profile() {
+            let mut rules = HashMap::new();
+            rules.insert("notepad.exe".to_string(), AppRule { all_caps: Some(true) });
+            assert!(!resolve_all_caps(false, &None, &rules));
+        }
+
+        #[test]
+        fn unlisted_app_falls_back_to_profile() {
+            let mut rules = HashMap::new();
+            rules.insert("notepad.exe".to_string(), AppRule { all_caps: Some(true) });
+            assert!(!resolve_all_caps(false, &Some("code.exe".to_string()), &rules));
+        }
     }
 }
