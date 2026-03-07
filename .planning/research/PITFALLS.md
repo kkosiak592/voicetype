@@ -1,179 +1,183 @@
 # Pitfalls Research
 
-**Domain:** Clipboard simplification — removing save/restore from inject_text in a Windows dictation tool (VoiceType v1.3)
+**Domain:** Per-app settings with foreground window detection on Windows (Tauri 2.0 / Rust)
 **Researched:** 2026-03-07
-**Confidence:** HIGH (pitfalls derived from current codebase analysis, Windows clipboard Win32 documentation, and established patterns from clipboard managers and password managers)
+**Confidence:** HIGH
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Removing the Post-Paste Sleep Prematurely Along With the Restore
+### Pitfall 1: UWP Apps Return ApplicationFrameHost.exe Instead of Real Process
 
 **What goes wrong:**
-When removing the clipboard restore logic, a developer naturally removes the 80ms post-paste sleep (line 132 in current inject.rs) thinking "we're not restoring anymore, so we don't need to wait." The paste then intermittently fails — target applications receive an empty paste or stale clipboard content because Ctrl+V was released before the app consumed the clipboard data.
+`GetForegroundWindow()` + `GetWindowThreadProcessId()` + `OpenProcess()` returns `ApplicationFrameHost.exe` for all UWP/Store apps (Calculator, Windows Terminal from Store, Mail, Calendar, Settings, Photos). The user adds a rule for "Calculator" but the detected process is `ApplicationFrameHost.exe`, which matches ALL UWP apps simultaneously. One rule applies to every UWP app on the system.
 
 **Why it happens:**
-The 80ms sleep at line 132 serves two distinct purposes that look like one:
-1. Give the target app time to consume the paste before restoring (the documented purpose)
-2. Give the target app time to consume the paste before *any* subsequent clipboard operation occurs
-
-Even without a restore, other code paths can touch the clipboard shortly after inject_text returns — the history panel's click-to-copy feature, or a rapid second transcription. If the sleep is removed and a clipboard write happens within milliseconds of the Ctrl+V, the paste can fail silently.
+UWP apps run inside an `ApplicationFrameHost.exe` container process that owns the top-level HWND. The actual app process is a child, but the window handle belongs to the host. This is fundamental Windows architecture since Windows 8, not a bug. PowerToys, AutoHotkey, and every window-management tool has hit this exact issue.
 
 **How to avoid:**
-Keep the 80ms post-paste sleep. It exists to let the target application process WM_PASTE / CF_TEXT, not just to buffer the restore. Add a code comment explicitly stating this sleep is for paste consumption, independent of save/restore logic.
+After detecting `ApplicationFrameHost.exe`, enumerate child windows of the foreground HWND using `EnumChildWindows`. The first child window owned by a different PID is the actual UWP app. Call `GetWindowThreadProcessId` on that child to get the real PID, then resolve the exe name via `QueryFullProcessImageNameW`. Fallback: use `GetWindowText` on the parent HWND as the identifier when child enumeration fails (minimized UWP apps sometimes have no reliable child process link).
+
+```rust
+let hwnd = GetForegroundWindow();
+let pid = GetWindowThreadProcessId(hwnd);
+let exe = get_process_name(pid);
+if exe == "applicationframehost.exe" {
+    if let Some(real_pid) = find_uwp_child_process(hwnd) {
+        exe = get_process_name(real_pid);
+    } else {
+        // Fallback: window title as identifier
+        exe = format!("[UWP] {}", get_window_title(hwnd));
+    }
+}
+```
 
 **Warning signs:**
-- Paste works 95% of the time but occasionally pastes nothing or old content
-- Failure rate higher in Outlook, Word, and other Office apps (they process clipboard asynchronously via WM_CLIPBOARDUPDATE)
-- Rapid sequential transcriptions fail more often than single transcriptions
+- All UWP apps matching the same rule
+- Test with Calculator, Settings, Mail -- if they all report the same process name, this pitfall is active
 
-**Phase to address:** The single implementation phase. This is a "do not touch this line" guard during the removal.
+**Phase to address:**
+Phase 1 (foreground detection backend). Must be solved before any per-app matching logic is built.
 
 ---
 
-### Pitfall 2: Clipboard Verification Loop Becoming Unnecessary Complexity — But It Is Still Necessary
+### Pitfall 2: Elevated/Admin Processes Cause Access Denied on OpenProcess
 
 **What goes wrong:**
-The developer sees the verify-and-retry loop (lines 53-99) and the 150ms pre-paste delay (line 111) and thinks: "These were needed because of the race between setting clipboard and restoring clipboard. Without restore, we can simplify these too." They reduce or remove the verification loop, and intermittent paste failures return — particularly in Chrome/Edge tabs and Office apps.
+When the foreground window belongs to an elevated process (Task Manager, Device Manager, Registry Editor, or any app run as Admin), `OpenProcess(PROCESS_QUERY_INFORMATION, ...)` returns `ERROR_ACCESS_DENIED`. Process name resolution fails, and the app either panics on an unwrap, or silently falls back to global settings without telling the user why their rule didn't apply.
 
 **Why it happens:**
-The verification loop and the 150ms pre-paste delay exist because of two separate problems, neither of which is related to save/restore:
-
-1. **Chromium WebView clipboard race** (lines 47-52): The Tauri WebView (Chromium) can reclaim clipboard ownership via `navigator.clipboard.writeText()` when the user interacts with history panel click-to-copy. This race exists regardless of whether clipboard is restored afterward.
-
-2. **Office async clipboard cache** (lines 103-110): Office apps process WM_CLIPBOARDUPDATE asynchronously and cache clipboard content internally. The 150ms delay ensures Office has ingested the new clipboard content before Ctrl+V fires. This is a paste-reliability concern, not a restore concern.
+VoiceType runs as a standard user. Windows DACL restrictions prevent non-elevated processes from opening elevated process handles with `PROCESS_QUERY_INFORMATION` access rights. This is UAC working as designed.
 
 **How to avoid:**
-Keep the verification loop and the 150ms pre-paste delay intact. The only code to remove is:
-- Line 43: `let saved: Option<String> = clipboard.get_text().ok();`
-- Lines 135-149: The entire `match saved { ... }` restore block
+Use `PROCESS_QUERY_LIMITED_INFORMATION` instead of `PROCESS_QUERY_INFORMATION` when calling `OpenProcess`. This access right was introduced in Vista specifically to allow querying process image names without elevation. It permits `QueryFullProcessImageNameW` to succeed on elevated processes.
 
-Nothing else should change. Add comments on the verification loop clarifying it protects against Chromium races, not restore races.
+```rust
+let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+```
+
+If even `PROCESS_QUERY_LIMITED_INFORMATION` fails (System process, CSRSS, some protected processes like antimalware), treat as "unknown app" and apply global settings. Never attempt `SeDebugPrivilege` escalation -- it defeats UAC and is unnecessary for this use case.
 
 **Warning signs:**
-- Paste silently fails in Chrome/Edge tabs (Chromium reclaimed clipboard)
-- Outlook pastes stale content from its internal cache instead of the transcription
-- The verification loop reports mismatches in logs but was disabled because "we don't need it anymore"
+- "Access Denied" errors in logs when Task Manager or other admin apps are focused
+- Per-app rules silently not applying for some apps
+- Works on developer machine (if running IDE as admin) but fails for normal users
 
-**Phase to address:** The single implementation phase. The diff should be minimal — removal of exactly the save (1 line) and restore (15 lines) blocks.
+**Phase to address:**
+Phase 1. Use `PROCESS_QUERY_LIMITED_INFORMATION` from day one. This is a one-line difference that prevents an entire class of failures.
 
 ---
 
-### Pitfall 3: Every Transcription Now Appears in Windows Clipboard History (Win+V)
+### Pitfall 3: Race Condition Between Foreground Detection and Text Injection
 
 **What goes wrong:**
-After removing save/restore, the transcription text remains on the clipboard. Windows Clipboard History (if enabled) captures every transcription. The user presses Win+V and sees a long list of every dictated sentence — potentially sensitive content like emails, passwords dictated into login fields, or private messages. In enterprise environments with clipboard sync enabled, this data may be synced to Microsoft's cloud.
+Detection happens at the START of pipeline processing, but `inject_text()` fires Ctrl+V 500-2000ms later (transcription time). The user alt-tabs during transcription. ALL CAPS setting from app A is applied, but text is injected into app B. Wrong formatting for the destination window.
 
 **Why it happens:**
-The old save/restore pattern had a subtle privacy benefit: the transcription was on the clipboard only during the ~230ms paste window (150ms pre-paste delay + 80ms post-paste consumption), after which the original content was restored. Windows Clipboard History captures items when they are set, so the transcription was still captured — but the restore immediately pushed the original content back, meaning the clipboard history showed the original content as the "current" item rather than the transcription.
-
-With simplification, the transcription stays on the clipboard indefinitely. Every transcription is now a permanent clipboard history entry until the user clears history or it ages out.
+Looking at `pipeline.rs`, the current flow is: hotkey release -> stop recording -> VAD gate -> transcribe (500-2000ms) -> corrections -> ALL CAPS (line 396-404) -> inject. If foreground detection happens at step 1 but injection at step 6, the user has had seconds to switch windows. This is the same class of race condition that the existing keyboard hook already handles carefully.
 
 **How to avoid:**
-This is an accepted behavior change, not a bug. Standard dictation tools (Dragon NaturallySpeaking, Windows Voice Typing) all leave transcription on the clipboard. However, document this in release notes for user awareness.
+Detect the foreground window at INJECTION TIME, not at recording time. The correct detection point is immediately before clipboard write in `inject_text()`. The window receiving the Ctrl+V is the one that matters for per-app settings.
 
-If privacy becomes a concern later, Windows provides clipboard history exclusion via the `ExcludeClipboardContentFromMonitorProcessing` clipboard format. Setting this format alongside the text data tells Windows Clipboard History and cloud sync to ignore the entry. arboard does not expose this directly — it would require raw Win32 clipboard API calls via `OpenClipboard` / `SetClipboardData` with a custom registered format. This is an optional future enhancement, not a v1.3 requirement.
+This means the ALL CAPS transformation (currently in `pipeline.rs` lines 396-404, reading from `ActiveProfile`) must move to the injection layer. The pipeline should pass the raw corrected text, and the injection function resolves the foreground app, looks up per-app overrides, applies formatting, then injects.
+
+```
+Current flow:  transcribe -> correct -> ALL CAPS -> inject
+Required flow: transcribe -> correct -> inject(raw_text) -> detect_app -> apply_per_app_caps -> clipboard+paste
+```
 
 **Warning signs:**
-- Users report sensitive dictation appearing in Win+V clipboard history
-- Enterprise users with clipboard cloud sync enabled see transcriptions synced to other devices
-- Third-party clipboard managers (Ditto, CopyQ) capture every transcription as a new entry
+- Wrong capitalization after alt-tabbing during transcription
+- ALL CAPS text appearing in non-CAPS-configured apps
+- Testing only in single-window scenarios masks this entirely -- must test with deliberate alt-tab during dictation
 
-**Phase to address:** Document in release notes during the implementation phase. The exclusion format is a potential follow-up if users report privacy concerns.
+**Phase to address:**
+Phase 1 (architecture). The detection-at-injection-time pattern must be the design from the start. Retrofitting it after building detection-at-recording-time requires rearchitecting the pipeline formatting flow.
 
 ---
 
-### Pitfall 4: Non-Text Clipboard Content Permanently Lost
+### Pitfall 4: Case-Sensitive Exe Name Matching Causes Silent Rule Misses
 
 **What goes wrong:**
-User copies an image, a file path from Explorer, or rich text (formatted text from Word/Outlook) to their clipboard. They then dictate with VoiceType. The transcription replaces the clipboard content. The image/file/rich-text is gone — no way to recover it.
-
-With the old save/restore behavior, this was *also* the case (arboard's `get_text()` only saves text content, so images were already being lost and replaced with an empty string on restore). However, users may not have noticed because:
-1. The clipboard appeared to be "unchanged" after dictation (restored to empty or to text content that was there before)
-2. Users rarely copy an image and then immediately dictate
-
-With simplification, the clipboard *visibly* contains the transcription instead of appearing unchanged. This makes the content loss obvious and noticeable.
+Process names returned by Windows APIs have inconsistent casing. `QueryFullProcessImageNameW` returns `C:\Program Files\Autodesk\AutoCAD\acad.exe` while `CreateToolhelp32Snapshot` + `Process32Next` returns `ACAD.EXE`. The user adds a rule via "Detect Active App" (which got `acad.exe`), but the injection-time detection resolves `ACAD.EXE`. Case-sensitive string comparison fails to match.
 
 **Why it happens:**
-arboard's `set_text()` calls `OpenClipboard` / `EmptyClipboard` / `SetClipboardData` with CF_UNICODETEXT. The `EmptyClipboard` call destroys all clipboard formats — CF_BITMAP, CF_HDROP (file list), CF_HTML, CF_RTF, and any custom formats. This is standard Win32 behavior: the clipboard can only have one owner at a time, and `EmptyClipboard` clears all formats from the previous owner.
+Windows filesystem is case-insensitive but case-preserving. Different Win32 APIs return different casings depending on how the process was launched (file association vs. shortcut vs. command line). The exe name in the PE header may differ from the filesystem name.
 
 **How to avoid:**
-This is the intended behavior and matches every other dictation tool. The clipboard is a transient holding area, not a persistent store. Accept the behavior change. The only mitigation needed is documentation clarity — update the CLAUDE.md key decisions to note that clipboard content is replaced by transcription.
+Normalize ALL process names to lowercase at every boundary:
+1. When storing a rule from "Detect Active App": `.to_lowercase()`
+2. When detecting foreground app at injection time: `.to_lowercase()`
+3. When populating the searchable dropdown: `.to_lowercase()`
 
-If users want clipboard persistence, they should use a clipboard manager (Ditto, Windows Clipboard History via Win+V). This is not VoiceType's responsibility.
+Also: strip the full path -- store and match on filename only (`acad.exe`), not the full path. Paths differ between installations, user profiles, and Program Files vs. Program Files (x86).
+
+```rust
+let exe_name = Path::new(&full_path)
+    .file_name()
+    .map(|f| f.to_string_lossy().to_lowercase())
+    .unwrap_or_default();
+```
 
 **Warning signs:**
-- No warning signs needed — this is expected behavior
-- The only risk is a user complaint: "I had an image on my clipboard and VoiceType erased it"
+- Rules working for some apps but not others, no clear pattern
+- Rules working when added via "Detect" but failing after app update changed installation path
+- Developer machine matches because the same API is used for both add and detect, but a different code path uses a different API
 
-**Phase to address:** No code mitigation needed. Acknowledge in release notes.
+**Phase to address:**
+Phase 1 (data model). Normalize early, normalize consistently. Establish a single `normalize_exe_name()` function used everywhere.
 
 ---
 
-## Moderate Pitfalls
-
-### Pitfall 5: The `Clipboard::new()` Call Fails If Another App Has the Clipboard Open
+### Pitfall 5: Settings Migration Breaks Existing Users on Upgrade from v1.3
 
 **What goes wrong:**
-`Clipboard::new()` (arboard) internally calls `OpenClipboard`. If another application currently has the clipboard open (e.g., a clipboard manager polling the clipboard, or the user is actively pasting in another app), `OpenClipboard` fails with `ERROR_ACCESS_DENIED`. The current code at line 40 propagates this as an error, failing the entire injection.
+Adding `appRules` to `settings.json` causes issues when existing v1.3 users upgrade. If any code path does `settings["appRules"].as_array().unwrap()` on a v1.3 settings file that has no `appRules` key, it panics. User's app crashes on startup after update. All settings lost if the error handling resets to defaults.
 
 **Why it happens:**
-The Win32 clipboard is a global resource with exclusive locking. Only one process can have the clipboard open at a time. Clipboard managers like Ditto poll the clipboard frequently, and some hold the clipboard open for several milliseconds during each poll cycle. The existing code already handles this implicitly (the retry loop at lines 57-92 retries `set_text`), but `Clipboard::new()` on line 40 has no retry — it fails immediately.
+The current settings system uses `serde_json::Value` via a Mutex, with individual keys read/written through `get_setting`/`set_setting` IPC (see `store.ts`). New top-level keys are naturally absent in old settings files, and `get_setting("appRules")` returns `null`. The risk is in code that consumes the value without handling null.
 
 **How to avoid:**
-This pitfall exists in the current code and is unrelated to the save/restore removal. However, removing the save step (line 43: `clipboard.get_text().ok()`) eliminates one clipboard access that could also fail. The simplification marginally *improves* reliability by reducing the number of clipboard operations from 4 (get_text for save, set_text, get_text for verify, set_text for restore) to 2 (set_text, get_text for verify).
+Since the store uses untyped `serde_json::Value`, new keys are naturally absent and `get_setting` returns null. Enforce null-safety at every consumption point:
 
-No additional mitigation needed for v1.3 — this is already handled acceptably.
+- Backend: `settings.get("appRules").and_then(|v| v.as_array()).unwrap_or(&Vec::new())`
+- Frontend: `const rules = (await store.get<AppRule[]>('appRules')) ?? []`
+- Never write a migration script that modifies existing settings files
+- Test by running the app with a real v1.3 settings.json (no `appRules` key) and verifying clean startup
+
+The existing `serde_json::Value` approach is migration-friendly by design -- leverage it, don't fight it by switching to a typed struct with `#[serde(default)]` unless you also handle existing files.
 
 **Warning signs:**
-- Sporadic `inject_text: clipboard access failed` errors in logs
-- Failures correlate with Ditto or another clipboard manager being installed
+- App crashes on startup after update
+- All user settings reset to defaults after update
+- Works on clean install but breaks on upgrade from v1.3
 
-**Phase to address:** Not a v1.3 concern. Existing behavior is acceptable.
+**Phase to address:**
+Phase 2 (settings/UI integration). Must be tested with a real v1.3 settings file before release.
 
 ---
 
-### Pitfall 6: Removing Save/Restore Changes the Timing Profile — Regression in Paste Reliability
+### Pitfall 6: GetForegroundWindow Returns NULL or VoiceType's Own Window
 
 **What goes wrong:**
-The old flow was: `get_text` (save) -> `set_text` -> `get_text` (verify) -> sleep 150ms -> Ctrl+V -> sleep 80ms -> `set_text` (restore). Total clipboard operations: 4. Total time: ~280ms + verification attempts.
-
-The new flow is: `set_text` -> `get_text` (verify) -> sleep 150ms -> Ctrl+V -> sleep 80ms. Total clipboard operations: 2. Total time: ~280ms + verification attempts, but the *start* of the function is faster because there's no initial `get_text`.
-
-The overall latency improvement is minimal (~1-5ms for the removed get_text call), but the *timing window* changes. Some clipboard-monitoring apps track clipboard ownership changes and may behave differently when there are fewer ownership transitions.
+`GetForegroundWindow()` returns `NULL` during window transitions (alt-tab animation, UAC consent dialog, lock screen). It can also return VoiceType's own pill overlay HWND or settings window HWND, causing the app to look up rules for itself.
 
 **Why it happens:**
-The save operation (`get_text`) read the clipboard without changing ownership. But it did open and close the clipboard, which introduced a brief window where the clipboard was "locked" before the set_text call. Some clipboard managers interpret rapid open/close/open/close patterns as "an app is actively using the clipboard" and back off from polling. With the save removed, the first clipboard operation is now `set_text` (which changes ownership immediately), and monitoring apps may compete for clipboard access more aggressively.
+During activation changes, there is a brief period where no window is foreground. The pill overlay is a visible Tauri window during recording/processing -- if it has focus (even briefly), it becomes the foreground window. The existing pill window likely has `WS_EX_NOACTIVATE` / `WS_EX_TOOLWINDOW` via Tauri config, but this needs verification.
 
 **How to avoid:**
-This is unlikely to cause real problems but is worth noting. The 150ms pre-paste delay already provides ample time for clipboard propagation. Monitor logs for increased clipboard verification retry rates after the change. If retry rates increase, the existing retry loop already handles it.
+1. **NULL guard:** If `GetForegroundWindow()` returns null, fall back to global settings. Do not retry in a loop -- just use defaults.
+2. **Self-detection filter:** Get VoiceType's own HWNDs (pill window, settings window) via `tauri::WebviewWindow::hwnd()` and skip them. If detected HWND is VoiceType's own, use the previously cached foreground app or fall back to global settings.
+3. **Verify pill window attributes:** Confirm the pill window config in `tauri.conf.json` has `decorations: false`, `skipTaskbar: true`, and ideally is non-focusable. If the pill can receive focus, it will be the foreground window during the exact moment detection runs.
 
 **Warning signs:**
-- Clipboard verification retry count increases after the change (visible in log output)
-- More frequent clipboard mismatch warnings in logs
+- Per-app rules randomly not applying (NULL case)
+- VoiceType applying its own app rules to itself
+- Rules failing specifically during rapid alt-tab sequences
 
-**Phase to address:** Monitor during testing after implementation. No preemptive action needed.
-
----
-
-### Pitfall 7: The Empty-String Restore for Non-Text Content Is Also Being Removed
-
-**What goes wrong:**
-Lines 144-148 in the current code handle the case where the original clipboard was empty or non-text: they call `clipboard.set_text("")` to "clear" the clipboard. This was a cleanup step. After removal, if the original clipboard had an image, and the user dictates, the clipboard will contain the transcription text. If the user then tries to paste expecting the image... they get text instead.
-
-With the old behavior, they would have gotten an empty string paste — also wrong, but in a different way.
-
-**Why it happens:**
-The old code was already broken for non-text clipboard content — it could never properly save/restore images or rich text. It just masked the breakage by setting an empty string. The simplification makes the behavior more *honest*: the clipboard contains exactly what VoiceType put there, no pretense of preservation.
-
-**How to avoid:**
-No mitigation needed. The old behavior was already lossy for non-text content. The new behavior is more predictable: after dictation, the clipboard always contains the transcription. Users can reason about this more easily than "sometimes my clipboard is mysteriously empty after dictation."
-
-**Warning signs:**
-- None — this is an improvement in predictability
-
-**Phase to address:** Acknowledge in commit message that non-text clipboard content was already not preserved.
+**Phase to address:**
+Phase 1. The NULL check and self-detection filter are part of the core detection function.
 
 ---
 
@@ -181,10 +185,11 @@ No mitigation needed. The old behavior was already lossy for non-text content. T
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Remove the 80ms post-paste sleep alongside the restore | Saves 80ms per transcription | Intermittent paste failures in Office apps that haven't consumed the clipboard yet | Never — the sleep protects paste consumption, not restore |
-| Remove the 150ms pre-paste delay alongside the restore | Saves 150ms per transcription | Outlook and Word paste stale cached content instead of the transcription | Never — the delay protects Office app clipboard ingestion |
-| Remove the verification loop alongside the restore | Simpler code, fewer clipboard operations | Chromium WebView clipboard races cause silent paste failures | Never — the verification loop protects against a different race condition |
-| Skip testing with clipboard managers (Ditto, CopyQ) installed | Faster testing cycle | Undiscovered clipboard contention issues in real-world environments | Only for initial smoke test; must test with clipboard managers before release |
+| Matching on window title instead of exe name for all apps | No OpenProcess needed, simpler code | Titles change with document names, localization, tab changes | Only as fallback for UWP apps when child window enum fails |
+| Storing full exe path instead of filename only | More precise matching | Breaks on reinstall, different user profiles, different drive letters | Never -- always strip to filename |
+| Hardcoding `"applicationframehost.exe"` check | Works for current Windows versions | Microsoft could rename the host process | Acceptable -- isolate to one function for future-proofing |
+| Keeping ALL CAPS logic in pipeline.rs and adding per-app override as a separate layer | Minimal pipeline changes | Two places where caps logic lives, confusing ownership | Only for initial prototype; refactor before shipping |
+| Using `EnumProcesses` for process dropdown | Simple API | Returns only PIDs, requires opening each process for name -- O(n) OpenProcess calls | Never -- use `CreateToolhelp32Snapshot` which gives exe names directly |
 
 ---
 
@@ -192,11 +197,12 @@ No mitigation needed. The old behavior was already lossy for non-text content. T
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Windows Clipboard History (Win+V) | Assume transcriptions won't appear in history | Accept that every transcription will appear; document for users. Optionally exclude via `ExcludeClipboardContentFromMonitorProcessing` format in future |
-| Third-party clipboard managers (Ditto, CopyQ) | Assume they won't interfere | Test that clipboard managers don't reclaim clipboard ownership between set_text and Ctrl+V. The existing 150ms delay and retry loop handle this. |
-| Office apps (Outlook, Word, Excel) | Remove the 150ms pre-paste delay thinking it was for the restore | The delay exists because Office processes WM_CLIPBOARDUPDATE asynchronously. Keep it. |
-| Tauri WebView (Chromium) | Remove the verify-and-retry loop thinking it was for the restore | The loop exists because Chromium can reclaim clipboard ownership via navigator.clipboard API. Keep it. |
-| Password managers (Bitwarden, KeePass) | Not considering that password managers clear clipboard on a timer | If the user copies a password, dictates, then the password manager timer fires — it may clear the transcription from clipboard. This is the password manager's behavior, not VoiceType's problem. No action needed. |
+| `windows` crate process access | Using `PROCESS_QUERY_INFORMATION` (fails on elevated) | Use `PROCESS_QUERY_LIMITED_INFORMATION` with `QueryFullProcessImageNameW` |
+| Tauri window handles | Assuming Tauri exposes raw HWND easily | Use `webview_window.hwnd()` -- available in Tauri 2.0 for Windows |
+| Process handle cleanup | Opening process handle, getting name, forgetting `CloseHandle` | Use `windows` crate RAII wrappers or explicit `CloseHandle` in a Drop guard |
+| serde_json settings | Adding typed struct for `AppRule` with strict deserialization | Keep using `serde_json::Value` for the settings file; deserialize `appRules` value into `Vec<AppRule>` with fallback to empty vec |
+| Process enumeration dropdown | `EnumProcesses` returns PIDs only, must open each for name | Use `CreateToolhelp32Snapshot` + `Process32First/Next` -- gives exe name directly without opening each process |
+| Current pipeline ALL CAPS | Adding per-app check alongside existing profile-based caps | Move ALL CAPS out of pipeline.rs entirely; detection + formatting happens at injection time |
 
 ---
 
@@ -204,8 +210,10 @@ No mitigation needed. The old behavior was already lossy for non-text content. T
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Removing both sleeps (150ms + 80ms) to "speed up" injection | Paste works on developer's machine but fails in Outlook on slower machines | Keep both sleeps; they are for target app compatibility, not clipboard logic | Immediately on Office apps, especially on machines with many Outlook add-ins |
-| Removing the verify loop to reduce clipboard operations from 2 to 1 | Paste occasionally injects wrong text | Keep the loop; it catches real clipboard races | When Tauri WebView has recently used navigator.clipboard API |
+| Calling `CreateToolhelp32Snapshot` on every injection to enumerate all processes | 10-50ms added to injection latency | Only call `GetForegroundWindow` + resolve single PID at injection time; full enumeration only when dropdown opens | Immediately noticeable -- injection latency jumps for every dictation |
+| Enumerating child windows on every UWP app detection | 5-20ms per `EnumChildWindows` call | Cache last detection result with HWND as key; only re-resolve if HWND changed | High-frequency dictation into UWP apps |
+| Refreshing process list on every keystroke in searchable dropdown | UI jank with 200+ running processes | Snapshot process list once when dropdown opens, filter in-memory on keystrokes | Any machine with many background processes |
+| Resolving process name via full path then stripping | `QueryFullProcessImageNameW` resolves the full path including network drives | Use `GetProcessImageFileNameW` or just `Process32Next.szExeFile` which returns filename only | When target app is on a network share -- path resolution can block on network I/O |
 
 ---
 
@@ -213,8 +221,8 @@ No mitigation needed. The old behavior was already lossy for non-text content. T
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Transcription of sensitive dictation (passwords, PII) persists on clipboard indefinitely | Another app or user can read the clipboard content; appears in clipboard history | Accept as standard dictation tool behavior; users should not dictate passwords. Optionally add `ExcludeClipboardContentFromMonitorProcessing` format in future |
-| Clipboard sync to cloud enabled in Windows Settings | Transcribed text synced to Microsoft cloud and other devices | Not VoiceType's responsibility; users control clipboard sync settings. Note in docs if privacy is a concern |
+| Enabling `SeDebugPrivilege` to read elevated process names | Defeats UAC security model, unnecessary privilege escalation | Use `PROCESS_QUERY_LIMITED_INFORMATION` -- works without elevation for image name queries |
+| Storing exe paths that reveal user directory structure | Minor privacy leak in settings file (username in path) | Store filename only, not full path |
 
 ---
 
@@ -222,21 +230,28 @@ No mitigation needed. The old behavior was already lossy for non-text content. T
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Not documenting the behavior change | Users who relied on clipboard being "unchanged" after dictation are surprised when their copied content is replaced | Add a note in release notes or changelog: "After dictation, the transcription text remains on your clipboard. This matches standard dictation tool behavior." |
-| Users expect the clipboard to be "clean" after dictation | Some users may not want the transcription lingering on clipboard (sensitive content) | This is standard behavior for every dictation tool; no special handling needed |
+| Showing raw exe names like `ApplicationFrameHost.exe` or `svchost.exe` in UI | Confusing, user doesn't know what app this is | Show resolved app name (window title for UWP, product name from version info for Win32) alongside exe name |
+| No visual indicator of which app rule is active during injection | User can't verify per-app detection is working | Show the detected app name briefly in tray tooltip: "VoiceType -- injected to Code.exe (ALL CAPS)" |
+| Showing ALL processes in the dropdown including system services | Overwhelming list of `svchost.exe`, `csrss.exe`, `dwm.exe` | Filter to windowed processes only -- processes that have at least one visible top-level window |
+| No way to test if a rule matches before dictating | User adds rule, not sure if it will work | The "Detect Active App" flow naturally validates detection -- show the detected exe name in the UI when the user presses the detect button |
+| Global ALL CAPS toggle disappearing or being confusing alongside per-app rules | User unsure whether global or per-app setting applies | Label clearly: "Default for all apps" on the global toggle; per-app rules say "Override: ALL CAPS ON/OFF" |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Post-paste sleep preserved:** Verify the 80ms sleep after Ctrl+V is still present. Remove only the save/restore code, not the sleep.
-- [ ] **Pre-paste delay preserved:** Verify the 150ms delay before Ctrl+V is still present. Test paste in Outlook specifically.
-- [ ] **Verify loop preserved:** Verify the 5-attempt clipboard verification loop is still present. Test with Tauri settings window open (WebView active).
-- [ ] **Doc comments updated:** The inject_text doc comment (lines 27-37) references save/restore in the sequence. Update to reflect the simplified flow.
-- [ ] **Release Win keys still called:** The `release_win_keys` call (line 120) must remain — it is unrelated to clipboard save/restore.
-- [ ] **Error handling unchanged:** The `Clipboard::new()` error propagation and verification failure logging should remain unchanged.
-- [ ] **Test in Office apps:** Paste into Outlook, Word, Excel, Teams. Verify the correct transcription appears, not stale content.
-- [ ] **Test rapid sequential dictation:** Dictate twice in quick succession. Verify both transcriptions paste correctly (no race between the second set_text and the first app's paste consumption).
+- [ ] **UWP detection:** Works with Calculator, Settings, Windows Terminal (Store version) -- not just Win32 apps like Notepad
+- [ ] **Elevated process handling:** Dictate while Task Manager (run as admin) is focused -- no crash, global settings apply
+- [ ] **Self-detection filter:** Pill overlay is visible during processing -- detected app is NOT VoiceType itself
+- [ ] **NULL foreground:** Alt-tab rapidly during transcription -- no crash, global settings apply
+- [ ] **Case-insensitive matching:** Rule added for `Code.exe`, detected as `code.exe` at injection -- rule matches
+- [ ] **Path-independent matching:** Rule still works after app reinstall to a different directory
+- [ ] **Settings migration:** App starts cleanly with v1.3 `settings.json` that has no `appRules` key
+- [ ] **Global fallback:** Global ALL CAPS toggle works as default when no per-app rule matches the foreground app
+- [ ] **Injection-time detection:** ALL CAPS override uses foreground window at injection time, not at recording start time
+- [ ] **Multi-monitor:** Detection returns correct window when pill is on monitor 2 and target app is on monitor 1
+- [ ] **Target apps:** Tested with Bluebeam, AutoCAD, Revit, VS Code, Chrome, Excel, Outlook, Teams (all listed in PROJECT.md target apps)
+- [ ] **Searchable dropdown:** Only shows windowed processes, not system services; shows friendly names
 
 ---
 
@@ -244,11 +259,12 @@ No mitigation needed. The old behavior was already lossy for non-text content. T
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Accidentally removed the post-paste sleep | LOW | Add `thread::sleep(Duration::from_millis(80))` back after Ctrl+V release |
-| Accidentally removed the pre-paste delay | LOW | Add `thread::sleep(Duration::from_millis(150))` back before Ctrl+V |
-| Accidentally removed the verify loop | MEDIUM | Restore the 5-attempt retry loop from git history; requires understanding the Chromium race condition |
-| Users report privacy concerns with clipboard history | LOW | Register `ExcludeClipboardContentFromMonitorProcessing` format via raw Win32 API alongside set_text; arboard doesn't expose this natively |
-| Paste regression in Office apps after timing change | LOW | Increase pre-paste delay from 150ms to 200ms if Office apps show issues |
+| UWP ApplicationFrameHost not handled | LOW | Add `EnumChildWindows` fallback in detection function -- isolated change |
+| Access Denied on elevated processes | LOW | Change `PROCESS_QUERY_INFORMATION` to `PROCESS_QUERY_LIMITED_INFORMATION` -- one constant change |
+| Race condition (detection at wrong time) | HIGH | Must move ALL CAPS logic from pipeline.rs to injection layer -- rearchitects the formatting flow. This is why it must be designed correctly in Phase 1. |
+| Case-sensitive matching shipped | MEDIUM | Add `.to_lowercase()` normalization everywhere + one-time lowercase conversion of existing stored rules |
+| Settings migration breaks upgrades | HIGH | Users lose all settings on crash, must reconfigure. No recovery for lost config. Prevention is the only option. |
+| NULL foreground window not handled | LOW | Add null check with global-settings fallback -- single if-statement |
 
 ---
 
@@ -256,27 +272,28 @@ No mitigation needed. The old behavior was already lossy for non-text content. T
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Post-paste sleep removed (#1) | Implementation | Code review: verify `thread::sleep(Duration::from_millis(80))` is present after Ctrl+V |
-| Verify loop removed (#2) | Implementation | Code review: verify the retry loop and 150ms delay are untouched |
-| Clipboard history exposure (#3) | Release notes | Changelog mentions the behavior change |
-| Non-text content loss (#4) | Release notes | Acknowledged in commit message |
-| Timing profile change (#6) | Post-implementation testing | Compare clipboard retry rates in logs before and after the change |
-| Doc comments stale (#checklist) | Implementation | Doc comment on inject_text updated to reflect new flow |
+| UWP ApplicationFrameHost (#1) | Phase 1 (detection backend) | Detect Calculator, Settings, Mail -- all show correct distinct app names |
+| Elevated process Access Denied (#2) | Phase 1 (detection backend) | Open Task Manager as admin, dictate -- no crash, falls back to global settings |
+| Race condition timing (#3) | Phase 1 (architecture) | Alt-tab during transcription -- correct CAPS applied for destination window |
+| Case-sensitive matching (#4) | Phase 1 (data model) | Add rule for "Code.exe", detect as "code.exe" at runtime -- rule matches |
+| Settings migration (#5) | Phase 2 (settings integration) | Upgrade from v1.3 settings file -- app starts, global CAPS works, no rules present |
+| NULL/self foreground window (#6) | Phase 1 (detection backend) | Alt-tab rapidly during dictation -- no crash, global settings applied |
 
 ---
 
 ## Sources
 
-- [Clipboard Formats — Microsoft Win32 Docs](https://learn.microsoft.com/en-us/windows/win32/dataxchg/clipboard-formats) — HIGH confidence
-- [WM_CLIPBOARDUPDATE — Microsoft Win32 Docs](https://learn.microsoft.com/en-us/windows/win32/dataxchg/wm-clipboardupdate) — HIGH confidence
-- [arboard Clipboard API — docs.rs](https://docs.rs/arboard/latest/arboard/struct.Clipboard.html) — HIGH confidence
-- [arboard GitHub — 1Password](https://github.com/1Password/arboard) — HIGH confidence (arboard only saves text and images; no custom format support)
-- [ExcludeClipboardContentFromMonitorProcessing — CopyQ issue #2679](https://github.com/hluk/CopyQ/issues/2679) — MEDIUM confidence (documents the clipboard history exclusion format; confirmed by KeePass implementation)
-- [PowerShell clipboard history exclusion — GitHub issue #17454](https://github.com/PowerShell/PowerShell/issues/17454) — MEDIUM confidence (confirms CanIncludeInClipboardHistory and ExcludeClipboardContentFromMonitorProcessing formats)
-- [Windows Clipboard History privacy — GhostVolt](https://www.ghostvolt.com/blog/Is-the-Windows-Clipboard-Function-History-or-Sync-Secure.html) — MEDIUM confidence
-- [Password manager clipboard security — TechSpot](https://www.techspot.com/news/97320-you-change-password-manager-clipboard-settings-now.html) — MEDIUM confidence (context on clipboard as a security surface)
-- Current codebase: `src-tauri/src/inject.rs` — direct analysis of existing implementation
+- [GetForegroundWindow function - Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getforegroundwindow) -- HIGH confidence
+- [Process Security and Access Rights - Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights) -- HIGH confidence
+- [OpenProcess function - Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess) -- HIGH confidence
+- [Why does OpenProcess return access denied, even if I enable debug privilege? - Raymond Chen](https://devblogs.microsoft.com/oldnewthing/20151210-00/?p=92451) -- HIGH confidence
+- [Tracking the current active process in Windows with Rust - Hello Code](https://hellocode.co/blog/post/tracking-active-process-windows-rust/) -- MEDIUM confidence
+- [ApplicationFrameHost.exe and UWP process detection - AutoHotkey Community](https://www.autohotkey.com/boards/viewtopic.php?style=7&t=112906) -- MEDIUM confidence
+- [Window Walker UWP process names - PowerToys Issue #1766](https://github.com/microsoft/PowerToys/issues/1766) -- MEDIUM confidence
+- [Enumerating All Processes - Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/psapi/enumerating-all-processes) -- HIGH confidence
+- [GetForegroundWindow in windows crate - Rust docs](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/UI/WindowsAndMessaging/fn.GetForegroundWindow.html) -- HIGH confidence
+- Current codebase: `src-tauri/src/pipeline.rs` lines 396-404 (ALL CAPS logic), `src-tauri/src/inject.rs` (injection flow), `src-tauri/src/profiles.rs` (profile struct), `src/lib/store.ts` (settings facade) -- direct analysis
 
 ---
-*Pitfalls research for: Clipboard simplification — removing save/restore from inject_text (VoiceType v1.3)*
+*Pitfalls research for: Per-app settings with foreground window detection (VoiceType v1.4)*
 *Researched: 2026-03-07*

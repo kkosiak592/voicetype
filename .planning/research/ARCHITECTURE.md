@@ -1,221 +1,449 @@
-# Architecture: Clipboard Simplification (v1.3)
+# Architecture Research
 
-**Domain:** Clipboard flow simplification in voice-to-text injection pipeline
+**Domain:** Per-app settings with foreground window detection for Tauri 2.0 voice-to-text app
 **Researched:** 2026-03-07
-**Confidence:** HIGH -- analysis based on actual source code; no external dependencies or unverified claims
+**Confidence:** HIGH
 
----
-
-> **Scope:** This document covers the clipboard save/restore removal for v1.3 only. It focuses on what changes in `inject.rs`, what does NOT change, race condition analysis, timing implications, and build order. The broader application architecture is unchanged.
-
----
-
-## Current inject_text() Flow (inject.rs)
+## System Overview
 
 ```
-1. Save clipboard         ── clipboard.get_text().ok()                    [line 43]
-2. Write transcription     ── clipboard.set_text(text)                    [line 58]
-3. Verify-and-retry loop   ── up to 5 attempts, 25ms delay each          [lines 53-99]
-4. Pre-paste delay         ── 150ms (Office WM_CLIPBOARDUPDATE latency)  [line 111]
-5. Release Win keys        ── defensive against stuck Win from hook       [line 120]
-6. Simulate Ctrl+V         ── Press Ctrl, Click V, Release Ctrl           [lines 124-127]
-7. Post-paste delay        ── 80ms (let target app consume before restore)[line 132]
-8. Restore clipboard       ── set_text(original) or clear if was empty    [lines 135-148]
+                          EXISTING                              NEW
+                     +-----------------+                 +-------------------+
+                     |   Frontend      |                 |  AppRulesSection  |
+                     |   (React/TS)    |                 |  (new sidebar pg) |
+                     +--------+--------+                 +---------+---------+
+                              |                                    |
+                     Tauri IPC (invoke)                   Tauri IPC (invoke)
+                              |                                    |
+                     +--------v--------+                 +---------v---------+
+                     |   lib.rs        |                 | New commands:      |
+                     |   Tauri cmds    |                 | get_app_rules      |
+                     |                 |                 | set_app_rule       |
+                     +--------+--------+                 | remove_app_rule    |
+                              |                          | detect_foreground  |
+                     +--------v--------+                 | list_running_apps  |
+                     | pipeline.rs     |                 +---------+---------+
+                     | run_pipeline()  |                           |
+                     |                 |                 +---------v---------+
+                     | Step 5: ALL CAPS| <-- MODIFY -->  | app_rules.rs (NEW) |
+                     | reads ActiveProf|                 | AppOverrides state |
+                     +--------+--------+                 | foreground detect  |
+                              |                          +-------------------+
+                     +--------v--------+
+                     | inject.rs       |
+                     | inject_text()   |
+                     +--------+--------+
+                              |
+                     clipboard paste
+                     into foreground app
 ```
 
-## Pipeline Call Site (pipeline.rs)
+### Component Responsibilities
 
-```
-run_pipeline() async:
-  ...steps 1-5 (audio → transcription → formatting)...
-  6. spawn_blocking(inject_text(&to_inject))    ← only clipboard interaction
-  7. append_history(app, &formatted, engine)     ← no clipboard interaction
-  8. reset_to_idle()
-```
+| Component | Responsibility | Status |
+|-----------|----------------|--------|
+| `app_rules.rs` (NEW) | AppOverride types, AppRulesState, foreground window detection, process enumeration | New file |
+| `pipeline.rs` lines 395-404 | ALL CAPS decision point -- currently reads `ActiveProfile.all_caps` | Modify: add override lookup before ALL CAPS decision |
+| `profiles.rs` | Global `ActiveProfile` with `all_caps`, `filler_removal`, `corrections` | Unchanged (serves as global default) |
+| `lib.rs` | Tauri command registration, managed state, settings persistence | Add new commands + `AppRulesState` managed state |
+| `Sidebar.tsx` | Navigation -- `SectionId` union type, `ITEMS` array | Add `'app-rules'` entry |
+| `App.tsx` | Section routing via `activeSection` state | Add `AppRulesSection` render case |
+| `AppRulesSection.tsx` (NEW) | UI for managing per-app overrides | New component |
+| `settings.json` | Persistence -- flat keys (`all_caps`, `corrections.default`) | Add `app_rules` key |
 
-## History Panel Clipboard Usage (HistorySection.tsx)
+## Integration Architecture
 
-```
-handleCopy(text, index):
-  navigator.clipboard.writeText(text)    ← browser Async Clipboard API
-```
+### Where Foreground Detection Hooks In
 
----
+The detection point is **pipeline.rs line 395**, immediately before the ALL CAPS decision. This is the correct location because:
 
-## Modifications
+1. Transcription is complete (text is final after filler removal + corrections)
+2. The foreground window at this moment is the window that will receive the paste
+3. `inject_text()` is called on the next line -- same foreground window context
 
-### inject.rs -- Removals Only
+**Do NOT detect in inject.rs.** inject.rs is a pure text injection function (clipboard + Ctrl+V). Mixing detection logic there violates its single responsibility and would require inject to return metadata about what it detected.
 
-| What | Lines | Action | Rationale |
-|------|-------|--------|-----------|
-| Save clipboard | 43 (`let saved = clipboard.get_text().ok()`) | Remove | No restore means no need to save |
-| Post-paste delay | 132 (`thread::sleep(Duration::from_millis(80))`) | Remove | Existed solely to let target app consume paste before restore overwrites clipboard; without restore, clipboard retains correct content indefinitely |
-| Restore block | 135-148 (entire `match saved` block) | Remove | Core change -- transcription stays on clipboard |
+**Do NOT detect earlier in the pipeline.** The user may switch windows during recording/transcription. The only reliable moment is right before injection.
 
-### inject.rs -- Unchanged
+### AppOverrides State Structure
 
-| Component | Lines | Why Unchanged |
-|-----------|-------|---------------|
-| Verify-and-retry loop | 53-99 | Correctness mechanism, not related to restore (see Race 2 below) |
-| 150ms pre-paste delay | 111 | Office apps need WM_CLIPBOARDUPDATE processing time before Ctrl+V arrives |
-| Win key release | 117-123 | Keyboard hook defense, unrelated to clipboard flow |
-| Ctrl+V simulation | 124-127 | Core injection mechanism |
-| Enigo fresh instance | 114 | Required per-call pattern |
+```rust
+// app_rules.rs (NEW)
 
-### Other Files -- Zero Changes
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
-| File | Why Unchanged |
-|------|---------------|
-| `pipeline.rs` | Calls `inject_text()` with same signature, same spawn_blocking wrapper |
-| `HistorySection.tsx` | `navigator.clipboard.writeText()` is independent of inject flow |
-| `history.rs` | No clipboard interaction whatsoever |
-| `keyboard_hook.rs` | Unrelated to clipboard |
-| `lib.rs` | No clipboard-related code |
+/// Per-application setting overrides.
+/// Each field is Option -- None means "use global default."
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct AppOverride {
+    pub all_caps: Option<bool>,
+    // Future: filler_removal, corrections profile, etc.
+}
 
----
+/// Map from process name (lowercase, e.g. "bluebeam.exe") to overrides.
+/// Process name is the match key -- not window title (titles change).
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct AppRules(pub HashMap<String, AppOverride>);
 
-## Race Condition Analysis
-
-### Race 1: History Panel vs inject_text()
-
-**Question:** Can `navigator.clipboard.writeText()` from HistorySection race with `inject_text()`?
-
-**Answer: No practical risk.**
-
-Temporal separation makes this impossible in normal use:
-- `inject_text()` runs on a `spawn_blocking` thread during pipeline processing, while focus is on the target application (VS Code, Outlook, etc.)
-- History panel copy requires user to: switch to the settings window, navigate to History tab, click an entry
-- User cannot simultaneously dictate AND click the history panel -- the settings window requires focus, which means the target app lost focus
-
-Even in a theoretical edge case (user copies from history, immediately triggers dictation), pipeline transcription takes 200-1500ms before reaching `inject_text()`. The `navigator.clipboard.writeText()` completes in under 1ms. No temporal overlap.
-
-**After simplification:** No change. The race window was always between `set_text()` and `Ctrl+V` within `inject_text()`, not between inject and restore. Removing restore does not create new overlap.
-
-**Verdict: No mitigation needed.**
-
-### Race 2: Chromium WebView Clipboard Contention
-
-**What:** The verify-and-retry loop exists because Tauri's Chromium WebView can reclaim clipboard ownership after a recent `navigator.clipboard.writeText()` call, silently overwriting arboard's content before the Ctrl+V fires.
-
-**Why the loop is NOT about restore:** The loop runs *before* the paste, ensuring the clipboard contains the correct text when Ctrl+V fires. It has nothing to do with what happens after paste. The loop prevents pasting wrong content; restore prevents leaving transcription on clipboard. These are orthogonal concerns.
-
-**After simplification:** Loop remains necessary. If removed, a Chromium clipboard race would cause the wrong text to be pasted -- a correctness bug unrelated to restore.
-
-**Verdict: Keep verify-and-retry loop unchanged.**
-
-### Race 3: Post-Paste Clipboard State (Behavioral Change)
-
-**Current:** After paste, clipboard is restored to pre-transcription content. User's clipboard appears untouched.
-
-**After:** Clipboard contains the transcription text. Ctrl+V in any app produces the last transcription.
-
-**This is the desired behavior.** Standard dictation tools (Dragon NaturallySpeaking, Windows Voice Typing, macOS Dictation) all leave dictated text on the clipboard. The current save/restore adds complexity for behavior users do not expect from a dictation tool.
-
-**Verdict: Desired change, not a bug.**
-
----
-
-## Timing Analysis
-
-### Removed Delays
-
-| Delay | Duration | Why Removable |
-|-------|----------|---------------|
-| Post-paste sleep | 80ms | Comment on line 129 states purpose: "Allow target app to consume the paste before clipboard restore." Without restore, even if the target app reads the clipboard slightly late, it still gets the correct text (transcription remains on clipboard). |
-
-### Retained Delays
-
-| Delay | Duration | Why Still Required |
-|-------|----------|--------------------|
-| Verify-retry delay | 25ms per attempt (typically 1 attempt = 25ms, worst case 5 = 125ms) | Clipboard propagation is async on Windows. Read-back verification is the only way to confirm the OS clipboard contains the intended text. |
-| Pre-paste delay | 150ms | Office apps (Outlook, Word, Excel) maintain internal clipboard caches updated via WM_CLIPBOARDUPDATE. This message is processed asynchronously. Without the delay, Outlook pastes stale cached content. Verified through testing during v1.0 development. |
-
-### Net Impact
-
-**Best case (typical):** 80ms reduction per injection (single verify attempt)
-**Worst case:** 80ms reduction per injection (loop retries are independent of restore)
-
-This is a fixed, unconditional improvement. The removed 80ms was not conditional on any state.
-
-### Can the 150ms Pre-Paste Delay Be Reduced?
-
-Not advisable in this milestone. The 150ms was calibrated during v1.0 against Outlook and Word. The comment on lines 107-110 documents the rationale: "WM_CLIPBOARDUPDATE processing in Office apps typically completes within 50-100ms, but we add margin for slower machines." Reducing it is a separate investigation requiring testing across multiple Office versions and hardware. Out of scope for clipboard simplification.
-
----
-
-## Data Flow After Simplification
-
-```
-User speaks
-  → audio buffer
-  → engine transcription (spawn_blocking)
-  → text formatting (trim, filler removal, corrections, ALL CAPS, trailing space)
-  → inject_text():
-       clipboard.set_text(text)
-       verify loop (25ms per attempt, usually 1)
-       sleep 150ms (Office app compatibility)
-       release_win_keys()
-       Ctrl+V (Press Ctrl → Click V → Release Ctrl)
-       return                    ← no restore, no 80ms wait
-  → append_history()
-  → emit pill-result "success"
-  → reset_to_idle()
-
-Clipboard state after injection: contains transcription text (by design)
+/// Tauri managed state.
+pub struct AppRulesState(pub std::sync::Mutex<AppRules>);
 ```
 
-## Component Boundaries
+**Design decisions:**
 
-| Component | Responsibility | Changed? |
-|-----------|---------------|----------|
-| `inject.rs::inject_text()` | Write text to clipboard, verify, simulate Ctrl+V | YES -- remove save/restore/post-paste sleep |
-| `pipeline.rs::run_pipeline()` | Orchestrate: record → transcribe → format → inject → history | NO |
-| `HistorySection.tsx` | Display history entries, click-to-copy via browser API | NO |
-| `history.rs` | Persist/retrieve transcription entries | NO |
-| `keyboard_hook.rs` | WH_KEYBOARD_LL modifier-only hotkey detection | NO |
-| `lib.rs` | Tauri setup, IPC commands, hotkey routing | NO |
+- **Process name as key (not window title, not exe path).** Window titles are dynamic and locale-dependent. Full paths break on reinstall or user directory differences. Process name (`bluebeam.exe`, `code.exe`) is stable and human-readable. Stored lowercase for case-insensitive matching.
+- **`Option<bool>` not `bool` for override fields.** `None` = inherit global default. `Some(true)` = force on. `Some(false)` = force off. This three-state model avoids the "is false an override or a default?" ambiguity. Critical for UX: users need to distinguish "I explicitly set this off" from "I haven't configured this."
+- **`HashMap` not `Vec`.** O(1) lookup by process name at injection time. The number of rules will be small (5-20 apps), so HashMap overhead is negligible but the API is cleaner.
+- **Separate `AppRulesState` from `ActiveProfile`.** ActiveProfile holds the global defaults. AppRulesState holds per-app overrides. They are independent managed states -- no mutation of globals during override resolution.
 
-## Build Order
+### Data Flow: Detection to Override Application
 
-This is a single-file, deletion-only change:
+```
+pipeline.rs run_pipeline() -- after corrections, before injection:
 
-1. **Modify `inject.rs`** -- Remove three blocks: clipboard save (line 43), post-paste sleep (line 132), restore block (lines 135-148). Update the doc comment on `inject_text()` to reflect the new sequence.
-2. **Update doc comment** -- The function's `///` header describes the current 5-step sequence. Update to reflect the simplified 3-step sequence (write → verify → paste).
-3. **Test** -- Verify in target apps: VS Code, Outlook, Chrome, terminal. Confirm clipboard contains transcription after paste. Confirm history panel click-to-copy still works.
+1. Get global all_caps from ActiveProfile (existing code)
+   |
+   v
+2. Call app_rules::get_foreground_process_name()
+   |  Win32: GetForegroundWindow -> GetWindowThreadProcessId ->
+   |  OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION) ->
+   |  QueryFullProcessImageNameW -> extract filename -> lowercase
+   |  Returns Option<String> (None if detection fails)
+   |
+   v
+3. Look up process name in AppRulesState
+   |  let rules = app.state::<AppRulesState>();
+   |  let guard = rules.0.lock();
+   |  let maybe_override = guard.0.get(&process_name);
+   |
+   v
+4. Resolve effective all_caps
+   |  effective = override.all_caps.unwrap_or(global_all_caps)
+   |  Falls back to global if: no rule exists, or rule exists but all_caps is None
+   |
+   v
+5. Apply formatting (existing to_uppercase logic, unchanged)
+   |
+   v
+6. inject_text() -- unchanged
+```
 
-No new files. No new components. No API changes. Function signature `fn inject_text(text: &str) -> Result<(), String>` is unchanged. `pipeline.rs` requires zero modifications.
+### Pipeline.rs Modification
 
-## Anti-Patterns to Avoid
+The current code at lines 395-404:
 
-### Anti-Pattern 1: Removing the Verify-and-Retry Loop
+```rust
+// CURRENT: reads global flag only
+let formatted = {
+    let profile = app.state::<crate::profiles::ActiveProfile>();
+    let guard = profile.0.lock().unwrap_or_else(|e| e.into_inner());
+    if guard.all_caps {
+        corrected.to_uppercase()
+    } else {
+        corrected
+    }
+};
+```
 
-**Why tempting:** "Without restore, the clipboard is simpler -- maybe we don't need verification."
-**Why wrong:** Verification ensures the correct text is on the clipboard before Ctrl+V fires. Without it, a Chromium WebView clipboard race causes the wrong text to be pasted. This is a correctness mechanism, not a restore-related one. The existing code comments (lines 46-52) document this explicitly.
+Becomes:
 
-### Anti-Pattern 2: Removing the 150ms Pre-Paste Delay
+```rust
+// NEW: check per-app override, fall back to global
+let formatted = {
+    let global_all_caps = {
+        let profile = app.state::<crate::profiles::ActiveProfile>();
+        let guard = profile.0.lock().unwrap_or_else(|e| e.into_inner());
+        guard.all_caps
+    };
 
-**Why tempting:** "We verified the clipboard; just paste now."
-**Why wrong:** Verification confirms arboard can read back the content via the Win32 clipboard API. It does not confirm that Office apps have processed WM_CLIPBOARDUPDATE and updated their internal caches. Outlook has been observed pasting stale content without this delay. The comments on lines 101-110 document this.
+    let effective_all_caps = {
+        #[cfg(windows)]
+        {
+            match crate::app_rules::get_foreground_process_name() {
+                Some(ref proc_name) => {
+                    let rules = app.state::<crate::app_rules::AppRulesState>();
+                    let guard = rules.0.lock().unwrap_or_else(|e| e.into_inner());
+                    guard.0.get(proc_name)
+                        .and_then(|r| r.all_caps)
+                        .unwrap_or(global_all_caps)
+                }
+                None => global_all_caps,
+            }
+        }
+        #[cfg(not(windows))]
+        { global_all_caps }
+    };
 
-### Anti-Pattern 3: Adding a Clipboard Clear After Paste
+    if effective_all_caps {
+        corrected.to_uppercase()
+    } else {
+        corrected
+    }
+};
+```
 
-**Why tempting:** "Security -- don't leave dictated text on clipboard."
-**Why wrong:** Contradicts the stated goal. The entire point of this milestone is that transcription stays on clipboard, matching standard dictation tool behavior.
+Key points:
+- Global lock is acquired and dropped before app_rules lock -- no nested locks, no deadlock risk
+- `cfg(windows)` guard keeps non-Windows builds compiling (Tauri cross-platform future-proofing)
+- Detection failure (`None`) silently falls back to global -- no error logging needed (desktop may be focused, or an inaccessible system process)
 
-### Anti-Pattern 4: Reducing Post-Paste Sleep Instead of Removing It
+## Recommended Project Structure
 
-**Why tempting:** "Maybe 30ms instead of 80ms, for safety."
-**Why wrong:** The sleep has exactly one purpose: prevent clipboard restore from overwriting before the target app reads. With no restore, there is nothing to race against. The target app can read the clipboard at any point in the future and will always get the correct text. A reduced sleep adds latency for no benefit.
+### New Rust Files
 
----
+```
+src-tauri/src/
+    app_rules.rs          # NEW: types, state, foreground detection, process enumeration
+```
+
+### New Frontend Files
+
+```
+src/
+    components/
+        sections/
+            AppRulesSection.tsx    # NEW: main section component
+```
+
+### Structure Rationale
+
+- **Single `app_rules.rs`** instead of splitting detection + state. The module is small (~100-150 lines total). Foreground detection is ~20 lines, process enumeration ~30 lines, state types ~30 lines. Splitting creates file navigation overhead with no modularity benefit.
+- **Single `AppRulesSection.tsx`** for the first iteration. The detect button, app list, and add-app UI are small enough to colocate. Extract sub-components only if the file exceeds ~300 lines.
+
+## Architectural Patterns
+
+### Pattern 1: Override Resolution Chain
+
+**What:** Settings resolve through a two-level chain: per-app override -> global default. Each link is optional; first non-None value wins.
+**When to use:** Any setting that may have per-app overrides (all_caps now, potentially filler_removal or corrections profile later).
+**Trade-offs:** Simple, predictable. If a third level is ever needed (per-profile per-app), the `unwrap_or` chain extends naturally. Avoids overengineering a priority/inheritance system.
+
+```rust
+fn resolve_setting<T: Copy>(
+    app_override: Option<&AppOverride>,
+    field: impl Fn(&AppOverride) -> Option<T>,
+    global: T,
+) -> T {
+    app_override
+        .and_then(|r| field(r))
+        .unwrap_or(global)
+}
+```
+
+### Pattern 2: Detect-at-Injection-Time (Not Polling)
+
+**What:** Query the foreground window exactly once, right before injection. No background threads, no caching, no event subscriptions.
+**When to use:** Always. The relevant foreground window is the one that will receive the paste.
+**Trade-offs:** Adds ~0.1-1ms to the injection path (Win32 API calls are very fast). Zero CPU overhead at all other times. No stale-cache bugs on alt-tab.
+
+### Pattern 3: Process Name Matching
+
+**What:** Match rules by process executable name (e.g., `bluebeam.exe`), not window title or class name.
+**When to use:** Always for app identification.
+**Trade-offs:** Cannot distinguish multiple windows of the same app (e.g., two Chrome profiles). This is the correct trade-off -- per-window rules are fragile and confusing for users.
+
+## Win32 API Integration
+
+### Required Cargo.toml Feature Additions
+
+The `windows` crate v0.58 is already a dependency. Two features need adding:
+
+```toml
+windows = { version = "0.58", features = [
+    "Win32_Graphics_Dxgi",
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_Threading",
+    # NEW for per-app settings:
+    "Win32_System_ProcessStatus",
+] }
+```
+
+Note: `PROCESS_QUERY_LIMITED_INFORMATION` and `QueryFullProcessImageNameW` are in `Win32_System_Threading`, which is already enabled. `Win32_System_ProcessStatus` provides `EnumProcesses` for the running-app list. Verify at implementation time whether `PROCESS_NAME_WIN32` requires additional features -- it may already be covered by `Win32_System_Threading`.
+
+### Foreground Detection Implementation
+
+```rust
+use windows::Win32::Foundation::CloseHandle;
+use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+use windows::Win32::System::Threading::*;
+
+pub fn get_foreground_process_name() -> Option<String> {
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0.is_null() {
+            return None;
+        }
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        if pid == 0 {
+            return None;
+        }
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut buf = [0u16; 260]; // MAX_PATH
+        let mut len = buf.len() as u32;
+        let result = QueryFullProcessImageNameW(
+            process, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut len
+        );
+        let _ = CloseHandle(process);
+        result.ok()?;
+        let path = String::from_utf16_lossy(&buf[..len as usize]);
+        path.rsplit('\\').next().map(|s| s.to_lowercase())
+    }
+}
+```
+
+This follows the same pattern as `keyboard_hook.rs` -- unsafe Win32 calls, same `windows` crate, same import style.
+
+### Running Process Enumeration
+
+For the searchable dropdown, enumerate windowed processes:
+
+```rust
+pub fn list_running_process_names() -> Vec<String> {
+    // Use EnumProcesses to get all PIDs
+    // For each: OpenProcess -> QueryFullProcessImageNameW
+    // Filter to processes with visible windows (EnumWindows + IsWindowVisible)
+    // Deduplicate by name, sort alphabetically
+    // Return vec of lowercase process names
+}
+```
+
+## New Tauri Commands
+
+| Command | Signature | Purpose |
+|---------|-----------|---------|
+| `get_app_rules` | `() -> Result<HashMap<String, AppOverride>>` | Load all rules for UI display |
+| `set_app_rule` | `(process_name: String, all_caps: Option<bool>) -> Result<()>` | Add/update a rule + persist to settings.json |
+| `remove_app_rule` | `(process_name: String) -> Result<()>` | Delete a rule + persist |
+| `detect_foreground_app` | `() -> Result<Option<String>>` | One-shot foreground detection for "Detect Active App" button |
+| `list_running_apps` | `() -> Result<Vec<String>>` | Enumerate windowed processes for searchable dropdown |
+
+### Settings Persistence
+
+Rules persist to `settings.json` under key `app_rules`:
+
+```json
+{
+    "all_caps": true,
+    "app_rules": {
+        "bluebeam.exe": { "all_caps": true },
+        "code.exe": { "all_caps": false },
+        "outlook.exe": { "all_caps": null }
+    }
+}
+```
+
+Follows existing flat-key convention. The `app_rules` key holds the full map -- loaded at startup into `AppRulesState`, flushed via existing `write_settings()` after every mutation.
+
+### lib.rs Registration
+
+```rust
+// In setup():
+let app_rules = load_app_rules_from_settings(&json);
+app.manage(app_rules::AppRulesState(std::sync::Mutex::new(app_rules)));
+
+// In invoke_handler:
+builder.invoke_handler(tauri::generate_handler![
+    // ... existing commands ...
+    get_app_rules,
+    set_app_rule,
+    remove_app_rule,
+    detect_foreground_app,
+    list_running_apps,
+]);
+```
+
+## Frontend Integration
+
+### Sidebar Changes
+
+`Sidebar.tsx`:
+- Extend `SectionId` union: `'general' | 'dictionary' | 'model' | 'appearance' | 'system' | 'history' | 'app-rules'`
+- Add to `ITEMS` array: `{ id: 'app-rules', label: 'App Rules', icon: AppWindow }` (from `lucide-react`)
+- Position after General, before Dictionary (these are both "behavior" settings)
+
+`App.tsx`:
+- Import `AppRulesSection`
+- Add render case in section switch
+
+### AppRulesSection UI Flow
+
+**Add App via Detection:**
+1. User clicks "Detect Active App"
+2. Show 3-second countdown overlay ("Switch to target app in 3... 2... 1...")
+3. After countdown: `invoke('detect_foreground_app')`
+4. If detected: pre-fill process name, show confirmation to add rule
+5. If VoiceType detected (user didn't switch): show hint to switch first
+
+The countdown is essential -- without it, the detected app is always VoiceType itself since the settings window has focus when the button is clicked.
+
+**Add App via Dropdown:**
+1. User clicks "+ Add App"
+2. Call `invoke('list_running_apps')` to populate searchable dropdown
+3. User selects a process name
+4. Add rule with `all_caps: null` (inherit global default)
+
+**Three-State Toggle:**
+Each app rule's ALL CAPS toggle cycles through: Default (inherit) -> On -> Off -> Default. This maps to `Option<bool>`: `None` -> `Some(true)` -> `Some(false)` -> `None`.
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Polling Foreground Window
+
+**What people do:** Background thread polling GetForegroundWindow every 100ms, caching current app.
+**Why it's wrong:** Unnecessary CPU, stale cache on fast alt-tab, complexity. Detection is needed exactly once per injection.
+**Do this instead:** Single-shot detection at injection time in pipeline.rs.
+
+### Anti-Pattern 2: Window Title Matching
+
+**What people do:** Match rules by window title ("Document1 - Bluebeam Revu").
+**Why it's wrong:** Titles change per document, are locale-dependent, break with app updates.
+**Do this instead:** Match by process name (`bluebeam.exe`).
+
+### Anti-Pattern 3: Mutating ActiveProfile for Overrides
+
+**What people do:** Swap `ActiveProfile.all_caps` when foreground app changes, swap back after injection.
+**Why it's wrong:** Race condition if two pipeline runs overlap. ActiveProfile becomes non-deterministic. Other code reading ActiveProfile gets wrong values during the swap window.
+**Do this instead:** Keep ActiveProfile as immutable global default. Resolve overrides at read time in pipeline.rs, never mutating global state.
+
+### Anti-Pattern 4: Separate Settings File
+
+**What people do:** Create `app_rules.json` alongside `settings.json`.
+**Why it's wrong:** Two files to load, flush, synchronize. Two Mutex states or one state spanning two files. Introduces consistency bugs.
+**Do this instead:** Add `app_rules` key to existing `settings.json`.
+
+### Anti-Pattern 5: Detecting in inject.rs
+
+**What people do:** Put foreground detection inside `inject_text()` and return the detected app name alongside the result.
+**Why it's wrong:** `inject_text()` is called via `spawn_blocking` -- it runs on a blocking thread, not the main thread. Win32 window queries work on any thread, but the function's responsibility is text injection, not app detection. Also, formatting decisions (ALL CAPS) happen before `inject_text()` is called, so detection there would be too late.
+**Do this instead:** Detect in pipeline.rs before the formatting step.
+
+## Build Order (Dependency-Ordered)
+
+| Step | What | Depends On | Files Modified/Created |
+|------|------|------------|----------------------|
+| 1 | `app_rules.rs`: types (`AppOverride`, `AppRules`, `AppRulesState`) | Nothing | NEW: `app_rules.rs` |
+| 2 | `app_rules.rs`: `get_foreground_process_name()` | Step 1 + Cargo.toml features | `app_rules.rs`, `Cargo.toml` |
+| 3 | lib.rs: register `AppRulesState`, load from settings at startup | Steps 1-2 | `lib.rs` |
+| 4 | Tauri commands: `detect_foreground_app`, `list_running_apps` | Steps 1-3 | `lib.rs` |
+| 5 | Pipeline integration: override resolution at line 395 | Steps 1-3 | `pipeline.rs` |
+| 6 | Tauri commands: `get_app_rules`, `set_app_rule`, `remove_app_rule` | Steps 1-3 | `lib.rs` |
+| 7 | Sidebar + routing: add `'app-rules'` section | Nothing (frontend only) | `Sidebar.tsx`, `App.tsx` |
+| 8 | `AppRulesSection.tsx`: UI with detect button, app list, three-state toggles | Steps 4-7 | NEW: `AppRulesSection.tsx` |
+
+Steps 1-5 form the functional backend. Step 5 is the critical integration point where per-app overrides actually take effect. Steps 6-8 are the management UI.
+
+Steps 1-3 can be built and tested via unit tests + logging before any UI exists. Step 5 can be tested by manually adding rules to settings.json and verifying override behavior.
 
 ## Sources
 
-- `src-tauri/src/inject.rs` -- current implementation with inline documentation explaining each delay and the verify loop rationale
-- `src-tauri/src/pipeline.rs` -- pipeline orchestration showing inject_text() call site and history recording
-- `src/components/sections/HistorySection.tsx` -- frontend clipboard usage via navigator.clipboard.writeText()
-- `src-tauri/src/history.rs` -- history persistence confirming no clipboard interaction
+- Existing codebase: `pipeline.rs` (lines 395-404), `profiles.rs`, `inject.rs`, `keyboard_hook.rs` (Win32 patterns), `lib.rs` (managed state + command registration), `Sidebar.tsx`, `Cargo.toml`
+- Win32 API: `GetForegroundWindow`, `GetWindowThreadProcessId`, `OpenProcess`, `QueryFullProcessImageNameW` -- standard Win32 process identification, verified available in `windows` crate v0.58
+- `windows` crate features verified in existing `Cargo.toml` (line 103-109)
 
 ---
-*Architecture research for: Clipboard simplification in Tauri 2.0 voice-to-text (v1.3 milestone)*
+*Architecture research for: VoiceType v1.4 Per-App Settings*
 *Researched: 2026-03-07*
