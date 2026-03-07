@@ -135,7 +135,7 @@ Phases execute in numeric order: 23 -> 24 -> 25 -> 26
 | 23. Foreground Detection Backend | 2/2 | Complete    | 2026-03-07 | - |
 | 24. Pipeline Override Integration | 1/1 | Complete    | 2026-03-07 | - |
 | 25. App Rules UI | 1/1 | Complete    | 2026-03-07 | - |
-| 26. Process Dropdown | 1/1 | Complete   | 2026-03-07 | - |
+| 26. Process Dropdown | 1/1 | Complete    | 2026-03-07 | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
 Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
