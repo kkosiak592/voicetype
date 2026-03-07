@@ -5,8 +5,13 @@ use windows::Win32::System::Threading::{
     OpenProcess, PROCESS_NAME_FORMAT, PROCESS_QUERY_LIMITED_INFORMATION,
     QueryFullProcessImageNameW,
 };
+use windows::Win32::System::Diagnostics::ToolHelp::{
+    CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+    TH32CS_SNAPPROCESS,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumChildWindows, GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId,
+    EnumChildWindows, EnumWindows, GetForegroundWindow, GetWindowTextW,
+    GetWindowThreadProcessId, IsWindowVisible,
 };
 use windows::core::PWSTR;
 
@@ -74,6 +79,95 @@ pub fn detect_foreground_app() -> DetectedApp {
             window_title,
         }
     }
+}
+
+/// A running process with a visible window, for the Browse Running Apps dropdown.
+#[derive(Clone, Serialize)]
+pub struct RunningProcess {
+    pub exe_name: String,
+    pub window_title: String,
+}
+
+/// Enumerate running processes that have at least one visible window.
+///
+/// Two-phase approach:
+/// 1. EnumWindows collects (PID, window_title) for visible windows with non-empty titles
+/// 2. CreateToolhelp32Snapshot builds PID->exe_name map from szExeFile (fast, works for elevated)
+/// 3. Cross-reference and deduplicate by exe name (first window title wins)
+/// 4. Exclude the current process (VoiceType itself)
+/// 5. Return sorted alphabetically by exe_name
+pub fn list_running_processes() -> Vec<RunningProcess> {
+    unsafe {
+        // Step 1: Enumerate visible windows -> collect (pid, title) pairs
+        let mut window_info: Vec<(u32, String)> = Vec::new();
+        let _ = EnumWindows(
+            Some(enum_visible_windows),
+            LPARAM(&mut window_info as *mut Vec<(u32, String)> as isize),
+        );
+
+        // Step 2: Snapshot processes -> build pid-to-exe map
+        let mut pid_to_exe: HashMap<u32, String> = HashMap::new();
+        if let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) {
+            let mut entry = PROCESSENTRY32W {
+                dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+                ..Default::default()
+            };
+            if Process32FirstW(snapshot, &mut entry).is_ok() {
+                loop {
+                    let name_len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(260);
+                    let exe_name =
+                        String::from_utf16_lossy(&entry.szExeFile[..name_len]).to_lowercase();
+                    pid_to_exe.insert(entry.th32ProcessID, exe_name);
+                    entry.szExeFile = [0u16; 260]; // Zero buffer before next call
+                    if Process32NextW(snapshot, &mut entry).is_err() {
+                        break;
+                    }
+                }
+            }
+            let _ = CloseHandle(snapshot);
+        }
+
+        // Step 3: Cross-reference visible window PIDs -> exe names, deduplicate by exe
+        let own_pid = std::process::id();
+        let mut seen: HashMap<String, String> = HashMap::new(); // exe -> title
+        for (pid, title) in &window_info {
+            if *pid == own_pid {
+                continue; // Exclude VoiceType itself
+            }
+            if let Some(exe) = pid_to_exe.get(pid) {
+                seen.entry(exe.clone()).or_insert_with(|| title.clone());
+            }
+        }
+
+        // Step 4: Collect, sort, return
+        let mut result: Vec<RunningProcess> = seen
+            .into_iter()
+            .map(|(exe_name, window_title)| RunningProcess {
+                exe_name,
+                window_title,
+            })
+            .collect();
+        result.sort_by(|a, b| a.exe_name.cmp(&b.exe_name));
+        result
+    }
+}
+
+/// EnumWindows callback: collects (PID, window_title) for visible windows with non-empty titles.
+unsafe extern "system" fn enum_visible_windows(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    if IsWindowVisible(hwnd).as_bool() {
+        let mut title_buf = [0u16; 512];
+        let len = GetWindowTextW(hwnd, &mut title_buf);
+        if len > 0 {
+            let title = String::from_utf16_lossy(&title_buf[..len as usize]);
+            let mut pid: u32 = 0;
+            GetWindowThreadProcessId(hwnd, Some(&mut pid));
+            if pid != 0 {
+                let vec = &mut *(lparam.0 as *mut Vec<(u32, String)>);
+                vec.push((pid, title));
+            }
+        }
+    }
+    BOOL(1) // Continue enumeration
 }
 
 /// Get the exe name for a process by PID.

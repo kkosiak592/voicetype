@@ -1189,6 +1189,13 @@ fn detect_foreground_app() -> foreground::DetectedApp {
     foreground::detect_foreground_app()
 }
 
+/// List running processes with visible windows (for Browse Running Apps dropdown).
+#[cfg(windows)]
+#[tauri::command]
+fn list_running_processes() -> Vec<foreground::RunningProcess> {
+    foreground::list_running_processes()
+}
+
 /// List available audio input device names.
 ///
 /// The first entry is always "System Default" so the UI has a way to revert.
@@ -1869,6 +1876,8 @@ pub fn run() {
             remove_app_rule,
             #[cfg(windows)]
             detect_foreground_app,
+            #[cfg(windows)]
+            list_running_processes,
         ])
         .setup(|app| {
             // Load settings from disk into SettingsState (registered empty on Builder).
