@@ -50,11 +50,25 @@ Voice dictation must feel instant — sub-1500ms from end-of-speech to text appe
 
 ### Active
 
-(None — planning next milestone)
+- [ ] Per-app settings sidebar page with auto-detect foreground window
+- [ ] ALL CAPS per-app override (global toggle remains as default for unlisted apps)
+- [ ] Add apps via "Detect Active App" button + searchable dropdown of running processes
+- [ ] Win32 foreground window detection at injection time (GetForegroundWindow + process name)
+
+## Current Milestone: v1.4 Per-App Settings
+
+**Goal:** Enable per-application setting overrides, starting with ALL CAPS, detected automatically based on the foreground window at injection time.
+
+**Target features:**
+- New "App Rules" sidebar page for managing per-app overrides
+- Auto-detect foreground application using Win32 APIs at text injection time
+- Per-app ALL CAPS toggle that overrides the global default
+- "Detect Active App" button + searchable dropdown of running processes for adding apps
+- Global ALL CAPS toggle stays on General page as default for unlisted apps
 
 ## Current State
 
-v1.3 shipped 2026-03-07. Four milestones complete (v1.0 MVP, v1.1 Auto-Updates, v1.2 Keyboard Hook, v1.3 Clipboard Simplification).
+v1.3 shipped 2026-03-07. Four milestones complete (v1.0 MVP, v1.1 Auto-Updates, v1.2 Keyboard Hook, v1.3 Clipboard Simplification). v1.4 in progress.
 
 ### Out of Scope
 
@@ -127,5 +141,7 @@ v1.3 shipped 2026-03-07. Four milestones complete (v1.0 MVP, v1.1 Auto-Updates, 
 | CMAKE_CUDA_ARCHITECTURES=61;75;86;89 | Single binary supports Pascal through Ada Lovelace GPUs | ✓ Good |
 | Annotated git tags for releases | Store tagger info, work with git describe, better practice | ✓ Good |
 
+| Per-app settings with auto-detect foreground window | Per-app ALL CAPS is the first use case; extensible for future per-app settings | — Pending |
+
 ---
-*Last updated: 2026-03-07 after v1.3 milestone*
+*Last updated: 2026-03-07 after v1.4 milestone started*
