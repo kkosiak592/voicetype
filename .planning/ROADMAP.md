@@ -63,7 +63,7 @@
 
 **Milestone Goal:** Enable per-application setting overrides, starting with ALL CAPS, detected automatically based on the foreground window at injection time.
 
-- [x] **Phase 23: Foreground Detection Backend** - Win32 detection module, data model, persistence, and Tauri commands (completed 2026-03-07)
+- [x] **Phase 23: Foreground Detection Backend** - Win32 detection module, data model, persistence, and Tauri commands (completed 2026-03-07)
 - [ ] **Phase 24: Pipeline Override Integration** - Wire per-app override resolution into the transcription pipeline at injection time
 - [ ] **Phase 25: App Rules UI** - Sidebar page with rules list, detect button, three-state toggles, and rule management
 - [ ] **Phase 26: Process Dropdown** - Searchable dropdown of running processes for adding apps without detection
@@ -92,7 +92,9 @@ Plans:
   1. Dictating into an app with a "Force ON" rule produces ALL CAPS text even when the global toggle is OFF
   2. Dictating into an app with a "Force OFF" rule produces normal-case text even when the global toggle is ON
   3. Dictating into an app with no rule uses the global ALL CAPS setting
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 24-01-PLAN.md — resolve_all_caps() function with unit tests + pipeline wiring
 
 ### Phase 25: App Rules UI
 **Goal**: Users can manage per-app overrides through a dedicated settings page
@@ -127,7 +129,7 @@ Phases execute in numeric order: 23 -> 24 -> 25 -> 26
 | 15-20.1 | v1.2 | 15/15 | Complete | 2026-03-07 |
 | 22 | v1.3 | 1/1 | Complete | 2026-03-07 |
 | 23. Foreground Detection Backend | 2/2 | Complete    | 2026-03-07 | - |
-| 24. Pipeline Override Integration | v1.4 | 0/? | Not started | - |
+| 24. Pipeline Override Integration | v1.4 | 0/1 | Not started | - |
 | 25. App Rules UI | v1.4 | 0/? | Not started | - |
 | 26. Process Dropdown | v1.4 | 0/? | Not started | - |
 
