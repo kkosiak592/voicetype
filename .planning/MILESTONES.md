@@ -1,5 +1,23 @@
 # Milestones
 
+## v1.4 Per-App Settings (Shipped: 2026-03-07)
+
+**Phases completed:** 4 phases, 5 plans, 10 tasks
+**Execution time:** 33 min
+**Timeline:** 5 days (2026-03-03 -> 2026-03-07)
+**Git range:** feat(23-01)..feat(26-01)
+
+**Delivered:** Per-application ALL CAPS overrides with Win32 foreground detection, three-state toggle UI, and searchable process dropdown.
+
+**Key accomplishments:**
+- Win32 foreground detection with GetForegroundWindow chain, UWP resolution via EnumChildWindows, and PROCESS_QUERY_LIMITED_INFORMATION for elevated process safety (Phase 23)
+- Pure resolve_all_caps() override resolution with 8 unit tests and safe lock ordering in pipeline (Phase 24)
+- App Rules settings page with color-coded three-state dropdown (Inherit/Force ON/Force OFF) and 3-second detect-app countdown flow (Phase 25)
+- Browse Running Apps searchable dropdown with CreateToolhelp32Snapshot + EnumWindows two-phase process enumeration (Phase 26)
+- Per-app rules persistence via settings.json with startup hydration and case-normalized exe name keys (Phases 23-24)
+
+---
+
 ## v1.3 Clipboard Simplification (Shipped: 2026-03-07)
 
 **Phases completed:** 1 phase, 1 plan, 1 task

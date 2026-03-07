@@ -150,6 +150,75 @@
 
 ---
 
+## Milestone: v1.3 — Clipboard Simplification
+
+**Shipped:** 2026-03-07
+**Phases:** 1 | **Plans:** 1
+**Timeline:** 1 day (2026-03-07) | **Commits:** 2
+
+### What Was Built
+- Removed clipboard save/restore from inject_text — transcription stays on clipboard
+- Eliminated 80ms post-paste sleep that existed only for restore timing
+- Simplified injection to 3-step flow: set clipboard, verify, paste
+
+### What Worked
+- Smallest possible milestone scope — one phase, one plan, net -24 lines
+- Matched standard dictation tool behavior (transcription on clipboard is expected)
+
+### What Was Inefficient
+- Nothing — clean, minimal scope
+
+### Key Lessons
+1. Subtractive milestones (removing code) can be as valuable as additive ones
+
+### Cost Observations
+- Single session, ~5 minutes execution time
+- Notable: simplest milestone to date
+
+---
+
+## Milestone: v1.4 — Per-App Settings
+
+**Shipped:** 2026-03-07
+**Phases:** 4 | **Plans:** 5
+**Timeline:** 5 days (2026-03-03 -> 2026-03-07) | **Execution time:** 33 min
+
+### What Was Built
+- Win32 foreground detection (GetForegroundWindow chain) with UWP resolution via EnumChildWindows
+- Pure resolve_all_caps() override function with 8 unit tests and safe lock ordering
+- App Rules settings page with color-coded three-state dropdown and detect-app countdown flow
+- Browse Running Apps searchable dropdown with CreateToolhelp32Snapshot process enumeration
+- Per-app rules persistence via settings.json with startup hydration
+
+### What Worked
+- Pure function for override resolution enabled 8 unit tests without Win32 dependencies
+- Lock ordering discipline (ActiveProfile before AppRulesState) prevented deadlocks by design
+- Case-normalizing exe names at every boundary eliminated matching bugs
+- Four tightly-scoped phases with clear dependency chain (detect → pipeline → UI → dropdown)
+- All 5 plans executed with minimal deviations (3 auto-fixed bugs, 0 scope creep)
+
+### What Was Inefficient
+- Nothing significant — clean execution with 33 minutes total across 5 plans
+
+### Patterns Established
+- `resolve_all_caps(profile_val, exe_name, rules)` — pure function override resolution pattern
+- `Option<bool>` three-state toggle: None=inherit, Some(true)=ON, Some(false)=OFF
+- Two-phase process enumeration: EnumWindows for visible windows, CreateToolhelp32Snapshot for exe names
+- Inline button state machine: idle/countdown/success/error with auto-reset
+
+### Key Lessons
+1. Pure function resolution + unit tests is the right pattern for override logic — avoids Win32 test dependencies
+2. Case normalization at every boundary (set, remove, lookup) is essential for exe name matching
+3. Fetch-once strategy for process dropdown is sufficient — no need for auto-refresh complexity
+4. Custom dropdowns (vs native select) are worth the effort for color-coded multi-state controls
+
+### Cost Observations
+- Model mix: balanced profile
+- 33 minutes total execution across 5 plans — fastest execution per plan
+- Notable: no quick tasks needed — phases covered all requirements directly
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -159,6 +228,8 @@
 | v1.0 | ~20 | 10 | 16 | 237 | Initial process — bottom-up build with quick task polish |
 | v1.1 | 1 | 4 | 0 | 31 | Infrastructure milestone — linear dependencies, zero deviations |
 | v1.2 | ~10 | 10 | 21 | 253 | Scope growth beyond original goal — benchmark-driven model decisions |
+| v1.3 | 1 | 1 | 0 | 2 | Subtractive milestone — net -24 lines, simplest execution |
+| v1.4 | ~5 | 4 | 0 | ~10 | Cleanest execution — 33 min total, 0 scope creep, pure function testing |
 
 ### Top Lessons (Verified Across Milestones)
 
