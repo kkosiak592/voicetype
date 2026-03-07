@@ -2,31 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Per-App Settings
-status: ready_to_plan
-stopped_at: Phase 23 context gathered
-last_updated: "2026-03-07T16:23:35.454Z"
-last_activity: 2026-03-07 -- Roadmap created for v1.4 Per-App Settings
+status: executing
+stopped_at: Completed 23-01-PLAN.md
+last_updated: "2026-03-07T16:49:53Z"
+last_activity: 2026-03-07 -- Completed 23-01 foreground detection module
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
----
-
----
-gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: Per-App Settings
-status: ready_to_plan
-stopped_at: Roadmap created for v1.4
-last_updated: "2026-03-07"
-last_activity: 2026-03-07 -- Roadmap created for v1.4 Per-App Settings
-progress:
-  total_phases: 4
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 2
+  completed_plans: 1
+  percent: 50
 ---
 
 # Project State
@@ -41,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 ## Current Position
 
 Phase: 23 (1 of 4 in v1.4)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-03-07 -- Roadmap created for v1.4 Per-App Settings
+Plan: 1 of 2 in current phase
+Status: Executing
+Last activity: 2026-03-07 -- Completed 23-01 foreground detection module
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████░░░░░] 50%
 
 ## Accumulated Context
 
@@ -60,6 +45,8 @@ Recent decisions affecting current work:
 - [v1.4]: Three-state toggle via Option<bool> (None=inherit, Some(true)=ON, Some(false)=OFF)
 - [v1.4]: Case-normalize exe names at every boundary
 - [v1.4]: CreateToolhelp32Snapshot for process enumeration (Win32_System_Diagnostics_ToolHelp feature flag)
+- [23-01]: EnumChildWindows in windows 0.58 takes HWND directly, not Option<HWND>
+- [23-01]: #![allow(dead_code)] on foreground.rs until pipeline integration in 23-02
 
 ### Pending Todos
 
@@ -68,11 +55,11 @@ None.
 ### Blockers/Concerns
 
 - Do NOT remove clipboard verification retry loop or 150ms pre-paste delay -- they serve orthogonal purposes
-- UWP EnumChildWindows callback pattern in windows crate needs verification during Phase 23 planning
+- UWP EnumChildWindows callback pattern verified in 23-01 (takes HWND directly, not Option<HWND>)
 - Three-state toggle UX (cycling vs segmented control) needs decision during Phase 25 planning
 
 ## Session Continuity
 
-Last session: 2026-03-07T16:23:35.451Z
-Stopped at: Phase 23 context gathered
-Resume file: .planning/phases/23-foreground-detection-backend/23-CONTEXT.md
+Last session: 2026-03-07T16:49:53Z
+Stopped at: Completed 23-01-PLAN.md
+Resume file: .planning/phases/23-foreground-detection-backend/23-01-SUMMARY.md

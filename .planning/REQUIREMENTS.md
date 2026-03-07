@@ -9,9 +9,9 @@ Requirements for per-app settings milestone. Each maps to roadmap phases.
 
 ### Detection
 
-- [ ] **DET-01**: App auto-detects the foreground application at text injection time using Win32 APIs
-- [ ] **DET-02**: Detection resolves process executable name (e.g., "acad.exe", "OUTLOOK.EXE")
-- [ ] **DET-03**: Detection falls back to global defaults when process name cannot be resolved (elevated processes, access denied)
+- [x] **DET-01**: App auto-detects the foreground application at text injection time using Win32 APIs
+- [x] **DET-02**: Detection resolves process executable name (e.g., "acad.exe", "OUTLOOK.EXE")
+- [x] **DET-03**: Detection falls back to global defaults when process name cannot be resolved (elevated processes, access denied)
 
 ### App Rules UI
 
@@ -55,9 +55,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DET-01 | Phase 23 | Pending |
-| DET-02 | Phase 23 | Pending |
-| DET-03 | Phase 23 | Pending |
+| DET-01 | Phase 23 | Complete |
+| DET-02 | Phase 23 | Complete |
+| DET-03 | Phase 23 | Complete |
 | UI-01 | Phase 25 | Pending |
 | UI-02 | Phase 25 | Pending |
 | UI-03 | Phase 25 | Pending |
