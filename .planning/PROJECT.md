@@ -48,13 +48,20 @@ Voice dictation must feel instant — sub-1500ms from end-of-speech to text appe
 
 ### Active
 
-(No active requirements — define with `/gsd:new-milestone`)
+- [ ] Simplify clipboard flow: remove save/restore, transcription replaces clipboard content (standard dictation tool behavior)
+
+## Current Milestone: v1.3 Clipboard Simplification
+
+**Goal:** Remove clipboard save/restore logic from inject_text — after transcription, clipboard simply contains the transcription text, matching standard dictation tool behavior.
+
+**Target features:**
+- Remove pre-transcription clipboard save
+- Remove post-paste clipboard restore
+- Transcription text remains on clipboard after injection
 
 ## Current State
 
 v1.2 shipped 2026-03-07. Three milestones complete (v1.0 MVP, v1.1 Auto-Updates, v1.2 Keyboard Hook).
-
-No active milestone — use `/gsd:new-milestone` to start next.
 
 ### Out of Scope
 
@@ -127,4 +134,4 @@ No active milestone — use `/gsd:new-milestone` to start next.
 | Annotated git tags for releases | Store tagger info, work with git describe, better practice | ✓ Good |
 
 ---
-*Last updated: 2026-03-07 after v1.2 milestone*
+*Last updated: 2026-03-07 after v1.3 milestone started*

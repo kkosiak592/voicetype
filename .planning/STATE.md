@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Keyboard Hook
-status: archived
-stopped_at: Milestone v1.2 archived
+milestone: v1.3
+milestone_name: Clipboard Simplification
+status: planning
+stopped_at: Defining requirements
 last_updated: "2026-03-07"
-last_activity: "2026-03-07 - Milestone v1.2 Keyboard Hook archived"
+last_activity: "2026-03-07 - Milestone v1.3 started"
 progress:
-  total_phases: 10
-  completed_phases: 10
-  total_plans: 15
-  completed_plans: 15
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 ---
@@ -143,18 +143,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-07)
 
 **Core value:** Voice dictation must feel instant — sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** Planning next milestone
+**Current focus:** v1.3 Clipboard Simplification
 
 ## Position
 
-**Milestone:** v1.2 Keyboard Hook
-**Phase:** 19.1 — Integrate Moonshine Tiny model into main app with VAD chunking and GPU support
-**Plan:** 02 complete (2026-03-04)
-**Status:** v1.2 milestone complete
+**Milestone:** v1.3 Clipboard Simplification
+**Phase:** Not started (defining requirements)
+**Plan:** —
+**Status:** Defining requirements
 
-[##########████████████████████░░░░░░░░░░░░░░░░░░░░░░] 57% (4/7 phases)
-
-Last activity: 2026-03-05 - Completed quick task 46: Add VK_CONTROL tracking to keyboard hook for Outlook/Office
+Last activity: 2026-03-07 — Milestone v1.3 started
 
 ## Performance Metrics
 
