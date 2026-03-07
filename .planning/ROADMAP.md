@@ -129,7 +129,7 @@ Phases execute in numeric order: 23 -> 24 -> 25 -> 26
 | 15-20.1 | v1.2 | 15/15 | Complete | 2026-03-07 |
 | 22 | v1.3 | 1/1 | Complete | 2026-03-07 |
 | 23. Foreground Detection Backend | 2/2 | Complete    | 2026-03-07 | - |
-| 24. Pipeline Override Integration | 1/1 | Complete   | 2026-03-07 | - |
+| 24. Pipeline Override Integration | 1/1 | Complete    | 2026-03-07 | - |
 | 25. App Rules UI | v1.4 | 0/? | Not started | - |
 | 26. Process Dropdown | v1.4 | 0/? | Not started | - |
 
