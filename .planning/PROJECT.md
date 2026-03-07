@@ -46,22 +46,15 @@ Voice dictation must feel instant — sub-1500ms from end-of-speech to text appe
 - ✓ CUDA DLLs bundled in single installer with runtime GPU fallback — v1.2
 - ✓ Filler word removal, always-listen mode, pill drag reposition — v1.2
 
+- ✓ Simplified clipboard flow: save/restore removed, transcription replaces clipboard content — v1.3
+
 ### Active
 
-- [ ] Simplify clipboard flow: remove save/restore, transcription replaces clipboard content (standard dictation tool behavior)
-
-## Current Milestone: v1.3 Clipboard Simplification
-
-**Goal:** Remove clipboard save/restore logic from inject_text — after transcription, clipboard simply contains the transcription text, matching standard dictation tool behavior.
-
-**Target features:**
-- Remove pre-transcription clipboard save
-- Remove post-paste clipboard restore
-- Transcription text remains on clipboard after injection
+(None — planning next milestone)
 
 ## Current State
 
-v1.2 shipped 2026-03-07. Three milestones complete (v1.0 MVP, v1.1 Auto-Updates, v1.2 Keyboard Hook).
+v1.3 shipped 2026-03-07. Four milestones complete (v1.0 MVP, v1.1 Auto-Updates, v1.2 Keyboard Hook, v1.3 Clipboard Simplification).
 
 ### Out of Scope
 
@@ -75,8 +68,8 @@ v1.2 shipped 2026-03-07. Three milestones complete (v1.0 MVP, v1.1 Auto-Updates,
 
 ## Context
 
-**Current state (v1.2 shipped 2026-03-07):**
-- 23,557 LOC across Rust backend + React/TypeScript frontend
+**Current state (v1.3 shipped 2026-03-07):**
+- 23,533 LOC across Rust backend + React/TypeScript frontend
 - Tech stack: Tauri 2.0, whisper-rs, parakeet-rs, ort (Moonshine ONNX), cpal/WASAPI, Silero VAD, React, Tailwind CSS, tauri-plugin-updater, tauri-plugin-process
 - Three engines: Whisper (CUDA), Parakeet TDT (CUDA/DirectML), Moonshine Tiny (ONNX)
 - WH_KEYBOARD_LL keyboard hook for Ctrl+Win modifier-only activation
@@ -111,6 +104,7 @@ v1.2 shipped 2026-03-07. Three milestones complete (v1.0 MVP, v1.1 Auto-Updates,
 | Tauri 2.0 over Electron/Python | Smallest binary, native Rust FFI to whisper.cpp, BridgeVoice-proven, 20-40MB RAM vs 800MB | ✓ Good — ~9 MB installer, fast startup |
 | whisper.cpp over faster-whisper | CUDA 11.7 compatible (faster-whisper needs CUDA 12), Rust bindings via whisper-rs | ✓ Good — works on P2000 |
 | Clipboard paste as primary text injection | BridgeVoice-proven, fast regardless of text length, works in 95% of apps | ✓ Good — works across all target apps |
+| Remove clipboard save/restore | Standard dictation tools leave transcription on clipboard; save/restore adds complexity and 80ms latency for no user benefit | ✓ Good — -24 lines, faster injection |
 | Profiles system for vocabulary | Combines whisper initial prompt + post-processing dictionary per domain, cleanly extensible | ✓ Good — engineering terms recognized accurately |
 | Chunk-based over streaming transcription | Simpler architecture, sub-500ms latency achievable, streaming deferred | ✓ Good — acceptable latency achieved |
 | React for frontend | Widely known, good Tauri ecosystem support, Tailwind CSS for styling | ✓ Good — fast development |
@@ -134,4 +128,4 @@ v1.2 shipped 2026-03-07. Three milestones complete (v1.0 MVP, v1.1 Auto-Updates,
 | Annotated git tags for releases | Store tagger info, work with git describe, better practice | ✓ Good |
 
 ---
-*Last updated: 2026-03-07 after v1.3 milestone started*
+*Last updated: 2026-03-07 after v1.3 milestone*

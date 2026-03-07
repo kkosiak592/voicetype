@@ -1,5 +1,22 @@
 # Milestones
 
+## v1.3 Clipboard Simplification (Shipped: 2026-03-07)
+
+**Phases completed:** 1 phase, 1 plan, 1 task
+**Commits:** 2
+**Lines changed:** +7 / -31 (net -24 lines)
+**Timeline:** 1 day (2026-03-07)
+**Git range:** v1.2.0..v1.3.0
+
+**Delivered:** Simplified clipboard injection flow — removed save/restore logic and 80ms post-paste sleep, matching standard dictation tool behavior where transcription text stays on clipboard.
+
+**Key accomplishments:**
+- Removed clipboard save/restore from inject_text — transcription stays on clipboard after paste (Phase 22)
+- Eliminated 80ms post-paste sleep that only existed for restore timing (Phase 22)
+- Updated doc comment to reflect simplified 3-step flow: set clipboard → verify → paste (Phase 22)
+
+---
+
 ## v1.2 Keyboard Hook (Shipped: 2026-03-07)
 
 **Phases completed:** 10 phases (1 voided), 15 plans, 21 quick tasks
