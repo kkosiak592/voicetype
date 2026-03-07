@@ -1,10 +1,10 @@
-import { Settings, Cpu, Mic, Palette, Clock, Monitor, BookOpen, RefreshCw, type LucideIcon } from 'lucide-react';
+import { Settings, Cpu, Mic, Palette, Clock, Monitor, BookOpen, AppWindow, RefreshCw, type LucideIcon } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import { useEffect, useState } from 'react';
 import { getVersion } from '@tauri-apps/api/app';
 import type { UpdateState } from '../lib/updater';
 
-export type SectionId = 'general' | 'dictionary' | 'model' | 'appearance' | 'system' | 'history';
+export type SectionId = 'general' | 'dictionary' | 'app-rules' | 'model' | 'appearance' | 'system' | 'history';
 
 interface SidebarItem {
   id: SectionId;
@@ -15,6 +15,7 @@ interface SidebarItem {
 const ITEMS: SidebarItem[] = [
   { id: 'general', label: 'General', icon: Settings },
   { id: 'dictionary', label: 'Dictionary', icon: BookOpen },
+  { id: 'app-rules', label: 'App Rules', icon: AppWindow },
   { id: 'model', label: 'Model', icon: Cpu },
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'system', label: 'System', icon: Monitor },

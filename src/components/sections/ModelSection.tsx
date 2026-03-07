@@ -192,15 +192,6 @@ export function ModelSection({ selectedModel, onSelectedModelChange }: ModelSect
             moonshineError={moonshineError}
           />
         </div>
-
-
-
-        {(currentEngine === 'parakeet' || currentEngine === 'moonshine') && (
-          <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 px-2">
-            <span className="size-1.5 rounded-full bg-amber-500"></span>
-            {currentEngine.charAt(0).toUpperCase() + currentEngine.slice(1)} doesn't support vocabulary prompting. Your corrections dictionary still applies.
-          </p>
-        )}
       </div>
     </div>
   );

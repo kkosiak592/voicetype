@@ -392,11 +392,29 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
         guard.apply(&defillered)
     };
 
-    // Apply ALL CAPS if active profile flag is set (engine-agnostic).
+    // Apply ALL CAPS with per-app override resolution (engine-agnostic).
     let formatted = {
-        let profile = app.state::<crate::profiles::ActiveProfile>();
-        let guard = profile.0.lock().unwrap_or_else(|e| e.into_inner());
-        if guard.all_caps {
+        #[cfg(windows)]
+        let detected_exe = crate::foreground::detect_foreground_app().exe_name;
+        #[cfg(not(windows))]
+        let detected_exe: Option<String> = None;
+
+        let profile_all_caps = {
+            let profile = app.state::<crate::profiles::ActiveProfile>();
+            let guard = profile.0.lock().unwrap_or_else(|e| e.into_inner());
+            guard.all_caps
+        };
+
+        #[cfg(windows)]
+        let effective_all_caps = {
+            let rules_state = app.state::<crate::foreground::AppRulesState>();
+            let rules_guard = rules_state.0.lock().unwrap_or_else(|e| e.into_inner());
+            crate::foreground::resolve_all_caps(profile_all_caps, &detected_exe, &rules_guard)
+        };
+        #[cfg(not(windows))]
+        let effective_all_caps = profile_all_caps;
+
+        if effective_all_caps {
             corrected.to_uppercase()
         } else {
             corrected

@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A local, low-latency voice-to-text desktop tool for Windows with three transcription engines (Whisper, Parakeet TDT, Moonshine Tiny). Built with Tauri 2.0, it provides a glassmorphism pill overlay with audio visualizer, WH_KEYBOARD_LL keyboard hook for Ctrl+Win activation, Silero VAD silence detection with engine-agnostic chunking for long recordings, transcription history with click-to-copy, and instant text injection into any active application. Runs entirely on-device with zero internet dependency.
+A local, low-latency voice-to-text desktop tool for Windows with three transcription engines (Whisper, Parakeet TDT, Moonshine Tiny). Built with Tauri 2.0, it provides a glassmorphism pill overlay with audio visualizer, WH_KEYBOARD_LL keyboard hook for Ctrl+Win activation, Silero VAD silence detection with engine-agnostic chunking for long recordings, transcription history with click-to-copy, per-app ALL CAPS overrides with auto-detect foreground window, and instant text injection into any active application. Runs entirely on-device with zero internet dependency.
 
 ## Core Value
 
@@ -48,13 +48,18 @@ Voice dictation must feel instant — sub-1500ms from end-of-speech to text appe
 
 - ✓ Simplified clipboard flow: save/restore removed, transcription replaces clipboard content — v1.3
 
+- ✓ Per-app settings sidebar page with auto-detect foreground window — v1.4
+- ✓ ALL CAPS per-app override (global toggle remains as default for unlisted apps) — v1.4
+- ✓ Add apps via "Detect Active App" button + searchable dropdown of running processes — v1.4
+- ✓ Win32 foreground window detection at injection time (GetForegroundWindow + process name) — v1.4
+
 ### Active
 
 (None — planning next milestone)
 
 ## Current State
 
-v1.3 shipped 2026-03-07. Four milestones complete (v1.0 MVP, v1.1 Auto-Updates, v1.2 Keyboard Hook, v1.3 Clipboard Simplification).
+v1.4 shipped 2026-03-07. Five milestones complete (v1.0 MVP, v1.1 Auto-Updates, v1.2 Keyboard Hook, v1.3 Clipboard Simplification, v1.4 Per-App Settings).
 
 ### Out of Scope
 
@@ -68,13 +73,13 @@ v1.3 shipped 2026-03-07. Four milestones complete (v1.0 MVP, v1.1 Auto-Updates, 
 
 ## Context
 
-**Current state (v1.3 shipped 2026-03-07):**
-- 23,533 LOC across Rust backend + React/TypeScript frontend
+**Current state (v1.4 shipped 2026-03-07):**
+- 10,407 LOC across Rust backend (6,728) + React/TypeScript frontend (3,679)
 - Tech stack: Tauri 2.0, whisper-rs, parakeet-rs, ort (Moonshine ONNX), cpal/WASAPI, Silero VAD, React, Tailwind CSS, tauri-plugin-updater, tauri-plugin-process
 - Three engines: Whisper (CUDA), Parakeet TDT (CUDA/DirectML), Moonshine Tiny (ONNX)
 - WH_KEYBOARD_LL keyboard hook for Ctrl+Win modifier-only activation
 - Engine-agnostic VAD chunking for 60s+ recordings
-- 521 commits over 9 days of development
+- Per-app ALL CAPS overrides with Win32 foreground detection and UWP resolution
 - NSIS installer with bundled CUDA DLLs, models downloaded on first run
 - Auto-update pipeline: Ed25519 signing, GitHub Actions CI/CD, in-app update UX
 - Public repo: https://github.com/kkosiak592/voicetype
@@ -127,5 +132,9 @@ v1.3 shipped 2026-03-07. Four milestones complete (v1.0 MVP, v1.1 Auto-Updates, 
 | CMAKE_CUDA_ARCHITECTURES=61;75;86;89 | Single binary supports Pascal through Ada Lovelace GPUs | ✓ Good |
 | Annotated git tags for releases | Store tagger info, work with git describe, better practice | ✓ Good |
 
+| Per-app settings with auto-detect foreground window | Per-app ALL CAPS is the first use case; extensible for future per-app settings | ✓ Good — clean three-state override with pure function resolution |
+| Option<bool> three-state toggle for per-app overrides | None=inherit, Some(true)=ON, Some(false)=OFF — clean serialization, pure function resolution | ✓ Good |
+| CreateToolhelp32Snapshot for process enumeration | EnumWindows for visible windows + snapshot for exe names — two-phase approach | ✓ Good |
+
 ---
-*Last updated: 2026-03-07 after v1.3 milestone*
+*Last updated: 2026-03-07 after v1.4 milestone*

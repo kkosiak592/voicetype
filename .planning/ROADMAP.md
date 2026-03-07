@@ -6,6 +6,7 @@
 - ✅ **v1.1 Auto-Updates & CI/CD** — Phases 11-14 (shipped 2026-03-02)
 - ✅ **v1.2 Keyboard Hook** — Phases 15-20.1 (shipped 2026-03-07)
 - ✅ **v1.3 Clipboard Simplification** — Phase 22 (shipped 2026-03-07)
+- ✅ **v1.4 Per-App Settings** — Phases 23-26 (shipped 2026-03-07)
 
 ## Phases
 
@@ -58,6 +59,16 @@
 
 </details>
 
+<details>
+<summary>✅ v1.4 Per-App Settings (Phases 23-26) — SHIPPED 2026-03-07</summary>
+
+- [x] Phase 23: Foreground Detection Backend (2/2 plans) — completed 2026-03-07
+- [x] Phase 24: Pipeline Override Integration (1/1 plan) — completed 2026-03-07
+- [x] Phase 25: App Rules UI (1/1 plan) — completed 2026-03-07
+- [x] Phase 26: Process Dropdown (1/1 plan) — completed 2026-03-07
+
+</details>
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -66,8 +77,10 @@
 | 11-14 | v1.1 | 5/5 | Complete | 2026-03-02 |
 | 15-20.1 | v1.2 | 15/15 | Complete | 2026-03-07 |
 | 22 | v1.3 | 1/1 | Complete | 2026-03-07 |
+| 23-26 | v1.4 | 5/5 | Complete | 2026-03-07 |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
 Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
 Full v1.2 milestone details: `.planning/milestones/v1.2-ROADMAP.md`
 Full v1.3 milestone details: `.planning/milestones/v1.3-ROADMAP.md`
+Full v1.4 milestone details: `.planning/milestones/v1.4-ROADMAP.md`

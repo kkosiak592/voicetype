@@ -1,6 +1,6 @@
-# Feature Research: Clipboard Simplification
+# Feature Research: Per-App Settings with Foreground Window Detection
 
-**Domain:** Voice-to-text dictation tool clipboard behavior
+**Domain:** Desktop voice-to-text per-application rule management
 **Researched:** 2026-03-07
 **Confidence:** HIGH
 
@@ -8,43 +8,46 @@
 
 ## Context: What Is Already Built
 
-This is a subsequent milestone. The existing app (v1.2) already has:
+This is a subsequent milestone (v1.4). The existing app has:
 
-- Clipboard paste injection via `inject_text()` using arboard + enigo Ctrl+V
-- Pre-transcription clipboard save and post-paste clipboard restore (the code being simplified)
-- Clipboard verification retry loop (5 attempts, 25ms each) to handle Chromium WebView races
-- 150ms pre-paste delay for Office/Outlook clipboard cache sync
-- 80ms post-paste delay solely for restore timing
-- Transcription history panel with click-to-copy
+- Global ALL CAPS toggle on General page, stored in `ActiveProfile.all_caps`
+- Settings persistence via Rust `SettingsState` Mutex + `settings.json`
+- `store.get`/`store.set` frontend facade calling `get_setting`/`set_setting` IPC
+- `AllCapsToggle` component as template for toggle UI
+- Pipeline applies `all_caps` at injection time (pipeline.rs lines 396-404)
+- Sidebar with 6 sections: General, Dictionary, Model, Appearance, System, History
+- `inject_text()` already handles clipboard paste into the foreground app
 
-**The new milestone (v1.3) simplifies one thing:** Remove clipboard save/restore from `inject_text`, so transcription simply stays on the clipboard after paste injection. This matches standard dictation tool behavior.
+**The new milestone (v1.4) adds:** Per-app settings overrides (starting with ALL CAPS), auto-detected by foreground window at injection time.
 
 ---
 
-## Competitor Clipboard Behavior Analysis
+## How Comparable Desktop Tools Handle Per-App Rules
 
-### How Major Dictation Tools Handle Text After Transcription
+### Patterns Observed
 
-| Tool | Injection Method | Clipboard After Dictation | Clipboard Restore? |
-|------|-----------------|--------------------------|-------------------|
-| **Windows Voice Typing** | Text Services Framework (direct input API) | Untouched — no clipboard use | N/A |
-| **macOS Dictation** | InputMethodKit (direct input API) | Untouched — no clipboard use | N/A |
-| **Dragon NaturallySpeaking** | Direct input for supported apps; Dictation Box + Ctrl+V for unsupported | Contains dictated text when clipboard path used | No |
-| **Talon** | `insert()` keyboard simulation (default) | Untouched in default path; restored via `clip.capture()` when clipboard path used | Yes, but only on clipboard code path |
-| **Superwhisper** (macOS, commercial) | Clipboard paste (default) | Contains transcription (default) | Optional toggle, OFF by default. Restores 3s after paste |
-| **WhisperWriter** | pynput keystroke simulation, char-by-char | Untouched — no clipboard use | N/A |
-| **OpenWhispr** | Clipboard paste with fallback chain | Contains transcription | No |
-| **HyprVoice** (Linux) | ydotool/wtype; clipboard as fallback | Restored on clipboard fallback path | Yes, on fallback path only |
+**1. PowerToys Keyboard Manager -- "Target App" text field**
+Shortcut remaps have a "Target App" column where you type the process name (e.g., `msedge`). Users find process names via `Get-Process` or Task Manager. No auto-detect, no browse dialog, no searchable dropdown. Simple but requires user to know the exe name.
 
-### Key Patterns
+**2. Windows Firewall -- Browse + installed app list**
+"Add an app" shows installed applications in a scrollable list. "Browse" button opens a file picker for exe selection. No auto-detect of foreground app. Heavy, enterprise-focused UI.
 
-Two categories of tools exist:
+**3. f.lux -- "Disable for current app" contextual action**
+When an app is in the foreground, f.lux menu shows "Disable for current app" which auto-detects the foreground process. No centralized list management -- you configure each app while it is active. Users have requested a centralized list view.
 
-1. **OS-integrated dictation** (Windows Voice Typing, macOS Dictation, Dragon for supported apps): Use text input APIs that never touch the clipboard. Gold standard UX but requires deep OS integration impossible for third-party tools.
+**4. Windows Volume Mixer -- Auto-populated from running apps**
+Shows sliders only for apps currently producing audio. No manual add. Apps appear/disappear dynamically. Not suitable for persistent rules.
 
-2. **Third-party clipboard-paste tools** (Superwhisper, OpenWhispr, VoiceType): Use clipboard + Ctrl+V because it works universally. In this category, **the standard behavior is: transcription replaces clipboard, no restore.** Superwhisper -- the most polished commercial tool in this space -- defaults to this and makes clipboard restore an opt-in advanced setting.
+**5. EarTrumpet -- Per-app sliders with icons**
+Shows app icon + name + slider for each running process. Good visual identification. Still runtime-only, no persistent rules.
 
-**Bottom line:** VoiceType's current clipboard restore behavior is non-standard. Every comparable clipboard-paste dictation tool leaves the transcription on the clipboard by default. The restore logic adds complexity and latency for behavior no user expects.
+### What Works for VoiceType's Use Case
+
+VoiceType needs **persistent rules** (not runtime-only) with **auto-detection at injection time** (not just at configuration time). The best UX combines:
+
+- **f.lux's "detect current app" approach** for adding apps (user activates the target app, clicks "Detect", app gets added)
+- **PowerToys' persistent rule list** for managing configured apps with overrides
+- **EarTrumpet's app icon + name pattern** for visual identification in the list
 
 ---
 
@@ -54,81 +57,103 @@ Two categories of tools exist:
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Transcription stays on clipboard after injection | Every clipboard-paste dictation tool works this way. Superwhisper, OpenWhispr, Dragon (clipboard path) all leave transcription on clipboard. Users can re-paste with Ctrl+V. | LOW | Core v1.3 change: remove save/restore logic |
-| Reliable clipboard paste across target apps | Ctrl+V must work in VS Code, Chrome, Outlook, Word, Teams, AutoCAD, Bluebeam | N/A | Already exists and working |
-| Clipboard verification before paste | Chromium WebView clipboard races are real. Must verify clipboard contains intended text before Ctrl+V. | N/A | Already exists with 5-attempt retry loop. Keep this. |
+| Per-app rule list with add/remove | Core feature. Without a visible list of configured apps, users cannot manage overrides. Every per-app settings system shows a list of configured items. | MEDIUM | New "App Rules" sidebar section. List of `{exe_name, display_name, overrides}` entries persisted to settings.json |
+| "Detect Active App" button | Users should not need to manually type `BLUEBEAM.exe`. f.lux proves that "detect current app" is the intuitive way. Click button -> switch to target app -> detection captures it. | MEDIUM | Backend: `GetForegroundWindow` + `GetWindowThreadProcessId` + `QueryFullProcessImageNameW` -> extract exe name. Frontend: timer-based polling or single-shot after delay |
+| Per-app ALL CAPS toggle | The stated v1.4 use case. Must override the global default from General page. Three states per app: inherit global (default) / force ON / force OFF. | LOW | Toggle per rule entry. Pipeline reads foreground app at injection time, looks up rule, applies override |
+| Foreground detection at injection time | The whole point -- auto-apply the right settings based on which app receives the text. Must happen in `run_pipeline` before text formatting. | MEDIUM | Win32 API call in pipeline.rs, just before ALL CAPS application. Match exe name against rules list |
+| Global default for unlisted apps | Users expect the global ALL CAPS toggle to still work as the fallback. Apps not in the rules list should use the global setting. | LOW | Existing `ActiveProfile.all_caps` becomes the default. Per-app rule overrides only when a match exists |
+| Remove app from list | Must be able to delete rules. Every list-based settings UI has this. | LOW | Delete button per row, confirm not needed for single items |
 
 ### Differentiators (Competitive Advantage)
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Transcription history with click-to-copy | Eliminates the main argument for clipboard restore ("what if I lose what I copied?"). Users can always recover past transcriptions. No competitor at this price point (free, local) offers this combined with clipboard paste. | N/A | Already built in v1.2. Makes clipboard restore unnecessary for most users |
-| Optional clipboard restore toggle (future) | Superwhisper offers this as an advanced setting. Power users doing heavy copy-paste alongside dictation might want it. | LOW | Keep save/restore code path behind a settings toggle, default OFF. Not needed for v1.3. Add only if users request it |
+| Searchable running-process dropdown | Faster than "detect active app" when you already know the app name. Shows currently running processes with display names. PowerToys forces users to look up process names manually. | MEDIUM | `EnumProcesses` + `OpenProcess` + `QueryFullProcessImageNameW` for running processes. Combobox with filter-as-you-type. Show display name + exe name |
+| Three-state toggle (inherit / ON / OFF) | More expressive than binary. "Inherit" means the global setting controls this app. ON/OFF explicitly override. Users can set global=ON but force OFF for VS Code (where lowercase is preferred for code). | LOW | Segmented control or dropdown with three options. Default: inherit |
+| App icon display in rules list | Visual identification makes the list scannable. Users recognize app icons faster than reading exe names. | LOW | Extract icon from exe path using `ExtractIconExW` or `SHGetFileInfo`. Display as 16x16 or 24x24 in list |
+| Detection countdown UX | After clicking "Detect Active App", show "Switch to target app... detecting in 3s" countdown. Gives user time to alt-tab. Better than immediate detection (which captures the settings window itself). | LOW | 3-second countdown timer in frontend. After countdown, call backend `detect_foreground_app` command |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Clipboard restore as default behavior | "Don't overwrite my clipboard" -- seems courteous | Adds 80ms+ latency for restore timing. Creates race conditions if user pastes quickly after dictation (paste gets old content). Superwhisper's 3-second restore delay exists precisely because instant restore would paste OLD content on quick re-paste. Creates edge cases with non-text clipboard content (images, files, rich text). No comparable tool does this by default. | Leave transcription on clipboard. Users have Win+V clipboard history and transcription history panel |
-| Keystroke simulation instead of clipboard | "Don't touch my clipboard at all" | 5ms/char = 500ms for 100 characters. Breaks with special characters and Unicode. WhisperWriter uses this and it is noticeably laggy. Does not work reliably in all apps. | Clipboard paste is the correct approach. Fast, reliable, universal |
-| TSF/IME direct text input | "Inject text like Windows Voice Typing" | Requires implementing a Text Services Framework provider -- enormous complexity. Dragon spent years building this. Only works for apps supporting TSF. Complete injection rewrite. | Clipboard paste works in 95%+ of apps including all VoiceType targets |
+| Auto-populate rules for all running apps | "Show me everything" | Creates a huge list of irrelevant processes (svchost, RuntimeBroker, etc.). Volume Mixer can do this because audio is the filter. VoiceType has no natural filter for which apps matter. | Start with empty list. Users add only apps they actually dictate into |
+| Window-title-based matching | "Different behavior for different Chrome tabs" | Window titles change constantly, are locale-dependent, and break on updates. Process exe name is stable and unambiguous. | Match on exe name only. If a user needs different behavior per Chrome tab, that is a different product |
+| Real-time foreground monitoring with live indicator | "Show me which app is active right now in settings" | Continuous polling wastes CPU. Desktop tools that need this (window managers) use shell hooks which add complexity. VoiceType only needs detection at two points: when adding a rule, and at injection time. | Detect only when needed: on "Detect" button click and at injection time |
+| Per-app profile switching (engine, corrections, vocabulary) | "Different whisper model per app" | Massive scope increase. Engine switching has startup cost (model loading). Profile switching affects corrections state. Creates a combinatorial explosion of settings. | Start with ALL CAPS only. The architecture should support adding more per-app overrides later, but v1.4 ships only ALL CAPS |
+| Regex or wildcard matching for exe names | "Match all Chrome variants" | Over-engineering. Users have 3-5 apps they dictate into. Exact exe match is sufficient. | Exact exe name match. If `chrome.exe` vs `msedge.exe` matters, add both |
+| Browse for exe file picker | "Let me find the exe on disk" | Users rarely know where executables live. `C:\Program Files\...` browsing is painful. The "Detect Active App" flow and searchable process dropdown cover all use cases. | Detect Active App button + searchable running process dropdown |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[Remove clipboard save]
-    └──enables──> [Remove clipboard restore]
-                      └──simplifies──> [inject_text function]
-                      └──removes──> [80ms post-paste sleep]
-                                        └──reduces──> [Total injection latency]
+[Foreground window detection (Rust/Win32)]
+    |
+    |--used-by--> [Detect Active App button (add-flow)]
+    |--used-by--> [Pipeline injection-time lookup]
+    |
+    +--requires--> [GetForegroundWindow + GetWindowThreadProcessId + QueryFullProcessImageNameW]
 
-[Transcription history] ──mitigates──> [No clipboard restore concern]
-    (already exists)
+[Per-app rules data model]
+    |
+    |--stored-in--> [settings.json via SettingsState]
+    |--read-by---> [Pipeline at injection time]
+    |--managed-by-> [App Rules sidebar section]
 
-[Optional clipboard restore setting] ──requires──> [Settings infrastructure (exists)]
-    (future, not v1.3)                └──requires──> [Keep save/restore code behind feature flag]
+[App Rules sidebar section]
+    |--requires--> [Per-app rules data model]
+    |--requires--> [Foreground window detection]
+    |--uses------> [Searchable process dropdown (optional, differentiator)]
+
+[Pipeline per-app override]
+    |--requires--> [Per-app rules data model]
+    |--requires--> [Foreground window detection]
+    |--modifies--> [ALL CAPS application logic in pipeline.rs]
+    |--falls-back-> [Global ActiveProfile.all_caps]
+
+[Searchable process dropdown] --enhances--> [App Rules sidebar section]
+[App icon display] --enhances--> [App Rules sidebar section]
+[Detection countdown UX] --enhances--> [Detect Active App button]
 ```
 
 ### Dependency Notes
 
-- **Save and restore are a pair.** Removing save without removing restore would try to restore `None`, which current code handles by clearing clipboard to empty string -- worse than current behavior and worse than the proposed change.
-- **Transcription history mitigates the clipboard loss concern.** The main user worry ("I lose what I copied") is addressed by Win+V clipboard history (Windows 10+) and the existing transcription history panel.
-- **The 80ms post-paste sleep exists solely for restore timing.** Once restore is removed, this sleep serves no purpose and should be removed, saving 80ms of injection latency.
-- **The 150ms pre-paste sleep is unrelated to save/restore.** It exists for Office/Outlook clipboard cache sync and must be kept.
-- **The clipboard verification loop is unrelated to save/restore.** It ensures the correct text is on the clipboard before Ctrl+V. Must be kept.
+- **Foreground detection is the shared foundation.** Both the "add app" flow and the injection-time lookup need the same Win32 API calls. Build this Rust module first.
+- **Data model must exist before UI or pipeline changes.** The rules structure in settings.json determines what the UI displays and what the pipeline reads.
+- **Pipeline override is independent of the UI.** Even with no UI, if rules exist in settings.json, the pipeline should respect them. This enables testing the pipeline logic before the UI is complete.
+- **Searchable dropdown requires process enumeration**, which is a superset of foreground detection (enumerate all vs detect one). Can be deferred if needed.
 
 ---
 
-## Scope Definition for v1.3
+## Scope Definition for v1.4
 
-### Must Do
+### Must Do (v1.4)
 
-- Remove `saved: Option<String> = clipboard.get_text().ok()` (inject.rs line 43)
-- Remove the restore block at lines 134-149 (`match saved` / `set_text` restore)
-- Remove the 80ms post-paste sleep at line 132 (exists solely for restore timing)
+- [ ] Win32 foreground window detection module (Rust) -- `GetForegroundWindow` + process name extraction
+- [ ] Per-app rules data model -- `Vec<AppRule>` with `{exe_name, display_name, all_caps_override: Option<bool>}`
+- [ ] Rules persistence in settings.json via SettingsState
+- [ ] New "App Rules" sidebar section with rules list
+- [ ] "Detect Active App" button with countdown UX (3s delay for alt-tab)
+- [ ] Per-app ALL CAPS three-state toggle (inherit / ON / OFF)
+- [ ] Pipeline injection-time lookup -- detect foreground app, match against rules, override ALL CAPS
+- [ ] Remove button per rule entry
+- [ ] Global ALL CAPS on General page remains as default for unlisted apps
 
-### Must Keep
+### Should Do (v1.4 if time permits)
 
-- Clipboard verification retry loop (lines 53-99) -- reliability, not save/restore
-- 150ms pre-paste delay (lines 101-111) -- Office/Outlook clipboard cache sync
-- Win key release before paste (lines 118-120) -- keyboard hook race prevention
+- [ ] Searchable running-process dropdown for adding apps without the detect flow
+- [ ] App icon extraction and display in rules list
+- [ ] Duplicate detection -- prevent adding the same exe twice
 
-### Do Not Do
+### Do Not Do (v1.4)
 
-- Add a clipboard restore toggle setting -- unnecessary for v1.3
-- Change to keystroke simulation -- wrong trade-off
-- Implement TSF/IME -- massive scope, marginal benefit
-
-### Impact Assessment
-
-| Metric | Before (v1.2) | After (v1.3) | Change |
-|--------|--------------|--------------|--------|
-| `inject_text` code lines | ~150 | ~100 | -33% |
-| Post-paste sleep | 80ms | 0ms | -80ms latency |
-| Clipboard after dictation | Restored to previous | Contains transcription | Standard behavior |
-| Non-text clipboard edge cases | Must handle image/file types in save path | Eliminated | Entire class of edge cases removed |
+- [ ] Per-app engine/profile/corrections switching -- future milestone
+- [ ] Window-title matching -- fragile, unnecessary
+- [ ] Real-time foreground monitoring -- wasteful
+- [ ] Auto-populated process list -- noisy
+- [ ] Regex/wildcard exe matching -- over-engineering
 
 ---
 
@@ -136,37 +161,49 @@ Two categories of tools exist:
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Remove clipboard save/restore | HIGH | LOW (delete code) | P1 |
-| Remove 80ms post-paste sleep | MEDIUM | LOW (delete one line) | P1 |
-| Keep clipboard verification | HIGH | ZERO (already exists) | P1 |
-| Optional restore toggle | LOW | LOW | P3 |
+| Win32 foreground detection module | HIGH (foundation) | MEDIUM | P1 |
+| Per-app rules data model + persistence | HIGH (foundation) | LOW | P1 |
+| App Rules sidebar section | HIGH (user-facing) | MEDIUM | P1 |
+| Detect Active App with countdown | HIGH (primary add flow) | LOW | P1 |
+| Per-app ALL CAPS toggle | HIGH (core feature) | LOW | P1 |
+| Pipeline injection-time override | HIGH (core behavior) | MEDIUM | P1 |
+| Remove rule button | MEDIUM | LOW | P1 |
+| Searchable process dropdown | MEDIUM (convenience) | MEDIUM | P2 |
+| App icon display | LOW (polish) | LOW | P2 |
+| Duplicate detection | LOW (edge case) | LOW | P2 |
+
+**Priority key:**
+- P1: Must have for v1.4
+- P2: Should have, add if time permits
+- P3: Future consideration
 
 ---
 
 ## Competitor Feature Analysis
 
-| Behavior | Superwhisper | OpenWhispr | Dragon (clipboard path) | VoiceType v1.2 (current) | VoiceType v1.3 (proposed) |
-|----------|-------------|-----------|------------------------|--------------------------|---------------------------|
-| Clipboard used for injection | Yes | Yes | Yes (fallback) | Yes | Yes |
-| Transcription on clipboard after | Yes (default) | Yes | Yes | No (restored) | Yes |
-| Clipboard restore available | Yes (opt-in toggle) | No | No | Yes (always on) | No (removed) |
-| Restore timing | 3 seconds after paste | N/A | N/A | 80ms after paste | N/A |
-| Re-paste transcription possible | Yes | Yes | Yes | No (clipboard restored) | Yes |
+| Behavior | PowerToys KBM | f.lux | Windows Volume Mixer | VoiceType v1.4 (planned) |
+|----------|--------------|-------|---------------------|--------------------------|
+| Per-app rules | Yes (shortcuts only) | Yes (disable per app) | Runtime only | Yes (persistent) |
+| How apps are added | Manual exe name typing | "Disable for current app" auto-detect | Auto from running apps | Detect Active App button + process dropdown |
+| Rule persistence | Yes, in JSON config | Yes | No (runtime only) | Yes, in settings.json |
+| Rule management UI | Inline table rows | No centralized list (per f.lux forum complaints) | N/A | Dedicated sidebar section with list |
+| Override granularity | Key/shortcut remapping | Binary (enabled/disabled) | Volume level | Three-state per setting (inherit/ON/OFF) |
+| Foreground detection | At keypress time | At menu open time | Continuous monitoring | At injection time + on detect button |
+| App identification | Process name only | Process name + display name | Process name + icon | Exe name + display name + icon (P2) |
 
 ---
 
 ## Sources
 
-- [Microsoft Support: Windows Voice Typing](https://support.microsoft.com/en-us/windows/use-voice-typing-to-talk-instead-of-type-on-your-pc-fec94565-c4bd-329d-e59a-af033fa5689f) -- Uses direct text input API, no clipboard (HIGH confidence)
-- [Superwhisper Advanced Settings](https://superwhisper.com/docs/get-started/settings-advanced) -- Clipboard restore is opt-in, OFF by default, 3s delay (HIGH confidence)
-- [Superwhisper Clipboard Issue #11103](https://github.com/openai/codex/issues/11103) -- Confirms clipboard paste as default behavior (MEDIUM confidence)
-- [LinkedIn: Superwhisper clipboard tip](https://www.linkedin.com/posts/akshayluther_superwhisper-pro-tip-preserve-your-clipboard-activity-7320680840307306497-fUv1) -- Clipboard restore is power-user feature (MEDIUM confidence)
-- [Talon Community Wiki](https://talon.wiki/Basic%20Usage/basic_usage/) -- Default insert() avoids clipboard; clip.capture() saves/restores when clipboard used (MEDIUM confidence)
-- [Nuance: Dictation Box](https://www.nuance.com/products/help/dragon/dragon-for-pc/enx/dps/main/Content/Dictation/using_the_dictation_box.htm) -- Dragon uses Ctrl+V for unsupported apps, no restore (HIGH confidence)
-- [WhisperWriter](https://github.com/savbell/whisper-writer) -- Keystroke simulation, no clipboard use (HIGH confidence)
-- [OpenWhispr](https://github.com/HeroTools/open-whispr) -- Clipboard paste, no restore (MEDIUM confidence)
-- [KnowBrainer Forums](https://forums.knowbrainer.com/forum/dragon-speech-recognition/833-v-pasting-interferes-with-clipboard-history-from-dragoncapture-typemode-on) -- Users complain about Dragon polluting clipboard history, not about overwrite (MEDIUM confidence)
+- [PowerToys Keyboard Manager docs (Microsoft Learn)](https://learn.microsoft.com/en-us/windows/powertoys/keyboard-manager) -- Target App field uses exe process name, no auto-detect (HIGH confidence)
+- [PowerToys KBM per-app remap issue #6756](https://github.com/microsoft/PowerToys/issues/6756) -- App-specific remapping feature requests and limitations (HIGH confidence)
+- [f.lux FAQ](https://justgetflux.com/faq.html) -- "Disable for current app" auto-detects foreground process (HIGH confidence)
+- [f.lux forum: disable for games](https://forum.justgetflux.com/topic/2450/how-to-disable-for-current-app-for-games-full-screen) -- Users want centralized per-app list (MEDIUM confidence)
+- [GetForegroundWindow Win32 API (Microsoft Learn)](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getforegroundwindow) -- Official API for foreground window handle (HIGH confidence)
+- [windows-docs-rs: GetForegroundWindow](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/UI/WindowsAndMessaging/fn.GetForegroundWindow.html) -- Rust bindings via windows crate (HIGH confidence)
+- [Tracking active process in Windows with Rust (hellocode.co)](https://hellocode.co/blog/post/tracking-active-process-windows-rust/) -- Complete Rust pattern for GetForegroundWindow + PID + process name (HIGH confidence)
+- [Tauri issue #4827: access system's active window](https://github.com/tauri-apps/tauri/issues/4827) -- Confirms no built-in Tauri API, use windows-rs directly (HIGH confidence)
 
 ---
-*Feature research for: VoiceType v1.3 Clipboard Simplification*
+*Feature research for: VoiceType v1.4 Per-App Settings*
 *Researched: 2026-03-07*

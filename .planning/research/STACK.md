@@ -1,133 +1,247 @@
-# Stack Research: Clipboard Simplification
+# Stack Research: Per-App Foreground Window Detection
 
-**Domain:** Voice-to-text clipboard flow simplification (v1.3)
+**Domain:** Win32 foreground window detection + process enumeration for per-app settings
 **Researched:** 2026-03-07
 **Confidence:** HIGH
 
-## Verdict: No New Dependencies Required
+## Verdict: No New Crates Required
 
-The clipboard simplification is a pure code removal task. No new crates, no version bumps, no new APIs. The existing `arboard 3.6.1` and `enigo 0.6` remain unchanged.
+Everything needed is already available through the existing `windows` crate v0.58 dependency. The required feature flags (`Win32_UI_WindowsAndMessaging`, `Win32_System_Threading`, `Win32_Foundation`) are already enabled in Cargo.toml. Process enumeration for the searchable dropdown uses the same Win32 APIs. No `sysinfo` crate needed.
 
-## Current Stack (Unchanged)
+The frontend searchable dropdown should be built as a custom component -- the app already uses zero UI libraries beyond React + Tailwind, and the interaction is simple enough to not justify adding one.
 
-### Clipboard and Injection
+## Backend: Foreground Window Detection
 
-| Technology | Version | Purpose | Status for v1.3 |
-|------------|---------|---------|------------------|
-| arboard | 3.6.1 | Clipboard read/write | KEEP -- no API changes needed |
-| enigo | 0.6 | Ctrl+V keystroke simulation | KEEP -- no changes needed |
+### APIs Already Available (No Changes to Cargo.toml)
 
-### arboard API Usage After Simplification
+All three APIs live in modules whose feature flags are already enabled:
 
-Only these arboard methods remain in use after the change:
+| API | Module | Feature Flag | Status |
+|-----|--------|-------------|--------|
+| `GetForegroundWindow()` | `Win32::UI::WindowsAndMessaging` | `Win32_UI_WindowsAndMessaging` | Already enabled |
+| `GetWindowThreadProcessId()` | `Win32::UI::WindowsAndMessaging` | `Win32_UI_WindowsAndMessaging` | Already enabled |
+| `OpenProcess()` | `Win32::System::Threading` | `Win32_System_Threading` | Already enabled |
+| `QueryFullProcessImageNameW()` | `Win32::System::Threading` | `Win32_System_Threading` | Already enabled |
+| `CloseHandle()` | `Win32::Foundation` | `Win32_Foundation` | Already enabled |
+| `PROCESS_QUERY_LIMITED_INFORMATION` | `Win32::System::Threading` | `Win32_System_Threading` | Already enabled |
+| `PROCESS_NAME_FORMAT` | `Win32::System::Threading` | `Win32_System_Threading` | Already enabled |
 
-| Method | Purpose | Notes |
-|--------|---------|-------|
-| `Clipboard::new()` | Create clipboard handle | Unchanged |
-| `clipboard.set_text(text)` | Write transcription to clipboard | Unchanged |
-| `clipboard.get_text()` | Verify clipboard content after write | Unchanged -- still needed for verify-and-retry loop |
+### Detection Pattern
 
-**Removed API usage:**
-- `clipboard.get_text()` for save (line 43 of current inject.rs) -- eliminated
-- `clipboard.set_text(&original)` for restore (line 137) -- eliminated
-- `clipboard.set_text("")` for clear-on-empty (line 147) -- eliminated
+The full chain to resolve foreground process name at injection time:
 
-## What Changes (Code Only)
+```rust
+use windows::Win32::Foundation::CloseHandle;
+use windows::Win32::System::Threading::{
+    OpenProcess, QueryFullProcessImageNameW,
+    PROCESS_NAME_FORMAT, PROCESS_QUERY_LIMITED_INFORMATION,
+};
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetForegroundWindow, GetWindowThreadProcessId,
+};
 
-### Lines to Remove from `inject.rs`
+/// Get the executable name (e.g., "Code.exe") of the foreground window.
+/// Returns None if any step fails (no foreground window, access denied, etc.).
+pub fn get_foreground_process_name() -> Option<String> {
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0.is_null() {
+            return None;
+        }
 
-1. **Save** (line 43): `let saved: Option<String> = clipboard.get_text().ok();`
-2. **Post-paste sleep** (lines 129-132): The 80ms sleep after Ctrl+V. This existed solely to let the target app consume the paste before clipboard restore overwrote it. Without restore, no overwrite race exists.
-3. **Restore block** (lines 134-149): The entire `match saved { ... }` block.
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        if pid == 0 {
+            return None;
+        }
 
-### Lines to Keep
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut buf = [0u16; 260]; // MAX_PATH
+        let mut size = buf.len() as u32;
+        let result = QueryFullProcessImageNameW(
+            handle,
+            PROCESS_NAME_FORMAT(0),
+            windows::core::PWSTR(buf.as_mut_ptr()),
+            &mut size,
+        );
+        let _ = CloseHandle(handle);
 
-1. **Verify-and-retry loop** (lines 53-99): Still required. Chromium WebView clipboard races are a real problem regardless of save/restore. The loop ensures our text is actually on the clipboard before pasting.
-2. **150ms pre-paste delay** (lines 101-111): Still required. Office apps (Outlook, Word) process WM_CLIPBOARDUPDATE asynchronously. This delay prevents pasting stale content from their internal cache.
-3. **Win key release** (lines 117-120): Still required. Defensive against Win-key-stuck failure mode from keyboard hook.
-4. **Ctrl+V simulation** (lines 123-127): Obviously still required.
-
-### Cargo.toml Comment Update
-
-Line 66 currently reads:
-```toml
-# Clipboard save/restore for text injection (always available -- no whisper dependency)
-arboard = "3"
+        result.ok()?;
+        let path = String::from_utf16_lossy(&buf[..size as usize]);
+        // Extract filename from full path: "C:\...\Code.exe" -> "Code.exe"
+        path.rsplit('\\').next().map(|s| s.to_string())
+    }
+}
 ```
 
-Should become:
-```toml
-# Clipboard write for text injection (always available -- no whisper dependency)
-arboard = "3"
+**Why `PROCESS_QUERY_LIMITED_INFORMATION` over `PROCESS_QUERY_INFORMATION`:** Limited access rights succeed for processes running as the same user without requiring elevation. `PROCESS_QUERY_INFORMATION` fails for some system processes. For our use case (user-launched apps like VS Code, Outlook, Bluebeam), limited is sufficient and more reliable.
+
+### Integration Point
+
+The detection call goes in `pipeline.rs` at lines 395-404, replacing the current direct `ActiveProfile` read:
+
+```
+Current: Read ActiveProfile.all_caps -> apply uppercase
+New:     Call get_foreground_process_name() -> look up per-app override -> fall back to ActiveProfile.all_caps
 ```
 
-## Timing Analysis After Simplification
+This is a synchronous call (~0.1ms) on the blocking inject thread. No async needed.
 
-### Current Timing Budget (per inject_text call)
+## Backend: Process Enumeration (For Searchable Dropdown)
 
-| Step | Duration | After Simplification |
-|------|----------|---------------------|
-| Save clipboard | ~1ms | REMOVED |
-| Verify loop (happy path) | ~25ms (1 attempt) | KEPT |
-| Verify loop (retry) | ~50-125ms (2-5 attempts) | KEPT |
-| Pre-paste delay (Office apps) | 150ms | KEPT |
-| Win key release | <1ms | KEPT |
-| Ctrl+V simulation | <1ms | KEPT |
-| Post-paste sleep | 80ms | REMOVED |
-| Clipboard restore | ~1ms | REMOVED |
+### Recommended: Raw Win32 via Existing `windows` Crate
 
-**Net latency reduction: ~82ms** on every injection. The 80ms post-paste sleep is the meaningful savings; save/restore are sub-millisecond.
+Use `CreateToolhelp32Snapshot` + `Process32FirstW` / `Process32NextW` to enumerate all processes. This avoids adding `sysinfo` as a dependency.
 
-### Post-Paste Sleep: Why Remove It
+**Additional feature flag needed:** `Win32_System_Diagnostics_ToolHelp`
 
-The 80ms sleep existed to ensure the target app consumed the paste before the clipboard was overwritten by the restore. Without a restore, there is no overwrite race. The clipboard retains the transcription text indefinitely (until the user copies something else), so even slow applications will read the correct content whenever they process the paste.
+| API | Module | Feature Flag | Status |
+|-----|--------|-------------|--------|
+| `CreateToolhelp32Snapshot()` | `Win32::System::Diagnostics::ToolHelp` | `Win32_System_Diagnostics_ToolHelp` | **NEW -- must add** |
+| `Process32FirstW()` | `Win32::System::Diagnostics::ToolHelp` | `Win32_System_Diagnostics_ToolHelp` | **NEW -- must add** |
+| `Process32NextW()` | `Win32::System::Diagnostics::ToolHelp` | `Win32_System_Diagnostics_ToolHelp` | **NEW -- must add** |
+| `PROCESSENTRY32W` | `Win32::System::Diagnostics::ToolHelp` | `Win32_System_Diagnostics_ToolHelp` | **NEW -- must add** |
+| `TH32CS_SNAPPROCESS` | `Win32::System::Diagnostics::ToolHelp` | `Win32_System_Diagnostics_ToolHelp` | **NEW -- must add** |
 
-Edge case: Some apps (notably Excel, Outlook) process paste asynchronously and may read the clipboard after the Ctrl+V event returns. This is fine -- the clipboard still contains the transcription text. The only scenario where async paste was a problem was when the restore overwrote it too early, which no longer applies.
+### Cargo.toml Change
 
-## Windows Clipboard Ownership Considerations
+```toml
+# Before:
+windows = { version = "0.58", features = [
+    "Win32_Graphics_Dxgi",
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_Threading",
+] }
 
-### Clipboard Ownership Model
+# After (one feature added):
+windows = { version = "0.58", features = [
+    "Win32_Graphics_Dxgi",
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_Threading",
+    "Win32_System_Diagnostics_ToolHelp",
+] }
+```
 
-When `arboard::set_text()` is called, it:
-1. Opens the clipboard (`OpenClipboard`)
-2. Empties it (`EmptyClipboard`) -- this transfers ownership to our process
-3. Sets the data (`SetClipboardData`)
-4. Closes the clipboard (`CloseClipboard`)
+### Enumeration Pattern
 
-After simplification, VoiceType becomes the clipboard owner after every transcription. Implications:
+```rust
+use windows::Win32::System::Diagnostics::ToolHelp::{
+    CreateToolhelp32Snapshot, Process32FirstW, Process32NextW,
+    PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+};
 
-- **No ownership conflict**: We set the clipboard once and leave it. No second open/close for restore.
-- **Fewer clipboard operations**: 1 open/close cycle instead of 3 (save + set + restore). Removing 2 cycles.
-- **Reduced race window**: Fewer clipboard operations means fewer chances for another app to interleave clipboard access.
+/// List unique running process names (e.g., ["Code.exe", "OUTLOOK.EXE", ...]).
+/// Deduplicates and sorts alphabetically. Filters out system processes with empty names.
+pub fn list_running_processes() -> Vec<String> {
+    let mut names = std::collections::HashSet::new();
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).ok();
+        let Some(snapshot) = snapshot else { return vec![] };
 
-### Clipboard Viewer Notifications
+        let mut entry = PROCESSENTRY32W {
+            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
 
-Windows sends `WM_CLIPBOARDUPDATE` to clipboard viewers when content changes. Current flow sends this notification twice (once for set, once for restore). Simplified flow sends it once. Strictly better -- clipboard managers and history tools see the transcription as a single clipboard event instead of two.
+        if Process32FirstW(snapshot, &mut entry).is_ok() {
+            loop {
+                let name_len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+                let name = String::from_utf16_lossy(&entry.szExeFile[..name_len]);
+                if !name.is_empty() {
+                    names.insert(name);
+                }
+                if Process32NextW(snapshot, &mut entry).is_err() {
+                    break;
+                }
+            }
+        }
+        let _ = CloseHandle(snapshot);
+    }
+    let mut sorted: Vec<String> = names.into_iter().collect();
+    sorted.sort_unstable_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    sorted
+}
+```
+
+**Why raw Win32 over `sysinfo`:** `sysinfo` v0.37 is a 83M-download crate that pulls in significant platform abstraction overhead. We only need a flat list of process names on Windows. The ToolHelp32 snapshot API does exactly this in ~30 lines. Adding `sysinfo` for this would be like importing lodash for `_.capitalize()`. The `windows` crate is already a dependency -- one additional feature flag costs zero compile time increase beyond the generated bindings for that module.
+
+## Frontend: Searchable Process Dropdown
+
+### Recommended: Custom Component (No New Dependencies)
+
+Build a simple `<SearchableDropdown>` component using:
+- `<input>` with `onChange` for filtering
+- Filtered `<ul>/<li>` list rendered below
+- Keyboard navigation (ArrowUp/ArrowDown/Enter/Escape)
+- `lucide-react` icons (already a dependency) for search/chevron icons
+
+**Why custom over a library:**
+
+| Option | Bundle Size | Dependencies | Fit |
+|--------|-------------|-------------|-----|
+| Custom component | ~0 KB (already have React + Tailwind) | None | Matches existing app patterns |
+| `react-select` | ~27 KB min | emotion (CSS-in-JS) | Conflicts with Tailwind-only approach |
+| `@headlessui/react` | ~12 KB min | None | Good library, but overkill for one dropdown |
+| `react-select-search` | ~5 KB | None | Decent, but still unnecessary |
+
+The app has 20 components, all custom-built with React + Tailwind + clsx/tailwind-merge. Adding a UI library for a single dropdown breaks the consistency. The interaction is straightforward: filter a list of ~50-200 process names, select one. This is a 60-80 line component.
+
+### Tauri Command for Process List
+
+Expose `list_running_processes()` as a Tauri command:
+
+```rust
+#[tauri::command]
+fn get_running_processes() -> Vec<String> {
+    list_running_processes()
+}
+```
+
+Frontend calls it when the "Add App" flow is triggered. No polling -- one-shot fetch when the dropdown opens.
 
 ## What NOT to Add
 
-| Avoid | Why | Notes |
-|-------|-----|-------|
-| clipboard-win crate | Direct Win32 clipboard API | arboard already uses clipboard-win internally on Windows; no need to duplicate |
-| Custom clipboard format handling | Preserving images/rich text from clipboard | Out of scope -- the old save/restore only handled text anyway (`get_text()` returns None for non-text) |
-| Async clipboard crate | Non-blocking clipboard access | The function is already called via `spawn_blocking`; synchronous access is correct |
-| Post-paste verification | Reading clipboard after paste to confirm delivery | Unnecessary -- the pre-paste verify loop already confirms content; target apps do not modify clipboard on paste |
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| `sysinfo` crate | Heavyweight (~1.2MB compiled), pulls platform abstraction we don't need | `CreateToolhelp32Snapshot` via existing `windows` crate |
+| `react-select` or similar | Adds CSS-in-JS dependency, conflicts with Tailwind approach | Custom `<SearchableDropdown>` component |
+| `winapi` crate | Legacy crate, `windows` is the Microsoft-maintained replacement | Already using `windows` v0.58 |
+| Continuous foreground monitoring | Polling or hooks to track active window changes | One-shot detection at injection time only |
+| `GetWindowTextW` for window titles | Window titles change constantly, unreliable for app identification | Process executable name is stable |
+| `Win32_System_ProcessStatus` feature (EnumProcesses) | Older API, returns only PIDs requiring separate OpenProcess for each | ToolHelp32 returns names directly in PROCESSENTRY32W |
+
+## Version Compatibility
+
+| Package | Version | Compatible With | Notes |
+|---------|---------|-----------------|-------|
+| `windows` | 0.58 | All new APIs | ToolHelp32 APIs available since 0.48+; no version bump needed |
+| React | 18.3.1 | Custom dropdown component | Standard controlled input pattern |
+| `lucide-react` | 0.577.0 | Search/ChevronDown icons | Already available |
 
 ## Alternatives Considered
 
-| Approach | Why Not |
-|----------|---------|
-| Keep save/restore but make it optional via settings | Unnecessary complexity. Standard dictation tools (Dragon, Windows Voice Typing, macOS Dictation) all leave transcription on clipboard. Users expect this. |
-| Save/restore for non-text clipboard content (images) | The current code never did this -- `get_text()` returns `None` for images, and the restore path set empty string. This was never a real feature. |
-| Use `clipboard.clear()` after paste instead of restore | arboard 3.x has no `clear()` method. The old code used `set_text("")` as a workaround. But we want the transcription to remain on clipboard, so clearing is wrong anyway. |
+| Recommended | Alternative | Why Not |
+|-------------|-------------|---------|
+| `windows` crate ToolHelp32 | `sysinfo` crate | 1.2MB compiled weight for a 30-line function; overkill |
+| `windows` crate ToolHelp32 | `EnumProcesses` (psapi) | Returns only PIDs, requires per-process OpenProcess+QueryFullProcessImageName loop |
+| `PROCESS_QUERY_LIMITED_INFORMATION` | `PROCESS_QUERY_INFORMATION` | Limited access works for user processes and doesn't fail on elevated processes |
+| Process exe name matching | Window title matching | Exe names are stable ("Code.exe"); titles change with open files |
+| One-shot detection at injection | Polling/event-based foreground tracking | No need for continuous tracking; we only care at paste time |
+| Custom dropdown | Headless UI Combobox | Good library but adds dependency for one component |
 
 ## Sources
 
-- arboard 3.6.1 -- version from Cargo.lock, API from current inject.rs usage (HIGH confidence)
-- Windows clipboard ownership model (OpenClipboard/EmptyClipboard/SetClipboardData) -- Win32 documentation, well-established behavior (HIGH confidence)
-- Current inject.rs implementation -- direct code review (HIGH confidence)
-- Dictation tool clipboard behavior (Dragon, Windows Voice Typing, macOS Dictation) -- common knowledge from domain experience (MEDIUM confidence)
+- [windows crate GetForegroundWindow docs](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/UI/WindowsAndMessaging/fn.GetForegroundWindow.html) -- module path and signature (HIGH confidence)
+- [windows crate QueryFullProcessImageNameW docs](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Threading/fn.QueryFullProcessImageNameW.html) -- signature and feature flag (HIGH confidence)
+- [Tracking active process in Windows with Rust](https://hellocode.co/blog/post/tracking-active-process-windows-rust/) -- pattern for GetForegroundWindow -> PID -> process name chain (MEDIUM confidence, older windows crate version but pattern is identical)
+- [sysinfo crate](https://crates.io/crates/sysinfo) -- v0.37.2 latest, evaluated and rejected for this use case (HIGH confidence)
+- [Enumerating Windows processes with Rust](https://bazizi.github.io/2022/12/29/enumerating-windows-processes-using-Rust.html) -- ToolHelp32 pattern reference (MEDIUM confidence)
+- Existing Cargo.toml and keyboard_hook.rs -- direct code review confirming current feature flags (HIGH confidence)
 
 ---
-*Stack research for: v1.3 Clipboard Simplification*
+*Stack research for: v1.4 Per-App Settings - Foreground Window Detection*
 *Researched: 2026-03-07*
