@@ -10,6 +10,7 @@ import { AppearanceSection } from './components/sections/AppearanceSection';
 import { HistorySection } from './components/sections/HistorySection';
 import { SystemSection } from './components/sections/SystemSection';
 import { DictionarySection } from './components/sections/DictionarySection';
+import { AppRulesSection } from './components/sections/AppRulesSection';
 import { FirstRun } from './components/FirstRun';
 import { useUpdater } from './lib/updater';
 import { UpdateBanner } from './components/UpdateBanner';
@@ -205,6 +206,7 @@ function App() {
                   />
                 )}
                 {activeSection === 'dictionary' && <DictionarySection />}
+                {activeSection === 'app-rules' && <AppRulesSection />}
                 {activeSection === 'history' && <HistorySection />}
                 {activeSection === 'model' && (
                   <ModelSection
