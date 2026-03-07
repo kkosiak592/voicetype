@@ -63,7 +63,7 @@
 
 **Milestone Goal:** Enable per-application setting overrides, starting with ALL CAPS, detected automatically based on the foreground window at injection time.
 
-- [ ] **Phase 23: Foreground Detection Backend** - Win32 detection module, data model, persistence, and Tauri commands
+- [x] **Phase 23: Foreground Detection Backend** - Win32 detection module, data model, persistence, and Tauri commands (completed 2026-03-07)
 - [ ] **Phase 24: Pipeline Override Integration** - Wire per-app override resolution into the transcription pipeline at injection time
 - [ ] **Phase 25: App Rules UI** - Sidebar page with rules list, detect button, three-state toggles, and rule management
 - [ ] **Phase 26: Process Dropdown** - Searchable dropdown of running processes for adding apps without detection
@@ -79,7 +79,7 @@
   2. Detection handles elevated processes gracefully -- returns a fallback result instead of crashing or hanging
   3. App rules added to settings.json persist across application restarts and are loaded on startup
   4. UWP apps (e.g., Calculator, Windows Store apps) resolve to their real process name, not "applicationframehost.exe"
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 23-01-PLAN.md — Foreground detection module with types, Win32 API chain, UWP resolution, and unit tests
 - [ ] 23-02-PLAN.md — Wire into lib.rs: Tauri commands, managed state, startup loading, persistence
@@ -126,7 +126,7 @@ Phases execute in numeric order: 23 -> 24 -> 25 -> 26
 | 11-14 | v1.1 | 5/5 | Complete | 2026-03-02 |
 | 15-20.1 | v1.2 | 15/15 | Complete | 2026-03-07 |
 | 22 | v1.3 | 1/1 | Complete | 2026-03-07 |
-| 23. Foreground Detection Backend | 1/2 | In Progress|  | - |
+| 23. Foreground Detection Backend | 2/2 | Complete   | 2026-03-07 | - |
 | 24. Pipeline Override Integration | v1.4 | 0/? | Not started | - |
 | 25. App Rules UI | v1.4 | 0/? | Not started | - |
 | 26. Process Dropdown | v1.4 | 0/? | Not started | - |

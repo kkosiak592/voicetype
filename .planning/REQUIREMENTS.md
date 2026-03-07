@@ -26,7 +26,7 @@ Requirements for per-app settings milestone. Each maps to roadmap phases.
 - [ ] **OVR-01**: Each app rule has a three-state ALL CAPS toggle (Inherit / Force ON / Force OFF)
 - [ ] **OVR-02**: Per-app override is applied automatically at injection time when foreground app matches a rule
 - [ ] **OVR-03**: Unlisted apps fall back to the global ALL CAPS toggle on the General page
-- [ ] **OVR-04**: Per-app rules persist across app restarts via settings.json
+- [x] **OVR-04**: Per-app rules persist across app restarts via settings.json
 
 ## Future Requirements
 
@@ -66,7 +66,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OVR-01 | Phase 25 | Pending |
 | OVR-02 | Phase 24 | Pending |
 | OVR-03 | Phase 24 | Pending |
-| OVR-04 | Phase 23 | Pending |
+| OVR-04 | Phase 23 | Complete |
 
 **Coverage:**
 - v1.4 requirements: 12 total
