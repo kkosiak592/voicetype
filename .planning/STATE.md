@@ -3,29 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Per-App Settings
 status: executing
-stopped_at: Completed 23-02-PLAN.md (Phase 23 complete)
-last_updated: "2026-03-07T17:01:18.588Z"
-last_activity: 2026-03-07 -- Completed 23-02 Tauri app integration
+stopped_at: Completed 24-01-PLAN.md
+last_updated: "2026-03-07T17:22:00Z"
+last_activity: 2026-03-07 -- Completed 24-01 pipeline override integration
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
----
-
----
-gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: Per-App Settings
-status: executing
-stopped_at: Completed 23-02-PLAN.md
-last_updated: "2026-03-07T16:55:44Z"
-last_activity: 2026-03-07 -- Completed 23-02 Tauri app integration
-progress:
-  total_phases: 4
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  completed_phases: 2
+  total_plans: 3
+  completed_plans: 3
   percent: 100
 ---
 
@@ -36,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-07)
 
 **Core value:** Voice dictation must feel instant -- sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** Phase 23 - Foreground Detection Backend
+**Current focus:** Phase 24 - Pipeline Override Integration
 
 ## Current Position
 
-Phase: 23 (1 of 4 in v1.4)
-Plan: 2 of 2 in current phase (COMPLETE)
-Status: Phase 23 Complete
-Last activity: 2026-03-07 -- Completed 23-02 Tauri app integration
+Phase: 24 (2 of 4 in v1.4)
+Plan: 1 of 1 in current phase (COMPLETE)
+Status: Phase 24 Complete
+Last activity: 2026-03-07 -- Completed 24-01 pipeline override integration
 
 Progress: [██████████] 100%
 
@@ -64,6 +49,8 @@ Recent decisions affecting current work:
 - [23-01]: #![allow(dead_code)] on foreground.rs until pipeline integration in 23-02
 - [23-02]: Added #[cfg(windows)] to command function definitions (not just invoke_handler entries)
 - [23-02]: Removed #![allow(dead_code)] from foreground.rs (module now integrated)
+- [24-01]: Override resolution as pure function for unit testability without Win32 dependencies
+- [24-01]: Lock ordering: ActiveProfile dropped before AppRulesState acquired to prevent deadlocks
 
 ### Pending Todos
 
@@ -77,6 +64,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-07T16:55:44Z
-Stopped at: Completed 23-02-PLAN.md (Phase 23 complete)
-Resume file: .planning/phases/23-foreground-detection-backend/23-02-SUMMARY.md
+Last session: 2026-03-07T17:22:00Z
+Stopped at: Completed 24-01-PLAN.md (Phase 24 complete)
+Resume file: .planning/phases/24-pipeline-override-integration/24-01-SUMMARY.md
