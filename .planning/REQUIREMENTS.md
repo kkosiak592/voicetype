@@ -9,9 +9,9 @@ Requirements for clipboard simplification release. Each maps to roadmap phases.
 
 ### Clipboard Simplification
 
-- [ ] **CLIP-01**: Transcription replaces clipboard content after injection (no save/restore)
-- [ ] **CLIP-02**: Post-paste 80ms sleep removed (only needed for restore timing)
-- [ ] **CLIP-03**: inject_text doc comment updated to reflect simplified sequence
+- [x] **CLIP-01**: Transcription replaces clipboard content after injection (no save/restore)
+- [x] **CLIP-02**: Post-paste 80ms sleep removed (only needed for restore timing)
+- [x] **CLIP-03**: inject_text doc comment updated to reflect simplified sequence
 
 ## Future Requirements
 
@@ -37,9 +37,9 @@ Deferred to future release. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLIP-01 | Phase 22 | Pending |
-| CLIP-02 | Phase 22 | Pending |
-| CLIP-03 | Phase 22 | Pending |
+| CLIP-01 | Phase 22 | Complete |
+| CLIP-02 | Phase 22 | Complete |
+| CLIP-03 | Phase 22 | Complete |
 
 **Coverage:**
 - v1.3 requirements: 3 total

@@ -55,7 +55,7 @@
 
 **Milestone Goal:** Remove clipboard save/restore logic from inject_text -- after transcription, clipboard simply contains the transcription text, matching standard dictation tool behavior.
 
-- [ ] **Phase 22: Clipboard Save/Restore Removal** - Remove save, restore, and post-paste sleep from inject_text
+- [x] **Phase 22: Clipboard Save/Restore Removal** - Remove save, restore, and post-paste sleep from inject_text (completed 2026-03-07)
 
 ## Phase Details
 
@@ -83,7 +83,7 @@ Phase 22
 | 1-8 | v1.0 | 26/26 | Complete | 2026-03-02 |
 | 11-14 | v1.1 | 5/5 | Complete | 2026-03-02 |
 | 15-20.1 | v1.2 | 15/15 | Complete | 2026-03-07 |
-| 22. Clipboard Save/Restore Removal | v1.3 | 0/1 | Not started | - |
+| 22. Clipboard Save/Restore Removal | 1/1 | Complete   | 2026-03-07 | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
 Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
