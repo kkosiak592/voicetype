@@ -43,7 +43,7 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 Phase: 26 (4 of 4 in v1.4)
 Plan: 1 of 1 in current phase (COMPLETE)
 Status: Phase 26 Complete
-Last activity: 2026-03-07 -- Completed 26-01 Process Dropdown
+Last activity: 2026-03-07 - Completed quick task 47: Remove stale Parakeet vocabulary prompting warning from model page
 
 Progress: [██████████] 100%
 
@@ -81,6 +81,12 @@ None.
 - Do NOT remove clipboard verification retry loop or 150ms pre-paste delay -- they serve orthogonal purposes
 - UWP EnumChildWindows callback pattern verified in 23-01 (takes HWND directly, not Option<HWND>)
 - Three-state toggle UX resolved in 25-01: custom dropdown with Inherit/Force ON/Force OFF
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 47 | Remove stale Parakeet vocabulary prompting warning from model page | 2026-03-07 | f7946da | Verified | [47-remove-stale-parakeet-vocabulary-prompti](./quick/47-remove-stale-parakeet-vocabulary-prompti/) |
 
 ## Session Continuity
 
