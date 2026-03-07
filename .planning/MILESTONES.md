@@ -1,5 +1,29 @@
 # Milestones
 
+## v1.2 Keyboard Hook (Shipped: 2026-03-07)
+
+**Phases completed:** 10 phases (1 voided), 15 plans, 21 quick tasks
+**Commits:** 253
+**Lines changed:** +42,468 / -2,176
+**Lines of code:** 23,557 (Rust + TypeScript)
+**Timeline:** 5 days (2026-03-02 -> 2026-03-07)
+**Git range:** v1.1.0..v1.2.0
+
+**Delivered:** Custom WH_KEYBOARD_LL keyboard hook with Ctrl+Win modifier-only activation, three transcription engines (Whisper + Parakeet + Moonshine), engine-agnostic VAD chunking, bundled CUDA DLLs, and comprehensive UI polish.
+
+**Key accomplishments:**
+- WH_KEYBOARD_LL low-level keyboard hook on dedicated thread with 50ms debounce, Start menu suppression, and clean shutdown — replacing RegisterHotKey for modifier-only combos (Phases 15-17)
+- Moonshine Tiny ONNX engine integrated as third transcription backend with VAD chunking and GPU support (Phase 19.1)
+- Data-driven model selection with benchmark stats, parakeet-tdt-v2-fp32 as universal recommendation (Phase 19.2)
+- UI polish: tray icon fixes, profile simplification to single vocabulary prompt, transcription history panel with click-to-copy (Phase 19.3)
+- CUDA DLLs bundled in single installer — one installer works for all users with runtime GPU fallback (Phase 20)
+- Engine-agnostic VAD chunking for 60s+ recordings across all three engines (Phase 20.1)
+
+### Known Gaps
+- DIST-01: Signed v1.2 binary passes VirusTotal scan — Phase 18/21 voided, deferred to future milestone
+
+---
+
 ## v1.1 Auto-Updates & CI/CD (Shipped: 2026-03-02)
 
 **Phases completed:** 4 phases, 5 plans, 12 tasks

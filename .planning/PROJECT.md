@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A local, low-latency voice-to-text desktop tool for Windows with dual transcription engines (Whisper + Parakeet TDT). Built with Tauri 2.0, it provides a glassmorphism pill overlay with audio visualizer, global hotkey activation, Silero VAD silence detection, vocabulary profiles for domain-specific dictation, and instant text injection into any active application. Runs entirely on-device with zero internet dependency.
+A local, low-latency voice-to-text desktop tool for Windows with three transcription engines (Whisper, Parakeet TDT, Moonshine Tiny). Built with Tauri 2.0, it provides a glassmorphism pill overlay with audio visualizer, WH_KEYBOARD_LL keyboard hook for Ctrl+Win activation, Silero VAD silence detection with engine-agnostic chunking for long recordings, transcription history with click-to-copy, and instant text injection into any active application. Runs entirely on-device with zero internet dependency.
 
 ## Core Value
 
@@ -34,26 +34,27 @@ Voice dictation must feel instant — sub-1500ms from end-of-speech to text appe
 - ✓ GitHub Actions CI/CD for automated builds, signing, and release publishing — v1.1
 - ✓ In-app update check on launch with download/install/relaunch UX — v1.1
 - ✓ Release workflow with documented runbook and changelog format — v1.1
+- ✓ WH_KEYBOARD_LL keyboard hook module on dedicated thread — v1.2
+- ✓ Ctrl+Win modifier-only hotkey with 50ms debounce — v1.2
+- ✓ Start menu suppression when Ctrl+Win combo is active — v1.2
+- ✓ Fallback to standard hotkey if hook installation fails — v1.2
+- ✓ Frontend modifier-only combo capture and display — v1.2
+- ✓ Moonshine Tiny ONNX engine as third transcription backend — v1.2
+- ✓ Engine-agnostic VAD chunking for 60s+ recordings — v1.2
+- ✓ Data-driven model selection with benchmark stats — v1.2
+- ✓ Transcription history panel with click-to-copy — v1.2
+- ✓ CUDA DLLs bundled in single installer with runtime GPU fallback — v1.2
+- ✓ Filler word removal, always-listen mode, pill drag reposition — v1.2
 
 ### Active
 
-- [ ] WH_KEYBOARD_LL keyboard hook module on dedicated thread
-- [ ] Ctrl+Win modifier-only hotkey with 50ms debounce
-- [ ] Start menu suppression when Ctrl+Win combo is active
-- [ ] Fallback to standard hotkey if hook installation fails
-- [ ] Frontend modifier-only combo capture and display
+(No active requirements — define with `/gsd:new-milestone`)
 
-## Current Milestone: v1.2 Keyboard Hook
+## Current State
 
-**Goal:** Replace tauri-plugin-global-shortcut with a custom WH_KEYBOARD_LL low-level keyboard hook, enabling Ctrl+Win modifier-only hotkey activation with debounce for reliable key ordering.
+v1.2 shipped 2026-03-07. Three milestones complete (v1.0 MVP, v1.1 Auto-Updates, v1.2 Keyboard Hook).
 
-**Target features:**
-- WH_KEYBOARD_LL keyboard hook module replacing RegisterHotKey API
-- Ctrl+Win modifier-only hotkey as a configurable option
-- Debounce window (~50ms) for press-order independence
-- Start menu suppression when Ctrl+Win combo is active
-- Fallback to standard hotkey if hook installation fails
-- Frontend support for modifier-only combo capture and display
+No active milestone — use `/gsd:new-milestone` to start next.
 
 ### Out of Scope
 
@@ -67,12 +68,14 @@ Voice dictation must feel instant — sub-1500ms from end-of-speech to text appe
 
 ## Context
 
-**Current state (v1.1 shipped 2026-03-02):**
-- 18,261 LOC across Rust backend + React/TypeScript frontend + planning docs
-- Tech stack: Tauri 2.0, whisper-rs, parakeet-rs, cpal/WASAPI, Silero VAD, React, Tailwind CSS, tauri-plugin-updater, tauri-plugin-process
-- Dual engine: Whisper (CUDA) for broad compatibility, Parakeet TDT (CUDA/DirectML) for GPU users
-- 268 commits over 4 days of development
-- NSIS installer ~9 MB, models downloaded on first run (300MB-1.3GB depending on selection)
+**Current state (v1.2 shipped 2026-03-07):**
+- 23,557 LOC across Rust backend + React/TypeScript frontend
+- Tech stack: Tauri 2.0, whisper-rs, parakeet-rs, ort (Moonshine ONNX), cpal/WASAPI, Silero VAD, React, Tailwind CSS, tauri-plugin-updater, tauri-plugin-process
+- Three engines: Whisper (CUDA), Parakeet TDT (CUDA/DirectML), Moonshine Tiny (ONNX)
+- WH_KEYBOARD_LL keyboard hook for Ctrl+Win modifier-only activation
+- Engine-agnostic VAD chunking for 60s+ recordings
+- 521 commits over 9 days of development
+- NSIS installer with bundled CUDA DLLs, models downloaded on first run
 - Auto-update pipeline: Ed25519 signing, GitHub Actions CI/CD, in-app update UX
 - Public repo: https://github.com/kkosiak592/voicetype
 
@@ -107,6 +110,11 @@ Voice dictation must feel instant — sub-1500ms from end-of-speech to text appe
 | Parakeet TDT as second engine | ONNX-based, supports CUDA + DirectML, faster inference for GPU users | ✓ Good — broader GPU support |
 | DirectML for non-NVIDIA GPUs | ort DirectML EP enables Parakeet on Intel/AMD integrated GPUs | ✓ Good — widens hardware support |
 | VAD gate bypass for hold-to-talk | Saves 20-30ms by skipping Silero scan when user explicitly controls recording | ✓ Good — noticeable latency reduction |
+| WH_KEYBOARD_LL on dedicated thread | Enables modifier-only combos (Ctrl+Win) impossible with RegisterHotKey; 50ms debounce for press-order independence | ✓ Good — reliable activation |
+| Moonshine Tiny as third engine | ONNX-based, smallest model (~70MB), fastest inference for quick dictation | ✓ Good — broadens hardware support |
+| Engine-agnostic VAD chunking | Single vad_chunk_audio function handles 60s+ recordings for all engines | ✓ Good — eliminated per-engine chunking duplication |
+| CUDA DLLs bundled in installer | Single installer for all users; runtime GPU fallback on non-NVIDIA | ✓ Good — no installer split needed |
+| Parakeet as universal recommendation | Benchmark data shows best accuracy/latency balance across hardware | ✓ Good — simplified model selection |
 
 ---
 | tauri-plugin-updater + GitHub Releases | Zero cost, excellent UX, official Tauri approach, simplest for <20 users | ✓ Good — first CI release published |
@@ -119,4 +127,4 @@ Voice dictation must feel instant — sub-1500ms from end-of-speech to text appe
 | Annotated git tags for releases | Store tagger info, work with git describe, better practice | ✓ Good |
 
 ---
-*Last updated: 2026-03-02 after v1.1 milestone completion*
+*Last updated: 2026-03-07 after v1.2 milestone*

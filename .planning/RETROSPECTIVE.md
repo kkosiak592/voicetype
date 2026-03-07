@@ -99,17 +99,71 @@
 
 ---
 
+## Milestone: v1.2 — Keyboard Hook
+
+**Shipped:** 2026-03-07
+**Phases:** 10 (1 voided) | **Plans:** 15 | **Quick Tasks:** 21
+**Timeline:** 5 days (2026-03-02 -> 2026-03-07) | **Commits:** 253
+
+### What Was Built
+- WH_KEYBOARD_LL low-level keyboard hook on dedicated thread with 50ms debounce and Start menu suppression
+- Runtime routing between hook (modifier-only combos) and tauri-plugin-global-shortcut (standard combos)
+- Frontend modifier-only combo capture with progressive display and canonical token ordering
+- Moonshine Tiny ONNX as third transcription engine with download, selection, and GPU support
+- Engine-agnostic VAD chunking for 60s+ recordings across Whisper, Parakeet, and Moonshine
+- Data-driven model selection with benchmark stats and universal parakeet recommendation
+- UI polish: tray icon fixes, profile simplification, transcription history panel, pill drag reposition
+- CUDA DLLs bundled in single installer with runtime GPU fallback
+- Filler word removal, always-listen mode, corrections dictionary inline editor
+
+### What Worked
+- Win32 keyboard hook research (five critical pitfalls) front-loaded into Phase 15 planning prevented all common hook failure modes
+- Benchmark-driven model decisions (Quick tasks 27-37) provided empirical data for model selection revamp
+- Decimal phase numbering (19.1, 19.2, 19.3, 20.1) scaled well for scope additions without disrupting execution order
+- Quick tasks (21 total) handled feature polish, benchmarking, and small fixes efficiently alongside phased work
+- Conditional routing pattern (is_modifier_only) cleanly separated hook vs global-shortcut code paths
+
+### What Was Inefficient
+- Phase 18 (Integration and Distribution) was planned, voided, and moved to Phase 21 — which was also never executed. DIST-01 (VirusTotal scan) deferred as known gap
+- distil-large-v3.5 was added in Phase 19 then removed in Phase 19.2 — similar to the v1.0 int8 add-then-remove pattern
+- Phase 20 scope originally included dual CPU/GPU installers — simplified to single installer mid-planning
+- ROADMAP progress table columns drifted again on decimal phases — same issue as v1.0
+
+### Patterns Established
+- `handle_hotkey_event(app, pressed: bool)` as shared entry point for both hook and global-shortcut paths
+- `HookHandleState(Mutex<Option<HookHandle>>)` for cross-boundary hook lifecycle management
+- `vad_chunk_audio(samples, max_seconds)` as engine-agnostic chunking function
+- `TAURI_CONFIG` env var injection in CI for build-time-only bundle configuration
+- Correction log module for promoting inline corrections to persistent dictionary
+
+### Key Lessons
+1. Avoid add-then-remove churn by validating model/feature viability with benchmarks BEFORE integration (distil-large-v3.5 repeated v1.0's int8 mistake)
+2. Win32 API research is high-value — understanding pitfalls before coding prevented all 5 known hook failure modes
+3. Single-installer approach (bundle DLLs, runtime fallback) is simpler and more maintainable than installer variants
+4. Engine-agnostic abstractions (VAD chunking) should be built from the start, not generalized after the fact
+5. Phase voiding/movement (18 -> 21) signals scope uncertainty — better to defer unresolved phases entirely during planning
+
+### Cost Observations
+- Model mix: opus for planning/complex decisions, sonnet for execution, balanced profile
+- 253 commits across ~10 sessions over 5 days
+- Notable: 21 quick tasks — highest count per milestone, reflecting feature breadth beyond original keyboard hook scope
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
 
-| Milestone | Sessions | Phases | Key Change |
-|-----------|----------|--------|------------|
-| v1.0 | ~20 | 10 | Initial process — bottom-up build with quick task polish |
-| v1.1 | 1 | 4 | Infrastructure milestone — linear dependencies, zero deviations |
+| Milestone | Sessions | Phases | Quick Tasks | Commits | Key Change |
+|-----------|----------|--------|-------------|---------|------------|
+| v1.0 | ~20 | 10 | 16 | 237 | Initial process — bottom-up build with quick task polish |
+| v1.1 | 1 | 4 | 0 | 31 | Infrastructure milestone — linear dependencies, zero deviations |
+| v1.2 | ~10 | 10 | 21 | 253 | Scope growth beyond original goal — benchmark-driven model decisions |
 
 ### Top Lessons (Verified Across Milestones)
 
-1. Human verification checkpoints catch issues automated tests miss (v1.0: UI bugs; v1.1: config format)
-2. Phase dependency ordering (bottom-up in v1.0, linear in v1.1) prevents integration surprises when respected
-3. Planning pays off — phases that follow plans closely execute fastest (v1.1: 0 deviations across 5 plans)
+1. Human verification checkpoints catch issues automated tests miss (v1.0: UI bugs; v1.1: config format; v1.2: hook pitfalls)
+2. Phase dependency ordering prevents integration surprises when respected (all milestones)
+3. Planning pays off — phases that follow plans closely execute fastest (v1.1: 0 deviations; v1.2: hook phases executed cleanly)
+4. Avoid add-then-remove churn — validate viability before integration (v1.0: int8 model; v1.2: distil-large-v3.5)
+5. Quick tasks scale well for feature polish but can expand milestone scope significantly (v1.2: 21 quick tasks added filler removal, always-listen, pill drag, corrections editor)
