@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { X, Crosshair, Check } from 'lucide-react';
+import { X, Crosshair, Check, List } from 'lucide-react';
 import { store } from '../../lib/store';
 
 interface DetectedApp {
@@ -12,6 +12,11 @@ type DetectState = 'idle' | 'countdown' | 'success' | 'error';
 
 interface AppRule {
   all_caps: boolean | null;
+}
+
+interface RunningProcess {
+  exe_name: string;
+  window_title: string;
 }
 
 type DropdownValue = boolean | null;
@@ -30,7 +35,13 @@ export function AppRulesSection() {
   const [detectState, setDetectState] = useState<DetectState>('idle');
   const [countdown, setCountdown] = useState(3);
   const [detectMessage, setDetectMessage] = useState('');
+  const [browseOpen, setBrowseOpen] = useState(false);
+  const [processes, setProcesses] = useState<RunningProcess[]>([]);
+  const [search, setSearch] = useState('');
+  const [browseLoading, setBrowseLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const browseRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -105,7 +116,42 @@ export function AppRulesSection() {
     setCountdown(3);
   }
 
-  // Close dropdown on outside click
+  async function handleBrowseClick() {
+    setBrowseOpen(true);
+    setBrowseLoading(true);
+    setSearch('');
+    try {
+      const list = await invoke<RunningProcess[]>('list_running_processes');
+      setProcesses(list);
+    } catch {
+      setProcesses([]);
+    }
+    setBrowseLoading(false);
+    setTimeout(() => searchRef.current?.focus(), 0);
+  }
+
+  async function handleAddFromBrowse(exeName: string, windowTitle: string) {
+    await invoke('set_app_rule', { exeName, rule: { all_caps: null } });
+    setRules(prev => ({ ...prev, [exeName]: { all_caps: null } }));
+    setWindowTitles(prev => ({ ...prev, [exeName]: windowTitle }));
+    setBrowseOpen(false);
+    setSearch('');
+  }
+
+  // Close browse dropdown on outside click
+  useEffect(() => {
+    if (!browseOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (browseRef.current && !browseRef.current.contains(e.target as Node)) {
+        setBrowseOpen(false);
+        setSearch('');
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [browseOpen]);
+
+  // Close three-state dropdown on outside click
   useEffect(() => {
     if (!openDropdown) return;
     function handleClick(e: MouseEvent) {
@@ -137,6 +183,11 @@ export function AppRulesSection() {
     });
   }
 
+  const filtered = processes.filter(p =>
+    p.exe_name.includes(search.toLowerCase()) ||
+    p.window_title.toLowerCase().includes(search.toLowerCase())
+  );
+
   const sortedEntries = Object.entries(rules).sort(([a], [b]) => a.localeCompare(b));
 
   const dropdownOptions: { label: string; value: DropdownValue }[] = [
@@ -159,35 +210,103 @@ export function AppRulesSection() {
         </p>
       </div>
 
-      <div className="mb-4">
-        <button
-          onClick={handleDetectClick}
-          disabled={detectState !== 'idle'}
-          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
-            detectState === 'success'
-              ? 'bg-emerald-600 text-white cursor-default'
-              : detectState === 'error'
-              ? 'bg-amber-600 text-white cursor-default'
-              : detectState === 'countdown'
-              ? 'bg-emerald-700 text-white cursor-wait'
-              : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-          }`}
-        >
-          {detectState === 'idle' && (
-            <>
-              <Crosshair className="size-4" />
-              Detect Active App
-            </>
-          )}
-          {detectState === 'countdown' && `Detecting in ${countdown}...`}
-          {detectState === 'success' && (
-            <>
-              <Check className="size-4" />
-              {detectMessage}
-            </>
-          )}
-          {detectState === 'error' && detectMessage}
-        </button>
+      <div className="mb-4 relative">
+        <div className="flex items-start gap-2">
+          <button
+            onClick={handleDetectClick}
+            disabled={detectState !== 'idle'}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+              detectState === 'success'
+                ? 'bg-emerald-600 text-white cursor-default'
+                : detectState === 'error'
+                ? 'bg-amber-600 text-white cursor-default'
+                : detectState === 'countdown'
+                ? 'bg-emerald-700 text-white cursor-wait'
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+            }`}
+          >
+            {detectState === 'idle' && (
+              <>
+                <Crosshair className="size-4" />
+                Detect Active App
+              </>
+            )}
+            {detectState === 'countdown' && `Detecting in ${countdown}...`}
+            {detectState === 'success' && (
+              <>
+                <Check className="size-4" />
+                {detectMessage}
+              </>
+            )}
+            {detectState === 'error' && detectMessage}
+          </button>
+
+          <button
+            onClick={handleBrowseClick}
+            disabled={browseOpen}
+            className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium
+              ring-1 ring-gray-300 dark:ring-gray-600
+              text-gray-700 dark:text-gray-300
+              hover:bg-gray-100 dark:hover:bg-gray-800
+              transition-colors"
+          >
+            <List className="size-4" />
+            Browse Running Apps
+          </button>
+        </div>
+
+        {browseOpen && (
+          <div
+            ref={browseRef}
+            className="absolute z-20 mt-1 w-80 max-h-72 rounded-xl
+              bg-white dark:bg-gray-800 shadow-lg ring-1 ring-gray-200 dark:ring-gray-700
+              flex flex-col overflow-hidden"
+          >
+            <input
+              ref={searchRef}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search processes..."
+              className="px-3 py-2 text-sm border-b border-gray-200 dark:border-gray-700
+                bg-transparent text-gray-900 dark:text-gray-100
+                placeholder-gray-400 dark:placeholder-gray-500
+                outline-none"
+            />
+            <div className="overflow-y-auto">
+              {browseLoading ? (
+                <p className="px-3 py-4 text-sm text-gray-400 text-center">Loading...</p>
+              ) : filtered.length === 0 ? (
+                <p className="px-3 py-4 text-sm text-gray-400 text-center">No matching processes</p>
+              ) : (
+                filtered.map(proc => {
+                  const alreadyAdded = proc.exe_name in rules;
+                  return (
+                    <button
+                      key={proc.exe_name}
+                      disabled={alreadyAdded}
+                      onClick={() => handleAddFromBrowse(proc.exe_name, proc.window_title)}
+                      className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                        alreadyAdded
+                          ? 'opacity-50 cursor-default'
+                          : 'hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer'
+                      }`}
+                    >
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">
+                        {proc.exe_name}
+                      </span>
+                      {alreadyAdded && (
+                        <span className="ml-2 text-xs text-gray-400">already added</span>
+                      )}
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {proc.window_title}
+                      </p>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white dark:bg-gray-900 ring-1 ring-gray-200 dark:ring-gray-800 rounded-2xl p-4 shadow-sm">
@@ -195,7 +314,7 @@ export function AppRulesSection() {
           <div className="flex flex-col items-center justify-center py-8">
             <p className="text-sm text-gray-500 dark:text-gray-400">No app rules configured</p>
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-              Use the Detect Active App button to add an application
+              Use Detect Active App or Browse Running Apps to add an application
             </p>
           </div>
         ) : (
