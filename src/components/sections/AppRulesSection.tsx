@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { X } from 'lucide-react';
+import { X, Crosshair, Check } from 'lucide-react';
 import { store } from '../../lib/store';
+
+interface DetectedApp {
+  exe_name: string | null;
+  window_title: string | null;
+}
+
+type DetectState = 'idle' | 'countdown' | 'success' | 'error';
 
 interface AppRule {
   all_caps: boolean | null;
@@ -20,12 +27,83 @@ export function AppRulesSection() {
   const [windowTitles, setWindowTitles] = useState<Record<string, string>>({});
   const [globalAllCaps, setGlobalAllCaps] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [detectState, setDetectState] = useState<DetectState>('idle');
+  const [countdown, setCountdown] = useState(3);
+  const [detectMessage, setDetectMessage] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     invoke<Record<string, AppRule>>('get_app_rules').then(setRules).catch(() => {});
     store.get<boolean>('all_caps').then(v => setGlobalAllCaps(v ?? false)).catch(() => {});
   }, []);
+
+  // Countdown timer for detect flow
+  useEffect(() => {
+    if (detectState !== 'countdown') return;
+    intervalRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          // Detect foreground app
+          invoke<DetectedApp>('detect_foreground_app')
+            .then(detected => {
+              if (!detected.exe_name) {
+                setDetectMessage('Could not detect app -- try again');
+                setDetectState('error');
+              } else if (rules[detected.exe_name]) {
+                setDetectMessage(`${detected.exe_name} already added`);
+                setDetectState('success');
+              } else {
+                const exeName = detected.exe_name;
+                invoke('set_app_rule', { exeName, rule: { all_caps: null } })
+                  .then(() => {
+                    setRules(prev => ({ ...prev, [exeName]: { all_caps: null } }));
+                    if (detected.window_title) {
+                      setWindowTitles(prev => ({ ...prev, [exeName]: detected.window_title! }));
+                    }
+                    setDetectMessage(`Added ${exeName}`);
+                    setDetectState('success');
+                  })
+                  .catch(() => {
+                    setDetectMessage('Could not detect app -- try again');
+                    setDetectState('error');
+                  });
+              }
+            })
+            .catch(() => {
+              setDetectMessage('Could not detect app -- try again');
+              setDetectState('error');
+            });
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [detectState, rules]);
+
+  // Reset detect state after success/error message display
+  useEffect(() => {
+    if (detectState !== 'success' && detectState !== 'error') return;
+    resetTimeoutRef.current = setTimeout(() => {
+      setDetectState('idle');
+      setDetectMessage('');
+      setCountdown(3);
+    }, 2500);
+    return () => {
+      if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
+    };
+  }, [detectState]);
+
+  function handleDetectClick() {
+    setDetectState('countdown');
+    setCountdown(3);
+  }
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -81,7 +159,36 @@ export function AppRulesSection() {
         </p>
       </div>
 
-      {/* Detect button placeholder - implemented in Task 2 */}
+      <div className="mb-4">
+        <button
+          onClick={handleDetectClick}
+          disabled={detectState !== 'idle'}
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+            detectState === 'success'
+              ? 'bg-emerald-600 text-white cursor-default'
+              : detectState === 'error'
+              ? 'bg-amber-600 text-white cursor-default'
+              : detectState === 'countdown'
+              ? 'bg-emerald-700 text-white cursor-wait'
+              : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+          }`}
+        >
+          {detectState === 'idle' && (
+            <>
+              <Crosshair className="size-4" />
+              Detect Active App
+            </>
+          )}
+          {detectState === 'countdown' && `Detecting in ${countdown}...`}
+          {detectState === 'success' && (
+            <>
+              <Check className="size-4" />
+              {detectMessage}
+            </>
+          )}
+          {detectState === 'error' && detectMessage}
+        </button>
+      </div>
 
       <div className="bg-white dark:bg-gray-900 ring-1 ring-gray-200 dark:ring-gray-800 rounded-2xl p-4 shadow-sm">
         {sortedEntries.length === 0 ? (
