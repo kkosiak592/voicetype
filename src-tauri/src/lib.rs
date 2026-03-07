@@ -11,6 +11,8 @@ mod tray;
 mod vad;
 mod updater;
 #[cfg(windows)]
+mod foreground;
+#[cfg(windows)]
 mod keyboard_hook;
 #[cfg(test)]
 mod corrections_tests;
