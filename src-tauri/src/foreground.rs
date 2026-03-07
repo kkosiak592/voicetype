@@ -173,7 +173,14 @@ pub fn resolve_all_caps(
     exe_name: &Option<String>,
     rules: &HashMap<String, AppRule>,
 ) -> bool {
-    todo!("implement override resolution")
+    if let Some(name) = exe_name {
+        if let Some(rule) = rules.get(name) {
+            if let Some(override_val) = rule.all_caps {
+                return override_val;
+            }
+        }
+    }
+    profile_all_caps
 }
 
 #[cfg(test)]
