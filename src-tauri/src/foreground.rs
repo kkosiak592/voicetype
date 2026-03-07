@@ -1,5 +1,18 @@
+// Module is created in phase 23-01 and integrated into the pipeline in 23-02.
+// Suppress dead_code until then.
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use windows::Win32::Foundation::{BOOL, CloseHandle, HWND, LPARAM};
+use windows::Win32::System::Threading::{
+    OpenProcess, PROCESS_NAME_FORMAT, PROCESS_QUERY_LIMITED_INFORMATION,
+    QueryFullProcessImageNameW,
+};
+use windows::Win32::UI::WindowsAndMessaging::{
+    EnumChildWindows, GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId,
+};
+use windows::core::PWSTR;
 
 /// The foreground application detected via Win32 API.
 ///
@@ -23,6 +36,136 @@ pub struct AppRule {
 /// Tauri managed state holding per-app override rules.
 /// Keyed by lowercased exe name (e.g. "notepad.exe" -> AppRule).
 pub struct AppRulesState(pub std::sync::Mutex<HashMap<String, AppRule>>);
+
+/// Detect the foreground application using the Win32 API chain:
+/// GetForegroundWindow -> GetWindowThreadProcessId -> OpenProcess -> QueryFullProcessImageNameW.
+///
+/// UWP apps (ApplicationFrameHost.exe) are resolved to their real child process.
+/// Returns DetectedApp with None fields if detection fails at any step.
+pub fn detect_foreground_app() -> DetectedApp {
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0 == std::ptr::null_mut() {
+            return DetectedApp {
+                exe_name: None,
+                window_title: None,
+            };
+        }
+
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        if pid == 0 {
+            return DetectedApp {
+                exe_name: None,
+                window_title: None,
+            };
+        }
+
+        let window_title = get_window_title(hwnd);
+        let mut exe_name = get_process_exe_name(pid);
+
+        // UWP apps run inside ApplicationFrameHost.exe — resolve to real child process
+        if let Some(ref name) = exe_name {
+            if name == "applicationframehost.exe" {
+                if let Some(child_name) = resolve_uwp_child(hwnd) {
+                    exe_name = Some(child_name);
+                }
+            }
+        }
+
+        DetectedApp {
+            exe_name,
+            window_title,
+        }
+    }
+}
+
+/// Get the exe name for a process by PID.
+///
+/// Uses PROCESS_QUERY_LIMITED_INFORMATION to handle elevated processes gracefully —
+/// returns None instead of crashing if access is denied.
+/// CRITICAL: CloseHandle is called explicitly before any return path after OpenProcess.
+unsafe fn get_process_exe_name(pid: u32) -> Option<String> {
+    let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+
+    let mut buf = [0u16; 260]; // MAX_PATH
+    let mut size = buf.len() as u32;
+
+    let result = QueryFullProcessImageNameW(
+        handle,
+        PROCESS_NAME_FORMAT(0),
+        PWSTR(buf.as_mut_ptr()),
+        &mut size,
+    );
+
+    // CRITICAL: Close handle before any return
+    let _ = CloseHandle(handle);
+
+    if result.is_err() {
+        eprintln!("QueryFullProcessImageNameW failed for pid {}", pid);
+        return None;
+    }
+
+    let full_path = String::from_utf16_lossy(&buf[..size as usize]);
+    let filename = std::path::Path::new(&full_path)
+        .file_name()?
+        .to_string_lossy()
+        .to_lowercase();
+
+    Some(filename)
+}
+
+/// Get the window title text for a given HWND.
+unsafe fn get_window_title(hwnd: HWND) -> Option<String> {
+    let mut buf = [0u16; 512];
+    let len = GetWindowTextW(hwnd, &mut buf);
+    if len > 0 {
+        Some(String::from_utf16_lossy(&buf[..len as usize]))
+    } else {
+        None
+    }
+}
+
+/// Resolve a UWP app's real child process from ApplicationFrameHost.exe.
+///
+/// Enumerates child windows of the parent HWND and returns the exe name of the
+/// first child whose process is NOT applicationframehost.exe.
+fn resolve_uwp_child(parent_hwnd: HWND) -> Option<String> {
+    let mut result: Option<String> = None;
+
+    unsafe {
+        let _ = EnumChildWindows(
+            parent_hwnd,
+            Some(enum_child_proc),
+            LPARAM(&mut result as *mut Option<String> as isize),
+        );
+    }
+
+    result
+}
+
+/// Callback for EnumChildWindows. Finds the first child window whose process
+/// is not applicationframehost.exe and stores its exe name via LPARAM.
+///
+/// Returns BOOL(0) to stop enumeration once a match is found, BOOL(1) to continue.
+unsafe extern "system" fn enum_child_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    let mut pid: u32 = 0;
+    GetWindowThreadProcessId(hwnd, Some(&mut pid));
+
+    if pid == 0 {
+        return BOOL(1); // Continue enumeration
+    }
+
+    if let Some(name) = get_process_exe_name(pid) {
+        if name != "applicationframehost.exe" {
+            let result_ptr = lparam.0 as *mut Option<String>;
+            *result_ptr = Some(name);
+            return BOOL(0); // Stop enumeration — found real app
+        }
+    }
+
+    BOOL(1) // Continue enumeration
+}
 
 #[cfg(test)]
 mod tests {
