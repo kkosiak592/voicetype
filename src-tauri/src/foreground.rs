@@ -1,7 +1,3 @@
-// Module is created in phase 23-01 and integrated into the pipeline in 23-02.
-// Suppress dead_code until then.
-#![allow(dead_code)]
-
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use windows::Win32::Foundation::{BOOL, CloseHandle, HWND, LPARAM};

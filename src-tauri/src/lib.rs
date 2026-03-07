@@ -1138,6 +1138,57 @@ fn set_setting(app: tauri::AppHandle, key: String, value: serde_json::Value) -> 
     flush_settings(&app, &guard)
 }
 
+/// Return all stored per-app rules as a HashMap.
+#[cfg(windows)]
+#[tauri::command]
+fn get_app_rules(app: tauri::AppHandle) -> Result<std::collections::HashMap<String, foreground::AppRule>, String> {
+    let state = app.state::<foreground::AppRulesState>();
+    let guard = state.0.lock().map_err(|e| format!("app_rules lock: {}", e))?;
+    Ok(guard.clone())
+}
+
+/// Set (or update) a per-app rule and persist to settings.json.
+#[cfg(windows)]
+#[tauri::command]
+fn set_app_rule(app: tauri::AppHandle, exe_name: String, rule: foreground::AppRule) -> Result<(), String> {
+    let key = exe_name.to_lowercase();
+    {
+        let state = app.state::<foreground::AppRulesState>();
+        let mut guard = state.0.lock().map_err(|e| format!("app_rules lock: {}", e))?;
+        guard.insert(key, rule);
+        // Persist full map to settings.json
+        let rules_json = serde_json::to_value(&*guard).map_err(|e| e.to_string())?;
+        let mut settings = read_settings(&app)?;
+        settings["app_rules"] = rules_json;
+        write_settings(&app, &settings)?;
+    }
+    Ok(())
+}
+
+/// Remove a per-app rule and persist the change to settings.json.
+#[cfg(windows)]
+#[tauri::command]
+fn remove_app_rule(app: tauri::AppHandle, exe_name: String) -> Result<(), String> {
+    let key = exe_name.to_lowercase();
+    {
+        let state = app.state::<foreground::AppRulesState>();
+        let mut guard = state.0.lock().map_err(|e| format!("app_rules lock: {}", e))?;
+        guard.remove(&key);
+        let rules_json = serde_json::to_value(&*guard).map_err(|e| e.to_string())?;
+        let mut settings = read_settings(&app)?;
+        settings["app_rules"] = rules_json;
+        write_settings(&app, &settings)?;
+    }
+    Ok(())
+}
+
+/// Detect the currently focused foreground application (Windows only).
+#[cfg(windows)]
+#[tauri::command]
+fn detect_foreground_app() -> foreground::DetectedApp {
+    foreground::detect_foreground_app()
+}
+
 /// List available audio input device names.
 ///
 /// The first entry is always "System Default" so the UI has a way to revert.
@@ -1753,6 +1804,12 @@ pub fn run() {
     // PillMoveActive — true when pill is in repositioning mode
     builder = builder.manage(PillMoveActive(std::sync::atomic::AtomicBool::new(false)));
 
+    // AppRulesState — per-app override rules. Starts empty; setup() loads from disk.
+    #[cfg(windows)]
+    {
+        builder = builder.manage(foreground::AppRulesState(std::sync::Mutex::new(std::collections::HashMap::new())));
+    }
+
     builder.invoke_handler(tauri::generate_handler![
             rebind_hotkey,
             unregister_hotkey,
@@ -1804,6 +1861,14 @@ pub fn run() {
             transcribe_test_file,
             #[cfg(all(feature = "whisper", debug_assertions))]
             force_cpu_transcribe,
+            #[cfg(windows)]
+            get_app_rules,
+            #[cfg(windows)]
+            set_app_rule,
+            #[cfg(windows)]
+            remove_app_rule,
+            #[cfg(windows)]
+            detect_foreground_app,
         ])
         .setup(|app| {
             // Load settings from disk into SettingsState (registered empty on Builder).
@@ -1813,6 +1878,20 @@ pub fn run() {
                 let state = app.state::<SettingsState>();
                 let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
                 *guard = disk_settings;
+            }
+
+            // Load persisted app rules into AppRulesState
+            #[cfg(windows)]
+            {
+                let state = app.state::<SettingsState>();
+                let guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+                let app_rules: std::collections::HashMap<String, foreground::AppRule> = guard
+                    .get("app_rules")
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+                    .unwrap_or_default();
+                let rules_state = app.state::<foreground::AppRulesState>();
+                let mut rules_guard = rules_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                *rules_guard = app_rules;
             }
 
             // Load transcription history from disk before build_tray so manage() is called
