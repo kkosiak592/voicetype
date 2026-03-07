@@ -3,29 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Per-App Settings
 status: executing
-stopped_at: Phase 26 context gathered
-last_updated: "2026-03-07T18:34:02.136Z"
-last_activity: 2026-03-07 -- Completed 25-01 App Rules UI
+stopped_at: Completed 26-01-PLAN.md
+last_updated: "2026-03-07T21:38:00Z"
+last_activity: 2026-03-07 -- Completed 26-01 Process Dropdown
 progress:
   total_phases: 4
-  completed_phases: 3
-  total_plans: 4
-  completed_plans: 4
----
-
----
-gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: Per-App Settings
-status: executing
-stopped_at: Completed 25-01-PLAN.md
-last_updated: "2026-03-07T18:13:41Z"
-last_activity: 2026-03-07 -- Completed 25-01 App Rules UI
-progress:
-  total_phases: 4
-  completed_phases: 3
-  total_plans: 4
-  completed_plans: 4
+  completed_phases: 4
+  total_plans: 5
+  completed_plans: 5
   percent: 100
 ---
 
@@ -36,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-07)
 
 **Core value:** Voice dictation must feel instant -- sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** Phase 25 - App Rules UI
+**Current focus:** Phase 26 - Process Dropdown
 
 ## Current Position
 
-Phase: 25 (3 of 4 in v1.4)
+Phase: 26 (4 of 4 in v1.4)
 Plan: 1 of 1 in current phase (COMPLETE)
-Status: Phase 25 Complete
-Last activity: 2026-03-07 -- Completed 25-01 App Rules UI
+Status: Phase 26 Complete
+Last activity: 2026-03-07 -- Completed 26-01 Process Dropdown
 
 Progress: [██████████] 100%
 
@@ -68,6 +53,9 @@ Recent decisions affecting current work:
 - [24-01]: Lock ordering: ActiveProfile dropped before AppRulesState acquired to prevent deadlocks
 - [25-01]: Custom dropdown (not native select) for color-coded three-state ALL CAPS control
 - [25-01]: Inline button state machine for detect flow (no modal/toast)
+- [26-01]: Two-phase process enumeration: EnumWindows for visible windows, then CreateToolhelp32Snapshot for exe names
+- [26-01]: Fetch-once dropdown strategy (no auto-refresh or polling)
+- [26-01]: Secondary/outline button styling for Browse vs primary Detect button
 
 ### Pending Todos
 
@@ -81,6 +69,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-07T18:34:02.132Z
-Stopped at: Phase 26 context gathered
-Resume file: .planning/phases/26-process-dropdown/26-CONTEXT.md
+Last session: 2026-03-07T21:38:00Z
+Stopped at: Completed 26-01-PLAN.md
+Resume file: .planning/phases/26-process-dropdown/26-01-SUMMARY.md

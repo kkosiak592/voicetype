@@ -18,7 +18,7 @@ Requirements for per-app settings milestone. Each maps to roadmap phases.
 - [x] **UI-01**: New "App Rules" sidebar page accessible from the navigation
 - [x] **UI-02**: User can view a list of configured per-app rules with app icons and names
 - [x] **UI-03**: User can add an app via "Detect Active App" button with 3-second countdown
-- [ ] **UI-04**: User can add an app via searchable dropdown of currently running processes
+- [x] **UI-04**: User can add an app via searchable dropdown of currently running processes
 - [x] **UI-05**: User can remove an app from the rules list
 
 ### Override System
@@ -61,7 +61,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UI-01 | Phase 25 | Complete |
 | UI-02 | Phase 25 | Complete |
 | UI-03 | Phase 25 | Complete |
-| UI-04 | Phase 26 | Pending |
+| UI-04 | Phase 26 | Complete |
 | UI-05 | Phase 25 | Complete |
 | OVR-01 | Phase 25 | Complete |
 | OVR-02 | Phase 24 | Complete |
