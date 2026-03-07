@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Per-App Settings
 status: executing
-stopped_at: Completed 24-01-PLAN.md (Phase 24 complete)
-last_updated: "2026-03-07T17:25:38.167Z"
+stopped_at: Phase 25 context gathered
+last_updated: "2026-03-07T17:48:42.040Z"
 last_activity: 2026-03-07 -- Completed 24-01 pipeline override integration
 progress:
   total_phases: 4
@@ -79,6 +79,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-07T17:22:00Z
-Stopped at: Completed 24-01-PLAN.md (Phase 24 complete)
-Resume file: .planning/phases/24-pipeline-override-integration/24-01-SUMMARY.md
+Last session: 2026-03-07T17:48:42.036Z
+Stopped at: Phase 25 context gathered
+Resume file: .planning/phases/25-app-rules-ui/25-CONTEXT.md
