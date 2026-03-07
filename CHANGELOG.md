@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-03-07
+
+### Added
+
+- Per-app ALL CAPS override system with three-state toggle (Inherit / Force ON / Force OFF)
+- Win32 foreground window detection at text injection time using GetForegroundWindow API chain
+- UWP app resolution via EnumChildWindows to detect real process behind ApplicationFrameHost.exe
+- New "App Rules" settings page accessible from sidebar navigation
+- "Detect Active App" button with 3-second countdown to auto-add foreground application
+- "Browse Running Apps" searchable dropdown of currently running processes with window titles
+- Per-app rules persistence in settings.json with startup hydration
+- Process enumeration using CreateToolhelp32Snapshot + EnumWindows two-phase approach
+
+### Changed
+
+- Pipeline ALL CAPS block now resolves per-app overrides before applying case transformation
+- Removed stale Parakeet vocabulary prompting warning from model selection page
+
 ## [1.3.0] - 2026-03-07
 
 ### Changed
@@ -80,7 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - NSIS installer for Windows distribution
 - Auto-update infrastructure (updater plugin, Ed25519 signing)
 
-[Unreleased]: https://github.com/kkosiak592/voicetype/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/kkosiak592/voicetype/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/kkosiak592/voicetype/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/kkosiak592/voicetype/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/kkosiak592/voicetype/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/kkosiak592/voicetype/releases/tag/v1.1.0
