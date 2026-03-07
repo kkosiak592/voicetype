@@ -15,15 +15,15 @@ Requirements for per-app settings milestone. Each maps to roadmap phases.
 
 ### App Rules UI
 
-- [ ] **UI-01**: New "App Rules" sidebar page accessible from the navigation
-- [ ] **UI-02**: User can view a list of configured per-app rules with app icons and names
-- [ ] **UI-03**: User can add an app via "Detect Active App" button with 3-second countdown
+- [x] **UI-01**: New "App Rules" sidebar page accessible from the navigation
+- [x] **UI-02**: User can view a list of configured per-app rules with app icons and names
+- [x] **UI-03**: User can add an app via "Detect Active App" button with 3-second countdown
 - [ ] **UI-04**: User can add an app via searchable dropdown of currently running processes
-- [ ] **UI-05**: User can remove an app from the rules list
+- [x] **UI-05**: User can remove an app from the rules list
 
 ### Override System
 
-- [ ] **OVR-01**: Each app rule has a three-state ALL CAPS toggle (Inherit / Force ON / Force OFF)
+- [x] **OVR-01**: Each app rule has a three-state ALL CAPS toggle (Inherit / Force ON / Force OFF)
 - [x] **OVR-02**: Per-app override is applied automatically at injection time when foreground app matches a rule
 - [x] **OVR-03**: Unlisted apps fall back to the global ALL CAPS toggle on the General page
 - [x] **OVR-04**: Per-app rules persist across app restarts via settings.json
@@ -58,12 +58,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DET-01 | Phase 23 | Complete |
 | DET-02 | Phase 23 | Complete |
 | DET-03 | Phase 23 | Complete |
-| UI-01 | Phase 25 | Pending |
-| UI-02 | Phase 25 | Pending |
-| UI-03 | Phase 25 | Pending |
+| UI-01 | Phase 25 | Complete |
+| UI-02 | Phase 25 | Complete |
+| UI-03 | Phase 25 | Complete |
 | UI-04 | Phase 26 | Pending |
-| UI-05 | Phase 25 | Pending |
-| OVR-01 | Phase 25 | Pending |
+| UI-05 | Phase 25 | Complete |
+| OVR-01 | Phase 25 | Complete |
 | OVR-02 | Phase 24 | Complete |
 | OVR-03 | Phase 24 | Complete |
 | OVR-04 | Phase 23 | Complete |

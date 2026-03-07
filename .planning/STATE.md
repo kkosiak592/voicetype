@@ -3,29 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Per-App Settings
 status: executing
-stopped_at: Phase 25 context gathered
-last_updated: "2026-03-07T17:48:42.040Z"
-last_activity: 2026-03-07 -- Completed 24-01 pipeline override integration
+stopped_at: Completed 25-01-PLAN.md
+last_updated: "2026-03-07T18:13:41Z"
+last_activity: 2026-03-07 -- Completed 25-01 App Rules UI
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 3
-  completed_plans: 3
----
-
----
-gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: Per-App Settings
-status: executing
-stopped_at: Completed 24-01-PLAN.md
-last_updated: "2026-03-07T17:22:00Z"
-last_activity: 2026-03-07 -- Completed 24-01 pipeline override integration
-progress:
-  total_phases: 4
-  completed_phases: 2
-  total_plans: 3
-  completed_plans: 3
+  completed_phases: 3
+  total_plans: 4
+  completed_plans: 4
   percent: 100
 ---
 
@@ -36,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-07)
 
 **Core value:** Voice dictation must feel instant -- sub-1500ms from end-of-speech to text appearing at the cursor, with zero internet dependency.
-**Current focus:** Phase 24 - Pipeline Override Integration
+**Current focus:** Phase 25 - App Rules UI
 
 ## Current Position
 
-Phase: 24 (2 of 4 in v1.4)
+Phase: 25 (3 of 4 in v1.4)
 Plan: 1 of 1 in current phase (COMPLETE)
-Status: Phase 24 Complete
-Last activity: 2026-03-07 -- Completed 24-01 pipeline override integration
+Status: Phase 25 Complete
+Last activity: 2026-03-07 -- Completed 25-01 App Rules UI
 
 Progress: [██████████] 100%
 
@@ -66,6 +51,8 @@ Recent decisions affecting current work:
 - [23-02]: Removed #![allow(dead_code)] from foreground.rs (module now integrated)
 - [24-01]: Override resolution as pure function for unit testability without Win32 dependencies
 - [24-01]: Lock ordering: ActiveProfile dropped before AppRulesState acquired to prevent deadlocks
+- [25-01]: Custom dropdown (not native select) for color-coded three-state ALL CAPS control
+- [25-01]: Inline button state machine for detect flow (no modal/toast)
 
 ### Pending Todos
 
@@ -75,10 +62,10 @@ None.
 
 - Do NOT remove clipboard verification retry loop or 150ms pre-paste delay -- they serve orthogonal purposes
 - UWP EnumChildWindows callback pattern verified in 23-01 (takes HWND directly, not Option<HWND>)
-- Three-state toggle UX (cycling vs segmented control) needs decision during Phase 25 planning
+- Three-state toggle UX resolved in 25-01: custom dropdown with Inherit/Force ON/Force OFF
 
 ## Session Continuity
 
-Last session: 2026-03-07T17:48:42.036Z
-Stopped at: Phase 25 context gathered
-Resume file: .planning/phases/25-app-rules-ui/25-CONTEXT.md
+Last session: 2026-03-07T18:13:41Z
+Stopped at: Completed 25-01-PLAN.md
+Resume file: .planning/phases/25-app-rules-ui/25-01-SUMMARY.md

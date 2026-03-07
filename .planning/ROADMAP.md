@@ -65,7 +65,7 @@
 
 - [x] **Phase 23: Foreground Detection Backend** - Win32 detection module, data model, persistence, and Tauri commands (completed 2026-03-07)
 - [x] **Phase 24: Pipeline Override Integration** - Wire per-app override resolution into the transcription pipeline at injection time (completed 2026-03-07)
-- [ ] **Phase 25: App Rules UI** - Sidebar page with rules list, detect button, three-state toggles, and rule management
+- [x] **Phase 25: App Rules UI** - Sidebar page with rules list, detect button, three-state toggles, and rule management (completed 2026-03-07)
 - [ ] **Phase 26: Process Dropdown** - Searchable dropdown of running processes for adding apps without detection
 
 ## Phase Details
@@ -105,7 +105,7 @@ Plans:
   2. User can click "Detect Active App", switch to target app within 3 seconds, and have that app auto-added to the rules list
   3. Each app in the rules list shows its name and a three-state ALL CAPS toggle (Inherit / Force ON / Force OFF)
   4. User can remove an app from the rules list
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
 - [ ] 25-01-PLAN.md — Sidebar registration, rules list with three-state dropdown, detect flow with countdown, delete
 
@@ -132,7 +132,7 @@ Phases execute in numeric order: 23 -> 24 -> 25 -> 26
 | 22 | v1.3 | 1/1 | Complete | 2026-03-07 |
 | 23. Foreground Detection Backend | 2/2 | Complete    | 2026-03-07 | - |
 | 24. Pipeline Override Integration | 1/1 | Complete    | 2026-03-07 | - |
-| 25. App Rules UI | v1.4 | 0/1 | Not started | - |
+| 25. App Rules UI | 1/1 | Complete   | 2026-03-07 | - |
 | 26. Process Dropdown | v1.4 | 0/? | Not started | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
