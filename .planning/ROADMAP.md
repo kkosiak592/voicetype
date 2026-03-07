@@ -5,6 +5,7 @@
 - ✅ **v1.0 MVP** — Phases 1-8 + 4.1, 6.1 (shipped 2026-03-02)
 - ✅ **v1.1 Auto-Updates & CI/CD** — Phases 11-14 (shipped 2026-03-02)
 - ✅ **v1.2 Keyboard Hook** — Phases 15-20.1 (shipped 2026-03-07)
+- **v1.3 Clipboard Simplification** — Phase 22 (in progress)
 
 ## Phases
 
@@ -50,13 +51,39 @@
 
 </details>
 
+### v1.3 Clipboard Simplification (In Progress)
+
+**Milestone Goal:** Remove clipboard save/restore logic from inject_text -- after transcription, clipboard simply contains the transcription text, matching standard dictation tool behavior.
+
+- [ ] **Phase 22: Clipboard Save/Restore Removal** - Remove save, restore, and post-paste sleep from inject_text
+
+## Phase Details
+
+### Phase 22: Clipboard Save/Restore Removal
+**Goal**: Transcription text stays on clipboard after injection, matching standard dictation tool behavior
+**Depends on**: Nothing (standalone milestone)
+**Requirements**: CLIP-01, CLIP-02, CLIP-03
+**Success Criteria** (what must be TRUE):
+  1. After dictating and pasting, the clipboard contains the transcription text (verifiable via Ctrl+V in any app)
+  2. The 80ms post-paste delay is gone -- injection completes faster with no observable regression in paste reliability
+  3. The inject_text doc comment accurately describes the simplified clipboard flow (set, verify, paste)
+  4. Existing clipboard verification retry loop and 150ms pre-paste delay remain functional (no collateral removal)
+**Plans**: TBD
+
+Plans:
+- [ ] 22-01: TBD
+
 ## Progress
+
+**Execution Order:**
+Phase 22
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1-8 | v1.0 | 26/26 | Complete | 2026-03-02 |
 | 11-14 | v1.1 | 5/5 | Complete | 2026-03-02 |
 | 15-20.1 | v1.2 | 15/15 | Complete | 2026-03-07 |
+| 22. Clipboard Save/Restore Removal | v1.3 | 0/TBD | Not started | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
 Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
