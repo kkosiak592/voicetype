@@ -55,24 +55,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DET-01 | — | Pending |
-| DET-02 | — | Pending |
-| DET-03 | — | Pending |
-| UI-01 | — | Pending |
-| UI-02 | — | Pending |
-| UI-03 | — | Pending |
-| UI-04 | — | Pending |
-| UI-05 | — | Pending |
-| OVR-01 | — | Pending |
-| OVR-02 | — | Pending |
-| OVR-03 | — | Pending |
-| OVR-04 | — | Pending |
+| DET-01 | Phase 23 | Pending |
+| DET-02 | Phase 23 | Pending |
+| DET-03 | Phase 23 | Pending |
+| UI-01 | Phase 25 | Pending |
+| UI-02 | Phase 25 | Pending |
+| UI-03 | Phase 25 | Pending |
+| UI-04 | Phase 26 | Pending |
+| UI-05 | Phase 25 | Pending |
+| OVR-01 | Phase 25 | Pending |
+| OVR-02 | Phase 24 | Pending |
+| OVR-03 | Phase 24 | Pending |
+| OVR-04 | Phase 23 | Pending |
 
 **Coverage:**
 - v1.4 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12
+- Mapped to phases: 12
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-07*
-*Last updated: 2026-03-07 after initial definition*
+*Last updated: 2026-03-07 after roadmap creation*

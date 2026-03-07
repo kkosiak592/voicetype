@@ -6,6 +6,7 @@
 - ✅ **v1.1 Auto-Updates & CI/CD** — Phases 11-14 (shipped 2026-03-02)
 - ✅ **v1.2 Keyboard Hook** — Phases 15-20.1 (shipped 2026-03-07)
 - ✅ **v1.3 Clipboard Simplification** — Phase 22 (shipped 2026-03-07)
+- 🚧 **v1.4 Per-App Settings** — Phases 23-26 (in progress)
 
 ## Phases
 
@@ -58,7 +59,63 @@
 
 </details>
 
+### 🚧 v1.4 Per-App Settings (In Progress)
+
+**Milestone Goal:** Enable per-application setting overrides, starting with ALL CAPS, detected automatically based on the foreground window at injection time.
+
+- [ ] **Phase 23: Foreground Detection Backend** - Win32 detection module, data model, persistence, and Tauri commands
+- [ ] **Phase 24: Pipeline Override Integration** - Wire per-app override resolution into the transcription pipeline at injection time
+- [ ] **Phase 25: App Rules UI** - Sidebar page with rules list, detect button, three-state toggles, and rule management
+- [ ] **Phase 26: Process Dropdown** - Searchable dropdown of running processes for adding apps without detection
+
+## Phase Details
+
+### Phase 23: Foreground Detection Backend
+**Goal**: The app can identify which application is in the foreground and store per-app rules
+**Depends on**: Nothing (first phase of v1.4)
+**Requirements**: DET-01, DET-02, DET-03, OVR-04
+**Success Criteria** (what must be TRUE):
+  1. Calling `detect_foreground_app` from the frontend returns the lowercase exe name of the currently focused application (e.g., "acad.exe")
+  2. Detection handles elevated processes gracefully -- returns a fallback result instead of crashing or hanging
+  3. App rules added to settings.json persist across application restarts and are loaded on startup
+  4. UWP apps (e.g., Calculator, Windows Store apps) resolve to their real process name, not "applicationframehost.exe"
+**Plans**: TBD
+
+### Phase 24: Pipeline Override Integration
+**Goal**: Per-app ALL CAPS overrides take effect automatically at text injection time
+**Depends on**: Phase 23
+**Requirements**: OVR-02, OVR-03
+**Success Criteria** (what must be TRUE):
+  1. Dictating into an app with a "Force ON" rule produces ALL CAPS text even when the global toggle is OFF
+  2. Dictating into an app with a "Force OFF" rule produces normal-case text even when the global toggle is ON
+  3. Dictating into an app with no rule uses the global ALL CAPS setting
+**Plans**: TBD
+
+### Phase 25: App Rules UI
+**Goal**: Users can manage per-app overrides through a dedicated settings page
+**Depends on**: Phase 24
+**Requirements**: UI-01, UI-02, UI-03, UI-05, OVR-01
+**Success Criteria** (what must be TRUE):
+  1. "App Rules" page is accessible from the sidebar navigation alongside existing pages
+  2. User can click "Detect Active App", switch to target app within 3 seconds, and have that app auto-added to the rules list
+  3. Each app in the rules list shows its name and a three-state ALL CAPS toggle (Inherit / Force ON / Force OFF)
+  4. User can remove an app from the rules list
+**Plans**: TBD
+
+### Phase 26: Process Dropdown
+**Goal**: Users can add apps from a searchable list without using the detect flow
+**Depends on**: Phase 25
+**Requirements**: UI-04
+**Success Criteria** (what must be TRUE):
+  1. User can open a searchable dropdown showing currently running processes with window titles
+  2. Selecting a process from the dropdown adds it to the rules list
+  3. Dropdown filters results as the user types, showing only matching process names
+**Plans**: TBD
+
 ## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 23 -> 24 -> 25 -> 26
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -66,6 +123,10 @@
 | 11-14 | v1.1 | 5/5 | Complete | 2026-03-02 |
 | 15-20.1 | v1.2 | 15/15 | Complete | 2026-03-07 |
 | 22 | v1.3 | 1/1 | Complete | 2026-03-07 |
+| 23. Foreground Detection Backend | v1.4 | 0/? | Not started | - |
+| 24. Pipeline Override Integration | v1.4 | 0/? | Not started | - |
+| 25. App Rules UI | v1.4 | 0/? | Not started | - |
+| 26. Process Dropdown | v1.4 | 0/? | Not started | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
 Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
