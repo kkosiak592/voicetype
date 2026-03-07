@@ -3,6 +3,21 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Per-App Settings
 status: ready_to_plan
+stopped_at: Phase 23 context gathered
+last_updated: "2026-03-07T16:23:35.454Z"
+last_activity: 2026-03-07 -- Roadmap created for v1.4 Per-App Settings
+progress:
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.4
+milestone_name: Per-App Settings
+status: ready_to_plan
 stopped_at: Roadmap created for v1.4
 last_updated: "2026-03-07"
 last_activity: 2026-03-07 -- Roadmap created for v1.4 Per-App Settings
@@ -58,6 +73,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-07
-Stopped at: Roadmap created for v1.4
-Resume file: None
+Last session: 2026-03-07T16:23:35.451Z
+Stopped at: Phase 23 context gathered
+Resume file: .planning/phases/23-foreground-detection-backend/23-CONTEXT.md
