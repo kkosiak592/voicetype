@@ -1,480 +1,221 @@
-# Architecture Research
+# Architecture: Clipboard Simplification (v1.3)
 
-**Domain:** Win32 low-level keyboard hook integration into existing Tauri 2.0 app (v1.2 milestone)
-**Researched:** 2026-03-02
-**Confidence:** HIGH — Win32 APIs are stable, well-documented on MSDN; Tauri AppHandle threading patterns verified via official Tauri docs and community discussions; debounce strategy derived from AutoHotkey community knowledge and Win32 message timing
-
----
-
-> **Scope:** This document covers the WH_KEYBOARD_LL integration architecture for v1.2 only. It focuses on how the new hook module connects to the existing Tauri 2.0 app. The broader application architecture (audio pipeline, transcription, VAD, UI) is unchanged — see the 2026-02-27 version of this file in git history.
+**Domain:** Clipboard flow simplification in voice-to-text injection pipeline
+**Researched:** 2026-03-07
+**Confidence:** HIGH -- analysis based on actual source code; no external dependencies or unverified claims
 
 ---
 
-## System Overview
+> **Scope:** This document covers the clipboard save/restore removal for v1.3 only. It focuses on what changes in `inject.rs`, what does NOT change, race condition analysis, timing implications, and build order. The broader application architecture is unchanged.
 
-### Before (v1.1) — RegisterHotKey via tauri-plugin-global-shortcut
+---
 
-```
-┌───────────────────────────────────────────────────────────────────┐
-│                    TAURI MAIN THREAD                              │
-│   Win32 message loop (pumped by Tauri / Webview2 COM)             │
-│                                                                   │
-│   tauri-plugin-global-shortcut                                    │
-│     └─ RegisterHotKey(hwnd, id, MOD_CONTROL, VK_SPACE)            │
-│          ↓ WM_HOTKEY delivered to message loop                    │
-│          ↓ ShortcutEvent{Pressed/Released}                        │
-│          ↓ handle_shortcut(app, event)  ← existing function       │
-└───────────────────────────────────────────────────────────────────┘
-```
-
-**Why this cannot do Ctrl+Win:** `RegisterHotKey` requires a non-zero virtual key code in its `vk` parameter — there is no way to register a modifier-only hotkey (e.g. Ctrl+Win with no letter key). This is a fundamental Win32 API limitation, not a plugin bug.
-
-### After (v1.2) — WH_KEYBOARD_LL hook (hybrid approach)
+## Current inject_text() Flow (inject.rs)
 
 ```
-┌───────────────────────────────────────────────────────────────────┐
-│                    TAURI MAIN THREAD                              │
-│   tauri-plugin-global-shortcut KEPT for standard hotkeys          │
-│   (e.g. user chose Ctrl+Shift+Space — still uses RegisterHotKey)  │
-└───────────────────────────────────────────────────────────────────┘
-
-┌───────────────────────────────────────────────────────────────────┐
-│              HOOK THREAD  (std::thread, named "keyboard-hook")    │
-│                                                                   │
-│  SetWindowsHookExW(WH_KEYBOARD_LL, hook_proc, NULL, 0)            │
-│  ONLY installed when saved hotkey is a modifier-only combo        │
-│                                                                   │
-│  Runs: loop { GetMessageW(&msg, None, 0, 0); DispatchMessageW; }  │
-│    ↑ mandatory: WH_KEYBOARD_LL fires by sending a message to the  │
-│      installing thread — without GetMessage the hook never fires  │
-│                                                                   │
-│  hook_proc() [extern "system" fn — no user data allowed]:         │
-│    reads  KBDLLHOOKSTRUCT { vkCode, flags, time }                 │
-│    tracks CTRL_DOWN / WIN_DOWN via AtomicBool (thread-local)      │
-│    debounce: both set within 50ms → set COMBO_ACTIVE flag         │
-│    on combo: try_send(HookEvent::Pressed) — non-blocking          │
-│    on Win keyup when COMBO_ACTIVE: return LRESULT(1)  ← swallow   │
-│    otherwise: CallNextHookEx (pass through)                       │
-└──────────────────────────┬────────────────────────────────────────┘
-                           │ std::sync::mpsc::Sender<HookEvent>
-                           │ (Sender stored in OnceLock, populated at startup)
-                           ↓
-┌───────────────────────────────────────────────────────────────────┐
-│          HOOK DISPATCHER  (std::thread, named "hook-dispatcher")  │
-│                                                                   │
-│  loop { match rx.recv() {                                         │
-│    HookEvent::Pressed  → handle_shortcut_pressed(&app)            │
-│    HookEvent::Released → handle_shortcut_released(&app)           │
-│    HookEvent::Stop     → break                                    │
-│  }}                                                               │
-│                                                                   │
-│  AppHandle cloned in setup(), stored in HOOK_APP: OnceLock        │
-└──────────────────────────┬────────────────────────────────────────┘
-                           │ calls existing lib.rs functions
-                           ↓
-┌───────────────────────────────────────────────────────────────────┐
-│              EXISTING lib.rs — UNCHANGED                          │
-│                                                                   │
-│  handle_shortcut(app, ShortcutState::Pressed/Released)            │
-│    PipelineState transitions (IDLE→RECORDING→PROCESSING)          │
-│    AudioCaptureMutex, VAD worker, transcription pipeline          │
-│    tray state, pill overlay, Emitter events to frontend           │
-└───────────────────────────────────────────────────────────────────┘
+1. Save clipboard         ── clipboard.get_text().ok()                    [line 43]
+2. Write transcription     ── clipboard.set_text(text)                    [line 58]
+3. Verify-and-retry loop   ── up to 5 attempts, 25ms delay each          [lines 53-99]
+4. Pre-paste delay         ── 150ms (Office WM_CLIPBOARDUPDATE latency)  [line 111]
+5. Release Win keys        ── defensive against stuck Win from hook       [line 120]
+6. Simulate Ctrl+V         ── Press Ctrl, Click V, Release Ctrl           [lines 124-127]
+7. Post-paste delay        ── 80ms (let target app consume before restore)[line 132]
+8. Restore clipboard       ── set_text(original) or clear if was empty    [lines 135-148]
 ```
 
-## Component Responsibilities
-
-| Component | Status | Responsibility |
-|-----------|--------|----------------|
-| `keyboard_hook.rs` | NEW | Install WH_KEYBOARD_LL, run GetMessage loop, track modifier state, debounce, channel, suppression |
-| `OnceLock<AppHandle>` in `keyboard_hook.rs` | NEW | Bridge between Win32 callback (no user param) and Tauri runtime |
-| `std::sync::mpsc` channel | NEW | Carry `HookEvent` from hook thread to dispatcher thread |
-| Hook dispatcher thread | NEW | Receive `HookEvent`, call `handle_shortcut_pressed/released` |
-| `handle_shortcut()` in `lib.rs` | EXISTING, UNCHANGED | Drives recording pipeline from Pressed/Released events |
-| `tauri-plugin-global-shortcut` | EXISTING, KEPT | Handles standard (non-modifier-only) hotkeys; fallback if hook fails |
-| Frontend hotkey capture UI | MODIFIED | Must display and capture modifier-only combos (Ctrl+Win shows no letter) |
-| `rebind_hotkey` IPC command | MODIFIED | Route to hook path vs. plugin path based on hotkey type |
-
-## Recommended File Changes
+## Pipeline Call Site (pipeline.rs)
 
 ```
-src-tauri/src/
-├── lib.rs                    # MODIFIED
-│   ├── add mod keyboard_hook
-│   ├── setup(): call keyboard_hook::start() if saved hotkey is modifier-only
-│   ├── setup(): keep plugin registration for standard hotkeys
-│   ├── rebind_hotkey(): detect modifier-only format, route to hook::rebind()
-│   └── app teardown: call keyboard_hook::stop()
-│
-├── keyboard_hook.rs          # NEW — ~200 LOC
-│   ├── pub enum HookEvent { Pressed, Released, Stop }
-│   ├── static CTRL_DOWN: AtomicBool
-│   ├── static WIN_DOWN: AtomicBool
-│   ├── static COMBO_ACTIVE: AtomicBool
-│   ├── static LAST_MOD_TIME: AtomicU64     (KBDLLHOOKSTRUCT.time in ms)
-│   ├── static HOOK_SENDER: OnceLock<Mutex<mpsc::Sender<HookEvent>>>
-│   ├── static HOOK_APP: OnceLock<AppHandle<Wry>>
-│   ├── static HOOK_THREAD_ID: AtomicU32    (for PostThreadMessageW on shutdown)
-│   ├── pub fn start(app: AppHandle<Wry>)   → installs hook, spawns dispatcher
-│   ├── pub fn stop()                       → sends Stop + WM_QUIT to hook thread
-│   ├── pub fn rebind(combo: HookCombo)     → update target modifier set atomically
-│   └── unsafe extern "system" fn hook_proc(ncode, wparam, lparam) -> LRESULT
-│
-├── audio.rs, pipeline.rs, vad.rs, etc.     # UNCHANGED
-└── ...
+run_pipeline() async:
+  ...steps 1-5 (audio → transcription → formatting)...
+  6. spawn_blocking(inject_text(&to_inject))    ← only clipboard interaction
+  7. append_history(app, &formatted, engine)     ← no clipboard interaction
+  8. reset_to_idle()
 ```
 
-## Architectural Patterns
-
-### Pattern 1: Dedicated Hook Thread with Synchronous GetMessage Loop
-
-**What:** Install WH_KEYBOARD_LL on a `std::thread` (not a Tokio task) that runs a blocking `GetMessageW` / `DispatchMessageW` loop. The hook callback fires on this same thread.
-
-**Why mandatory:** The Win32 documentation states explicitly: "This hook is called in the context of the thread that installed it. The call is made by sending a message to the thread that installed the hook. Therefore, the thread that installed the hook must have a message loop." Installing on a Tokio worker thread (no Win32 message loop) causes the hook to silently never fire.
-
-**Example:**
-```rust
-// keyboard_hook.rs
-pub fn start(app: AppHandle<Wry>) {
-    let (tx, rx) = std::sync::mpsc::channel::<HookEvent>();
-    HOOK_SENDER.set(Mutex::new(tx)).ok();
-    HOOK_APP.set(app.clone()).ok();
-
-    // Dispatcher thread — reads channel, calls handle_shortcut
-    let dispatch_app = app.clone();
-    std::thread::Builder::new()
-        .name("hook-dispatcher".into())
-        .spawn(move || {
-            for event in rx {
-                match event {
-                    HookEvent::Pressed  => handle_shortcut_pressed(&dispatch_app),
-                    HookEvent::Released => handle_shortcut_released(&dispatch_app),
-                    HookEvent::Stop     => break,
-                }
-            }
-        })
-        .expect("hook dispatcher spawn failed");
-
-    // Hook thread — installs WH_KEYBOARD_LL and pumps GetMessage
-    std::thread::Builder::new()
-        .name("keyboard-hook".into())
-        .spawn(|| unsafe {
-            HOOK_THREAD_ID.store(
-                windows::Win32::System::Threading::GetCurrentThreadId(),
-                Ordering::Relaxed,
-            );
-            let hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(hook_proc), None, 0)
-                .expect("WH_KEYBOARD_LL installation failed");
-
-            let mut msg = MSG::default();
-            // Blocks until WM_QUIT
-            while GetMessageW(&mut msg, None, 0, 0).as_bool() {
-                TranslateMessage(&msg);
-                DispatchMessageW(&msg);
-            }
-            UnhookWindowsHookEx(hook).ok();
-        })
-        .expect("hook thread spawn failed");
-}
-```
-
-### Pattern 2: Modifier State Tracking via Atomics (not GetAsyncKeyState)
-
-**What:** Track Ctrl and Win key down/up state using `AtomicBool` updated inside the hook proc on every relevant keydown/keyup event. Never call `GetAsyncKeyState` inside the callback.
-
-**Why mandatory:** The LowLevelKeyboardProc documentation explicitly states: "the asynchronous state of the key cannot be determined by calling GetAsyncKeyState from within the callback function." The atomic approach is lock-free and safe to call from the hook proc's non-async context.
-
-**Virtual key codes to watch:**
-- `VK_LCONTROL` (0xA2), `VK_RCONTROL` (0xA3) — left and right Ctrl
-- `VK_LWIN` (0x5B), `VK_RWIN` (0x5C) — left and right Win
-
-**Debounce logic (50ms window):** Physical keypresses of two keys simultaneously arrive 5–30ms apart depending on hardware. The debounce window fires the combo when both modifiers are down within 50ms of each other, regardless of which was pressed first. `KBDLLHOOKSTRUCT.time` provides the millisecond timestamp for each event.
-
-**Example:**
-```rust
-// Inside hook_proc — modifier state machine
-let is_ctrl = vk == VK_LCONTROL.0 as u32 || vk == VK_RCONTROL.0 as u32;
-let is_win  = vk == VK_LWIN.0 as u32      || vk == VK_RWIN.0 as u32;
-
-if is_keydown && (is_ctrl || is_win) {
-    if is_ctrl { CTRL_DOWN.store(true, Ordering::Relaxed); }
-    if is_win  { WIN_DOWN.store(true,  Ordering::Relaxed); }
-    LAST_MOD_TIME.store(kb.time as u64, Ordering::Relaxed);
-
-    let ctrl = CTRL_DOWN.load(Ordering::Relaxed);
-    let win  = WIN_DOWN.load(Ordering::Relaxed);
-    let age  = kb.time as u64 - LAST_MOD_TIME.load(Ordering::Relaxed);
-
-    if ctrl && win && age < 50 && !COMBO_ACTIVE.load(Ordering::Relaxed) {
-        COMBO_ACTIVE.store(true, Ordering::Relaxed);
-        if let Some(lock) = HOOK_SENDER.get() {
-            if let Ok(tx) = lock.lock() {
-                let _ = tx.try_send(HookEvent::Pressed);
-            }
-        }
-    }
-}
-
-if is_keyup && (is_ctrl || is_win) {
-    let was_combo = COMBO_ACTIVE.load(Ordering::Relaxed);
-
-    if is_ctrl { CTRL_DOWN.store(false, Ordering::Relaxed); }
-    if is_win  { WIN_DOWN.store(false,  Ordering::Relaxed); }
-
-    // Send Released when either modifier is lifted (first one to release ends combo)
-    if was_combo {
-        if let Some(lock) = HOOK_SENDER.get() {
-            if let Ok(tx) = lock.lock() {
-                let _ = tx.try_send(HookEvent::Released);
-            }
-        }
-        COMBO_ACTIVE.store(false, Ordering::Relaxed);
-
-        // Swallow Win keyup to suppress Start menu
-        if is_win {
-            return LRESULT(1); // consumed — do NOT call CallNextHookEx
-        }
-    }
-}
-```
-
-### Pattern 3: AppHandle in Hook via OnceLock Static
-
-**What:** Win32 hook proc signatures are fixed (`extern "system" fn(i32, WPARAM, LPARAM) -> LRESULT`) — no user data pointer, no closure capture. Store `AppHandle` in a `OnceLock<AppHandle<Wry>>` initialized once during `setup()`. The dispatcher thread reads it from there.
-
-**Tauri 2.0 specifics:** `AppHandle<Wry>` is `Send` in Tauri 2.0 (the historical issue #2343 "AppHandle is not Send+Sync" was for Tauri 1.x and is resolved). Cloning is cheap (reference-counted internally). The canonical pattern from the Tauri community for extern callbacks is `OnceLock` or `once_cell::sync::OnceLock`.
-
-**Example:**
-```rust
-static HOOK_APP: OnceLock<AppHandle<Wry>> = OnceLock::new();
-// In setup():
-HOOK_APP.set(app.handle().clone()).ok();
-// In dispatcher thread:
-let app = HOOK_APP.get().expect("AppHandle not initialized");
-handle_shortcut_pressed(app);
-```
-
-### Pattern 4: Start Menu Suppression via Return Value
-
-**What:** The Win key fires the Start menu on WM_KEYUP (release), not WM_KEYDOWN. To prevent it: when the hook sees VK_LWIN or VK_RWIN keyup AND the Ctrl+Win combo was consumed (COMBO_ACTIVE was true), return `LRESULT(1)` instead of calling `CallNextHookEx`. This swallows the keyup and the OS never sees it.
-
-**Why this works:** The LowLevelKeyboardProc docs say: "If the hook procedure processed the message, it may return a nonzero value to prevent the system from passing the message to the rest of the hook chain or the target window procedure."
-
-**Belt-and-suspenders note:** The AutoHotkey community documents that Ctrl+Win naturally does not trigger the Start menu on most Windows versions (Win key is only masked if it was pressed and released without any other key in between). The explicit return value suppression ensures this works even on edge-case Windows builds.
-
-**Only suppress when combo was consumed:** If the hook is installed but the user presses Win alone (e.g. Win+E for Explorer), `COMBO_ACTIVE` is false and Win keyup passes through normally.
-
-## Data Flow
-
-### Hotkey Activation Flow (modifier-only path)
+## History Panel Clipboard Usage (HistorySection.tsx)
 
 ```
-Physical keyboard: Ctrl keydown, then Win keydown (or any order within 50ms)
-    ↓
-Win32 kernel delivers each keystroke to all WH_KEYBOARD_LL hooks
-    ↓
-hook_proc fires on HOOK THREAD for Ctrl keydown
-    CTRL_DOWN = true; LAST_MOD_TIME = kb.time
-    WIN_DOWN is false → no combo yet; CallNextHookEx
-    ↓
-hook_proc fires on HOOK THREAD for Win keydown (e.g. 18ms later)
-    WIN_DOWN = true; LAST_MOD_TIME = kb.time
-    CTRL_DOWN=true, WIN_DOWN=true, age=18ms < 50ms → COMBO!
-    COMBO_ACTIVE = true
-    try_send(HookEvent::Pressed)   ← non-blocking, returns instantly
-    CallNextHookEx (Win keydown still passes through)
-    ↓
-HOOK DISPATCHER thread receives HookEvent::Pressed
-    ↓
-handle_shortcut_pressed(&app)   ← calls existing lib.rs handle_shortcut logic
-    ↓
-PipelineState::IDLE → RECORDING
-    audio.clear_buffer(); audio.recording = true
-    tray::set_tray_state(Recording); pill::show_pill(); emit "recording"
+handleCopy(text, index):
+  navigator.clipboard.writeText(text)    ← browser Async Clipboard API
 ```
 
-### Hotkey Release Flow
+---
+
+## Modifications
+
+### inject.rs -- Removals Only
+
+| What | Lines | Action | Rationale |
+|------|-------|--------|-----------|
+| Save clipboard | 43 (`let saved = clipboard.get_text().ok()`) | Remove | No restore means no need to save |
+| Post-paste delay | 132 (`thread::sleep(Duration::from_millis(80))`) | Remove | Existed solely to let target app consume paste before restore overwrites clipboard; without restore, clipboard retains correct content indefinitely |
+| Restore block | 135-148 (entire `match saved` block) | Remove | Core change -- transcription stays on clipboard |
+
+### inject.rs -- Unchanged
+
+| Component | Lines | Why Unchanged |
+|-----------|-------|---------------|
+| Verify-and-retry loop | 53-99 | Correctness mechanism, not related to restore (see Race 2 below) |
+| 150ms pre-paste delay | 111 | Office apps need WM_CLIPBOARDUPDATE processing time before Ctrl+V arrives |
+| Win key release | 117-123 | Keyboard hook defense, unrelated to clipboard flow |
+| Ctrl+V simulation | 124-127 | Core injection mechanism |
+| Enigo fresh instance | 114 | Required per-call pattern |
+
+### Other Files -- Zero Changes
+
+| File | Why Unchanged |
+|------|---------------|
+| `pipeline.rs` | Calls `inject_text()` with same signature, same spawn_blocking wrapper |
+| `HistorySection.tsx` | `navigator.clipboard.writeText()` is independent of inject flow |
+| `history.rs` | No clipboard interaction whatsoever |
+| `keyboard_hook.rs` | Unrelated to clipboard |
+| `lib.rs` | No clipboard-related code |
+
+---
+
+## Race Condition Analysis
+
+### Race 1: History Panel vs inject_text()
+
+**Question:** Can `navigator.clipboard.writeText()` from HistorySection race with `inject_text()`?
+
+**Answer: No practical risk.**
+
+Temporal separation makes this impossible in normal use:
+- `inject_text()` runs on a `spawn_blocking` thread during pipeline processing, while focus is on the target application (VS Code, Outlook, etc.)
+- History panel copy requires user to: switch to the settings window, navigate to History tab, click an entry
+- User cannot simultaneously dictate AND click the history panel -- the settings window requires focus, which means the target app lost focus
+
+Even in a theoretical edge case (user copies from history, immediately triggers dictation), pipeline transcription takes 200-1500ms before reaching `inject_text()`. The `navigator.clipboard.writeText()` completes in under 1ms. No temporal overlap.
+
+**After simplification:** No change. The race window was always between `set_text()` and `Ctrl+V` within `inject_text()`, not between inject and restore. Removing restore does not create new overlap.
+
+**Verdict: No mitigation needed.**
+
+### Race 2: Chromium WebView Clipboard Contention
+
+**What:** The verify-and-retry loop exists because Tauri's Chromium WebView can reclaim clipboard ownership after a recent `navigator.clipboard.writeText()` call, silently overwriting arboard's content before the Ctrl+V fires.
+
+**Why the loop is NOT about restore:** The loop runs *before* the paste, ensuring the clipboard contains the correct text when Ctrl+V fires. It has nothing to do with what happens after paste. The loop prevents pasting wrong content; restore prevents leaving transcription on clipboard. These are orthogonal concerns.
+
+**After simplification:** Loop remains necessary. If removed, a Chromium clipboard race would cause the wrong text to be pasted -- a correctness bug unrelated to restore.
+
+**Verdict: Keep verify-and-retry loop unchanged.**
+
+### Race 3: Post-Paste Clipboard State (Behavioral Change)
+
+**Current:** After paste, clipboard is restored to pre-transcription content. User's clipboard appears untouched.
+
+**After:** Clipboard contains the transcription text. Ctrl+V in any app produces the last transcription.
+
+**This is the desired behavior.** Standard dictation tools (Dragon NaturallySpeaking, Windows Voice Typing, macOS Dictation) all leave dictated text on the clipboard. The current save/restore adds complexity for behavior users do not expect from a dictation tool.
+
+**Verdict: Desired change, not a bug.**
+
+---
+
+## Timing Analysis
+
+### Removed Delays
+
+| Delay | Duration | Why Removable |
+|-------|----------|---------------|
+| Post-paste sleep | 80ms | Comment on line 129 states purpose: "Allow target app to consume the paste before clipboard restore." Without restore, even if the target app reads the clipboard slightly late, it still gets the correct text (transcription remains on clipboard). |
+
+### Retained Delays
+
+| Delay | Duration | Why Still Required |
+|-------|----------|--------------------|
+| Verify-retry delay | 25ms per attempt (typically 1 attempt = 25ms, worst case 5 = 125ms) | Clipboard propagation is async on Windows. Read-back verification is the only way to confirm the OS clipboard contains the intended text. |
+| Pre-paste delay | 150ms | Office apps (Outlook, Word, Excel) maintain internal clipboard caches updated via WM_CLIPBOARDUPDATE. This message is processed asynchronously. Without the delay, Outlook pastes stale cached content. Verified through testing during v1.0 development. |
+
+### Net Impact
+
+**Best case (typical):** 80ms reduction per injection (single verify attempt)
+**Worst case:** 80ms reduction per injection (loop retries are independent of restore)
+
+This is a fixed, unconditional improvement. The removed 80ms was not conditional on any state.
+
+### Can the 150ms Pre-Paste Delay Be Reduced?
+
+Not advisable in this milestone. The 150ms was calibrated during v1.0 against Outlook and Word. The comment on lines 107-110 documents the rationale: "WM_CLIPBOARDUPDATE processing in Office apps typically completes within 50-100ms, but we add margin for slower machines." Reducing it is a separate investigation requiring testing across multiple Office versions and hardware. Out of scope for clipboard simplification.
+
+---
+
+## Data Flow After Simplification
 
 ```
-Physical keyboard: Win keyup (first modifier released)
-    ↓
-hook_proc fires on HOOK THREAD for Win keyup
-    WIN_DOWN = false
-    COMBO_ACTIVE was true → send HookEvent::Released; COMBO_ACTIVE = false
-    is_win=true → return LRESULT(1)   ← Start menu SUPPRESSED
-    ↓
-HOOK DISPATCHER thread receives HookEvent::Released
-    ↓
-handle_shortcut_released(&app)   ← calls existing lib.rs logic
-    ↓
-PipelineState::RECORDING → PROCESSING (hold-to-talk mode)
-    audio.recording = false; emit "processing"
-    tauri::async_runtime::spawn(pipeline::run_pipeline(app))
+User speaks
+  → audio buffer
+  → engine transcription (spawn_blocking)
+  → text formatting (trim, filler removal, corrections, ALL CAPS, trailing space)
+  → inject_text():
+       clipboard.set_text(text)
+       verify loop (25ms per attempt, usually 1)
+       sleep 150ms (Office app compatibility)
+       release_win_keys()
+       Ctrl+V (Press Ctrl → Click V → Release Ctrl)
+       return                    ← no restore, no 80ms wait
+  → append_history()
+  → emit pill-result "success"
+  → reset_to_idle()
+
+Clipboard state after injection: contains transcription text (by design)
 ```
 
-### Startup Flow
+## Component Boundaries
 
-```
-app.setup() on main thread
-    ↓
-read_saved_hotkey(app) → "ctrl+win" (modifier-only format)
-    ↓
-keyboard_hook::start(app.handle().clone())
-    ├─ sets HOOK_APP, HOOK_SENDER OnceLocks
-    ├─ spawns "hook-dispatcher" std::thread
-    └─ spawns "keyboard-hook" std::thread
-         └─ SetWindowsHookExW(WH_KEYBOARD_LL, ...)
-         └─ GetMessageW loop begins
-    ↓
-skip tauri-plugin-global-shortcut registration for this path
-```
-
-### Shutdown Flow
-
-```
-app.on_window_event(CloseRequested) or system shutdown
-    ↓
-keyboard_hook::stop()
-    ├─ tx.send(HookEvent::Stop)         → dispatcher thread exits loop
-    └─ PostThreadMessageW(hook_tid, WM_QUIT, ...)
-         └─ GetMessageW returns false
-         └─ UnhookWindowsHookEx(hook)
-         └─ hook thread exits
-```
-
-### Hotkey Rebind Flow (user changes hotkey in Settings)
-
-```
-Frontend captures new hotkey combo
-    ↓
-invoke("rebind_hotkey", { old: "ctrl+win", new: "ctrl+shift+space" })
-    ↓
-lib.rs rebind_hotkey():
-    if old was modifier-only:
-        keyboard_hook::stop()          → unhooks WH_KEYBOARD_LL
-    if new is modifier-only:
-        keyboard_hook::start(app)      → installs WH_KEYBOARD_LL
-    if new is standard:
-        plugin.on_shortcut(new, ...)   → uses RegisterHotKey path
-    persist new hotkey to settings.json
-```
-
-## Integration Points
-
-### New vs. Existing Components
-
-| Change | File | What |
-|--------|------|------|
-| NEW module | `src-tauri/src/keyboard_hook.rs` | All WH_KEYBOARD_LL logic (~200 LOC) |
-| MODIFIED | `src-tauri/src/lib.rs` | `mod keyboard_hook`; conditional hook startup in `setup()`; routing in `rebind_hotkey`, `register_hotkey`, `unregister_hotkey` commands |
-| MODIFIED | `src-tauri/Cargo.toml` | Add `Win32_UI_WindowsAndMessaging` and `Win32_Foundation` windows-rs features |
-| MODIFIED | Frontend settings hotkey capture | Accept modifier-only combos (Ctrl+Win with no letter key) |
-| KEPT AS-IS | `tauri-plugin-global-shortcut` | Still used for standard hotkeys; fallback if hook install fails |
-| KEPT AS-IS | `handle_shortcut()` in `lib.rs` | Zero changes — hook dispatcher calls same function |
-
-### Cargo.toml Changes Required
-
-```toml
-[target.'cfg(windows)'.dependencies]
-windows = { version = "0.58", features = [
-    "Win32_Graphics_Dxgi",              # already present
-    "Win32_UI_WindowsAndMessaging",     # ADD: SetWindowsHookExW, GetMessageW, PostThreadMessageW, etc.
-    "Win32_Foundation",                 # ADD: LRESULT, WPARAM, LPARAM, BOOL
-    "Win32_System_Threading",           # ADD: GetCurrentThreadId
-] }
-```
-
-### Internal Boundaries
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| `keyboard_hook.rs` hook proc → dispatcher | `mpsc::Sender::try_send(HookEvent)` | Non-blocking; hook proc must return in <1000ms |
-| `keyboard_hook.rs` dispatcher → `lib.rs` | Direct function calls `handle_shortcut_*(&app)` | No channel needed; dispatcher owns the AppHandle |
-| `keyboard_hook.rs` → Tauri AppHandle | `OnceLock<AppHandle<Wry>>` | Set once in `setup()`, read-only thereafter |
-| Hook thread → shutdown | `PostThreadMessageW(WM_QUIT)` via stored thread ID | Thread ID stored in `AtomicU32` at hook thread startup |
-| Frontend → `rebind_hotkey` | Existing IPC command (modified routing) | String format for modifier-only: `"ctrl+win"` (no virtual key suffix) |
-| `keyboard_hook.rs` ↔ `tauri-plugin-global-shortcut` | Mutually exclusive registration | Only one active per hotkey; `rebind_hotkey` manages the switch |
-
-## Fallback Strategy
-
-If `SetWindowsHookExW` returns `NULL` (error), log the failure and fall back to registering a composite standard hotkey via `tauri-plugin-global-shortcut`. Suggested fallback: `Ctrl+Win+Space` (still usable, Start menu not triggered). Surface this to the user via a settings warning: "Modifier-only hotkey unavailable — using Ctrl+Win+Space instead."
+| Component | Responsibility | Changed? |
+|-----------|---------------|----------|
+| `inject.rs::inject_text()` | Write text to clipboard, verify, simulate Ctrl+V | YES -- remove save/restore/post-paste sleep |
+| `pipeline.rs::run_pipeline()` | Orchestrate: record → transcribe → format → inject → history | NO |
+| `HistorySection.tsx` | Display history entries, click-to-copy via browser API | NO |
+| `history.rs` | Persist/retrieve transcription entries | NO |
+| `keyboard_hook.rs` | WH_KEYBOARD_LL modifier-only hotkey detection | NO |
+| `lib.rs` | Tauri setup, IPC commands, hotkey routing | NO |
 
 ## Build Order
 
-1. **Add `keyboard_hook.rs` skeleton** — `HookEvent` enum, `OnceLock` statics, stub `start()`/`stop()` that do nothing. Verify compilation.
-2. **Implement modifier state machine with unit tests** — `CTRL_DOWN`/`WIN_DOWN` logic and 50ms debounce, tested without any Win32 calls using mock timestamp injection.
-3. **Install the hook + GetMessage loop** — `SetWindowsHookExW` with logging only inside the callback (no channel sends yet). Run the app and verify the hook fires for every keystroke (check logs).
-4. **Wire the channel** — add `HOOK_SENDER`, `try_send` in hook proc, dispatcher thread that prints received events. Verify Pressed/Released arrive correctly for Ctrl+Win.
-5. **Connect to `handle_shortcut`** — replace dispatcher print with actual `handle_shortcut_pressed/released` calls. Verify hold-to-talk and toggle modes work end-to-end with Ctrl+Win.
-6. **Start menu suppression** — add `COMBO_ACTIVE` tracking and `return LRESULT(1)` for Win keyup. Verify Start menu does not open.
-7. **Shutdown path** — implement `stop()` with `PostThreadMessageW(WM_QUIT)` and `UnhookWindowsHookEx`. Verify clean exit with no hook handle leak.
-8. **Rebind integration** — wire `rebind_hotkey` IPC command to call `keyboard_hook::stop()` / `start()` vs. plugin registration based on hotkey format.
-9. **Frontend modifier-only capture** — update settings UI to display and store `"ctrl+win"` format combos without requiring a letter key.
-10. **Fallback** — if `SetWindowsHookExW` fails, fall back to plugin registration and surface warning in UI.
+This is a single-file, deletion-only change:
 
-## Anti-Patterns
+1. **Modify `inject.rs`** -- Remove three blocks: clipboard save (line 43), post-paste sleep (line 132), restore block (lines 135-148). Update the doc comment on `inject_text()` to reflect the new sequence.
+2. **Update doc comment** -- The function's `///` header describes the current 5-step sequence. Update to reflect the simplified 3-step sequence (write → verify → paste).
+3. **Test** -- Verify in target apps: VS Code, Outlook, Chrome, terminal. Confirm clipboard contains transcription after paste. Confirm history panel click-to-copy still works.
 
-### Anti-Pattern 1: Blocking Inside the Hook Proc
+No new files. No new components. No API changes. Function signature `fn inject_text(text: &str) -> Result<(), String>` is unchanged. `pipeline.rs` requires zero modifications.
 
-**What people do:** Lock a Mutex, call `app.emit()`, allocate, or do any I/O inside `hook_proc`.
+## Anti-Patterns to Avoid
 
-**Why it's wrong:** The hook proc has a hard 1000ms timeout on Windows 10 1709+. If it exceeds the timeout, the hook is silently removed permanently with no notification. Mutex contention alone can cause this under load.
+### Anti-Pattern 1: Removing the Verify-and-Retry Loop
 
-**Do this instead:** Use `mpsc::Sender::try_send` (non-blocking) to hand off the event. All actual work happens in the dispatcher thread. If `try_send` returns `Err` (channel full or disconnected), log and discard.
+**Why tempting:** "Without restore, the clipboard is simpler -- maybe we don't need verification."
+**Why wrong:** Verification ensures the correct text is on the clipboard before Ctrl+V fires. Without it, a Chromium WebView clipboard race causes the wrong text to be pasted. This is a correctness mechanism, not a restore-related one. The existing code comments (lines 46-52) document this explicitly.
 
-### Anti-Pattern 2: Installing the Hook on a Tokio Task
+### Anti-Pattern 2: Removing the 150ms Pre-Paste Delay
 
-**What people do:** Call `SetWindowsHookExW` inside `tauri::async_runtime::spawn(async { ... })`.
+**Why tempting:** "We verified the clipboard; just paste now."
+**Why wrong:** Verification confirms arboard can read back the content via the Win32 clipboard API. It does not confirm that Office apps have processed WM_CLIPBOARDUPDATE and updated their internal caches. Outlook has been observed pasting stale content without this delay. The comments on lines 101-110 document this.
 
-**Why it's wrong:** Tokio worker threads do not run a Win32 message loop. The hook installs successfully (no error), but the system cannot deliver hook messages to it — the hook silently never fires.
+### Anti-Pattern 3: Adding a Clipboard Clear After Paste
 
-**Do this instead:** Use `std::thread::spawn` for both the hook thread and the dispatcher. They are synchronous threads, not async tasks.
+**Why tempting:** "Security -- don't leave dictated text on clipboard."
+**Why wrong:** Contradicts the stated goal. The entire point of this milestone is that transcription stays on clipboard, matching standard dictation tool behavior.
 
-### Anti-Pattern 3: Using GetAsyncKeyState Inside the Hook Proc
+### Anti-Pattern 4: Reducing Post-Paste Sleep Instead of Removing It
 
-**What people do:** Check `GetAsyncKeyState(VK_CONTROL)` to detect if Ctrl is held while processing a Win keydown.
+**Why tempting:** "Maybe 30ms instead of 80ms, for safety."
+**Why wrong:** The sleep has exactly one purpose: prevent clipboard restore from overwriting before the target app reads. With no restore, there is nothing to race against. The target app can read the clipboard at any point in the future and will always get the correct text. A reduced sleep adds latency for no benefit.
 
-**Why it's wrong:** The LowLevelKeyboardProc documentation explicitly states the asynchronous key state is unreliable inside the callback. Results are indeterminate.
-
-**Do this instead:** Track modifier state with `AtomicBool` updated by the hook proc itself on every VK_LCONTROL / VK_RCONTROL / VK_LWIN / VK_RWIN keydown and keyup.
-
-### Anti-Pattern 4: Trying RegisterHotKey with Modifier-Only Combos
-
-**What people do:** Pass `MOD_CONTROL | MOD_WIN` with `vk = 0` to `RegisterHotKey`, expecting it to work.
-
-**Why it's wrong:** `RegisterHotKey` requires a non-zero virtual key code. The `vk` parameter is mandatory. Passing 0 fails silently or returns an error. This is the root reason WH_KEYBOARD_LL is necessary for this feature.
-
-**Do this instead:** Use `WH_KEYBOARD_LL` as described in this document.
-
-### Anti-Pattern 5: Suppressing All Win Keyups
-
-**What people do:** Return `LRESULT(1)` for every VK_LWIN/VK_RWIN keyup to guarantee Start menu suppression.
-
-**Why it's wrong:** This breaks all Win key shortcuts when the user is not triggering the Ctrl+Win combo. Win+E (Explorer), Win+D (Desktop), Win+L (Lock) all stop working.
-
-**Do this instead:** Only suppress Win keyup when `COMBO_ACTIVE` was true — meaning the hook intentionally consumed the Ctrl+Win combo. All other Win key usage passes through normally.
-
-### Anti-Pattern 6: Forgetting to Unhook on Shutdown
-
-**What people do:** Let the hook thread drop naturally on app exit without calling `UnhookWindowsHookEx`.
-
-**Why it's wrong:** The hook handle is a system resource. On process exit, Windows automatically removes it, but if the process crashes without exiting cleanly, the hook can linger and affect all applications on the desktop until the next login.
-
-**Do this instead:** Always call `UnhookWindowsHookEx(hook)` in the hook thread before it exits. Trigger this via `PostThreadMessageW(hook_tid, WM_QUIT, 0, 0)` which breaks the `GetMessageW` loop cleanly.
+---
 
 ## Sources
 
-- [SetWindowsHookExA — Win32 docs](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowshookexa) — thread requirements, bitness rules, dwThreadId=0 scope
-- [LowLevelKeyboardProc — Win32 docs](https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelkeyboardproc) — 1000ms timeout, message loop requirement, return value semantics
-- [KBDLLHOOKSTRUCT — Win32 docs](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-kbdllhookstruct) — vkCode, flags, time fields
-- [RegisterHotKey — Win32 docs](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey) — confirms vk is mandatory; modifier-only combos impossible
-- [Tauri Discussion #6309](https://github.com/orgs/tauri-apps/discussions/6309) — OnceLock pattern for AppHandle in extern "system" fn callbacks
-- [Tauri Discussion #8538](https://github.com/tauri-apps/tauri/discussions/8538) — AppHandle state access across threads
-- [Tauri Issue #2343](https://github.com/tauri-apps/tauri/issues/2343) — historical Send/Sync issue, resolved in Tauri 2.x
-- [AutoHotkey community — Win key suppression](https://www.autohotkey.com/boards/viewtopic.php?t=101812) — Ctrl+Win naturally does not trigger Start menu in most cases
-- [DaniWeb — system-wide keystroke blocking with WH_KEYBOARD_LL](https://www.daniweb.com/programming/software-development/threads/369970/system-wide-hook-to-block-certain-keystrokes) — return nonzero to swallow keystroke
-- [SetWindowsHookExW in windows-docs-rs](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/UI/WindowsAndMessaging/fn.SetWindowsHookExW.html) — Rust binding signature and feature flags
+- `src-tauri/src/inject.rs` -- current implementation with inline documentation explaining each delay and the verify loop rationale
+- `src-tauri/src/pipeline.rs` -- pipeline orchestration showing inject_text() call site and history recording
+- `src/components/sections/HistorySection.tsx` -- frontend clipboard usage via navigator.clipboard.writeText()
+- `src-tauri/src/history.rs` -- history persistence confirming no clipboard interaction
 
 ---
-*Architecture research for: WH_KEYBOARD_LL integration into Tauri 2.0 voice-to-text (v1.2 milestone)*
-*Researched: 2026-03-02*
+*Architecture research for: Clipboard simplification in Tauri 2.0 voice-to-text (v1.3 milestone)*
+*Researched: 2026-03-07*

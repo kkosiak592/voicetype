@@ -1,325 +1,179 @@
 # Pitfalls Research
 
-**Domain:** WH_KEYBOARD_LL modifier-only hotkey integration into existing Tauri 2.0 desktop app (v1.2 Keyboard Hook milestone)
-**Researched:** 2026-03-02
-**Confidence:** HIGH (critical pitfalls verified against official Microsoft Win32 docs and confirmed Tauri GitHub issues; moderate pitfalls from AutoHotkey community validated patterns and Rust FFI docs)
+**Domain:** Clipboard simplification — removing save/restore from inject_text in a Windows dictation tool (VoiceType v1.3)
+**Researched:** 2026-03-07
+**Confidence:** HIGH (pitfalls derived from current codebase analysis, Windows clipboard Win32 documentation, and established patterns from clipboard managers and password managers)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Hook Callbacks Never Fire When Tauri Window Is Focused
+### Pitfall 1: Removing the Post-Paste Sleep Prematurely Along With the Restore
 
 **What goes wrong:**
-The WH_KEYBOARD_LL hook installs successfully (SetWindowsHookExW returns a valid HHOOK), but when the VoiceType window has focus, the hook callback receives no keyboard events — not even Win key or Ctrl presses. The hook appears dead. The problem disappears when any other window has focus.
+When removing the clipboard restore logic, a developer naturally removes the 80ms post-paste sleep (line 132 in current inject.rs) thinking "we're not restoring anymore, so we don't need to wait." The paste then intermittently fails — target applications receive an empty paste or stale clipboard content because Ctrl+V was released before the app consumed the clipboard data.
 
 **Why it happens:**
-Tauri 2.0 uses the `tao` windowing library, which on Windows sets a `DeviceEventFilter` that defaults to `Unfocused` — meaning the app's input processing pipeline filters out device events when its window is not the receiver. This was confirmed in tauri-apps/tauri#13919 and tauri-apps/tauri#14770. Importantly, WH_KEYBOARD_LL does not inject into another process — it is called in the context of the thread that installed it via an inter-thread message. If that thread's message pump is blocked or its event filter is consuming events, callbacks are silently swallowed.
+The 80ms sleep at line 132 serves two distinct purposes that look like one:
+1. Give the target app time to consume the paste before restoring (the documented purpose)
+2. Give the target app time to consume the paste before *any* subsequent clipboard operation occurs
 
-This is particularly acute for VoiceType because:
-- The hook thread is installed inside the same Tauri process
-- The Tauri main window is the primary UI (settings panel) — users may have it focused when configuring the app
-- Even if settings panel is not normally in focus, the first run and onboarding phases will have it focused
+Even without a restore, other code paths can touch the clipboard shortly after inject_text returns — the history panel's click-to-copy feature, or a rapid second transcription. If the sleep is removed and a clipboard write happens within milliseconds of the Ctrl+V, the paste can fail silently.
 
 **How to avoid:**
-Set `device_event_filter` in the Tauri AppBuilder to allow device events even when focused:
-
-```rust
-// In setup() or via AppBuilder before build()
-.device_event_filter(tauri::DeviceEventFilter::Always)
-```
-
-This must be applied before installing the WH_KEYBOARD_LL hook. Install the hook on a dedicated thread that runs its own `GetMessage` / `DispatchMessage` loop — do not install on the Tauri main thread. The hook thread must be separate from the Tauri async runtime threads.
+Keep the 80ms post-paste sleep. It exists to let the target application process WM_PASTE / CF_TEXT, not just to buffer the restore. Add a code comment explicitly stating this sleep is for paste consumption, independent of save/restore logic.
 
 **Warning signs:**
-- Hook callback fires correctly for 30 seconds (while settings window is not focused), then suddenly stops responding when user opens the settings panel
-- App logs show hook installed successfully but no `WM_KEYDOWN` events appear when VoiceType window is foreground
-- Hotkey works globally but fails to trigger when VoiceType is the active window
+- Paste works 95% of the time but occasionally pastes nothing or old content
+- Failure rate higher in Outlook, Word, and other Office apps (they process clipboard asynchronously via WM_CLIPBOARDUPDATE)
+- Rapid sequential transcriptions fail more often than single transcriptions
 
-**Phase to address:** Hook installation phase (Phase 1 of v1.2). Verify before implementing any other hook logic — this is the foundation all other features rest on.
+**Phase to address:** The single implementation phase. This is a "do not touch this line" guard during the removal.
 
 ---
 
-### Pitfall 2: Start Menu Opens on Win Key Release Despite Hook Blocking the Event
+### Pitfall 2: Clipboard Verification Loop Becoming Unnecessary Complexity — But It Is Still Necessary
 
 **What goes wrong:**
-The hook correctly detects the Ctrl+Win combination and returns a non-zero value to suppress the events. The VoiceType hotkey fires. But after releasing the keys, the Start menu opens anyway — the WM_KEYUP for VK_LWIN was not blocked or was blocked too late.
+The developer sees the verify-and-retry loop (lines 53-99) and the 150ms pre-paste delay (line 111) and thinks: "These were needed because of the race between setting clipboard and restoring clipboard. Without restore, we can simplify these too." They reduce or remove the verification loop, and intermittent paste failures return — particularly in Chrome/Edge tabs and Office apps.
 
 **Why it happens:**
-Windows handles the Start menu activation on the WM_KEYUP event for VK_LWIN/VK_RWIN, not WM_KEYDOWN. The sequence the OS uses: if Win key is pressed and released with no other keys in between, the Start menu activation is queued. Simply blocking the WM_KEYDOWN is not sufficient. There are two sub-problems:
+The verification loop and the 150ms pre-paste delay exist because of two separate problems, neither of which is related to save/restore:
 
-1. **Direct suppression is insufficient alone**: Returning non-zero from the hook for WM_KEYUP of VK_WIN suppresses the event to the target window, but the Windows shell has already registered interest in the Win key at a level that observes the hook output.
+1. **Chromium WebView clipboard race** (lines 47-52): The Tauri WebView (Chromium) can reclaim clipboard ownership via `navigator.clipboard.writeText()` when the user interacts with history panel click-to-copy. This race exists regardless of whether clipboard is restored afterward.
 
-2. **The masking technique is required**: AutoHotkey and other hook tools suppress Start menu activation by injecting a synthetic key event (VK 0xE8, which is "unassigned" per Microsoft's virtual key table) on Win key press. This "masks" the Win key as a combo-key in the OS's internal tracking state. Without the mask key, the OS concludes the Win key was pressed alone and opens the Start menu.
-
-On Windows 11, this is more sensitive than Windows 10: the AutoHotkey community confirmed that Windows 11 changed Win key handling and the masking technique requires sending the unassigned key on both down and up transitions in some configurations.
+2. **Office async clipboard cache** (lines 103-110): Office apps process WM_CLIPBOARDUPDATE asynchronously and cache clipboard content internally. The 150ms delay ensures Office has ingested the new clipboard content before Ctrl+V fires. This is a paste-reliability concern, not a restore concern.
 
 **How to avoid:**
-In the hook callback, when Ctrl+Win is recognized as the active combo:
-1. Return non-zero to suppress the Win key KEYDOWN event.
-2. Simultaneously send a synthetic key event for VK 0xE8 (KEYDOWN + KEYUP) via `SendInput` with `LLKHF_INJECTED` — but check the `LLKHF_INJECTED` flag in your own callback to skip re-processing your own synthetic events (see Pitfall 6).
-3. Also return non-zero for VK_LWIN KEYUP.
+Keep the verification loop and the 150ms pre-paste delay intact. The only code to remove is:
+- Line 43: `let saved: Option<String> = clipboard.get_text().ok();`
+- Lines 135-149: The entire `match saved { ... }` restore block
 
-Critical: Do not use VK 0x07 as the mask key — on Windows 10+ it opens the Xbox Game Bar.
-
-```rust
-// In hook callback, detect own synthetic events to avoid recursion:
-let flags = kbdll.flags;
-if flags & LLKHF_INJECTED != 0 {
-    return CallNextHookEx(ptr::null_mut(), code, wparam, lparam);
-}
-```
+Nothing else should change. Add comments on the verification loop clarifying it protects against Chromium races, not restore races.
 
 **Warning signs:**
-- Start menu opens briefly then closes (partial suppression — KEYDOWN blocked but not KEYUP)
-- Start menu reliably opens after every successful Ctrl+Win hotkey trigger
-- Behavior differs on Windows 10 vs Windows 11 test machines
+- Paste silently fails in Chrome/Edge tabs (Chromium reclaimed clipboard)
+- Outlook pastes stale content from its internal cache instead of the transcription
+- The verification loop reports mismatches in logs but was disabled because "we don't need it anymore"
 
-**Phase to address:** Phase 1 (hook implementation) — the mask-key strategy must be designed in from the start, not bolted on after testing reveals Start menu leakage.
+**Phase to address:** The single implementation phase. The diff should be minimal — removal of exactly the save (1 line) and restore (15 lines) blocks.
 
 ---
 
-### Pitfall 3: Hook Is Silently Removed by Windows After Timeout — App Doesn't Know
+### Pitfall 3: Every Transcription Now Appears in Windows Clipboard History (Win+V)
 
 **What goes wrong:**
-The hook works normally for hours, then stops responding with no error. The app continues running normally (no crash, no log error), but the Ctrl+Win hotkey no longer fires. The user must restart VoiceType to restore the hotkey. This happens intermittently — more often on machines with antivirus, heavy CPU load, or slow machines.
+After removing save/restore, the transcription text remains on the clipboard. Windows Clipboard History (if enabled) captures every transcription. The user presses Win+V and sees a long list of every dictated sentence — potentially sensitive content like emails, passwords dictated into login fields, or private messages. In enterprise environments with clipboard sync enabled, this data may be synced to Microsoft's cloud.
 
 **Why it happens:**
-From the official `LowLevelKeyboardProc` documentation (verified): "The hook procedure should process a message in less time than the data entry specified in the `LowLevelHooksTimeout` value in `HKEY_CURRENT_USER\Control Panel\Desktop`." If the callback exceeds this timeout — default 300ms, capped at 1000ms on Windows 10 version 1709+ — the system passes the event to the next hook. If it times out 11 times cumulatively, **the hook is silently removed with no notification to the app**. There is no callback, no event, no return value — the HHOOK handle becomes invalid and all subsequent keystrokes bypass the callback.
+The old save/restore pattern had a subtle privacy benefit: the transcription was on the clipboard only during the ~230ms paste window (150ms pre-paste delay + 80ms post-paste consumption), after which the original content was restored. Windows Clipboard History captures items when they are set, so the transcription was still captured — but the restore immediately pushed the original content back, meaning the clipboard history showed the original content as the "current" item rather than the transcription.
 
-In this app, the hook callback runs on the hook thread. Any blocking operation (acquiring a Mutex, sending across a channel that is full, calling into the Tauri command system) directly inside the callback can cause timeout. Given the existing Arc<Mutex<...>> patterns in lib.rs, accidentally holding a lock in the callback path is a realistic mistake.
+With simplification, the transcription stays on the clipboard indefinitely. Every transcription is now a permanent clipboard history entry until the user clears history or it ages out.
 
 **How to avoid:**
-- The hook callback must do ONLY: read the KBDLLHOOKSTRUCT, set an AtomicBool or send to an unbounded channel (non-blocking), and return immediately. Do NOT lock mutexes, do NOT call into Tauri commands, do NOT allocate on the heap inside the callback.
-- Worker logic (debounce timer, state machine evaluation) runs on a separate thread that reads from the channel.
-- Implement a health-check mechanism: a periodic timer (e.g., every 5 seconds) attempts a synthetic key event and verifies the hook callback fires. If the hook is dead, reinstall it.
+This is an accepted behavior change, not a bug. Standard dictation tools (Dragon NaturallySpeaking, Windows Voice Typing) all leave transcription on the clipboard. However, document this in release notes for user awareness.
 
-```rust
-// The entire callback should be near this simple:
-unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
-    if code >= 0 {
-        let kb = *(lparam as *const KBDLLHOOKSTRUCT);
-        let _ = HOOK_SENDER.send(HookEvent { vk: kb.vkCode, flags: kb.flags, wp: wparam });
-    }
-    CallNextHookEx(ptr::null_mut(), code, wparam, lparam)
-}
-```
+If privacy becomes a concern later, Windows provides clipboard history exclusion via the `ExcludeClipboardContentFromMonitorProcessing` clipboard format. Setting this format alongside the text data tells Windows Clipboard History and cloud sync to ignore the entry. arboard does not expose this directly — it would require raw Win32 clipboard API calls via `OpenClipboard` / `SetClipboardData` with a custom registered format. This is an optional future enhancement, not a v1.3 requirement.
 
 **Warning signs:**
-- Hotkey stops working without any restart or settings change
-- Issue reproduces more reliably when antivirus is scanning (CPU spikes) or system is under heavy load
-- Adding a `log::debug!()` call inside the hook callback causes the hook to die faster (disk I/O in callback)
+- Users report sensitive dictation appearing in Win+V clipboard history
+- Enterprise users with clipboard cloud sync enabled see transcriptions synced to other devices
+- Third-party clipboard managers (Ditto, CopyQ) capture every transcription as a new entry
 
-**Phase to address:** Phase 1 (hook architecture). The channel-based non-blocking callback design must be the initial design — it cannot be refactored in after discovering timeouts.
+**Phase to address:** Document in release notes during the implementation phase. The exclusion format is a potential follow-up if users report privacy concerns.
 
 ---
 
-### Pitfall 4: Rust Panic Inside `extern "system"` Hook Callback Causes Undefined Behavior
+### Pitfall 4: Non-Text Clipboard Content Permanently Lost
 
 **What goes wrong:**
-A Rust panic occurs inside the hook callback (e.g., a slice index out of bounds, an unwrap() on a None, or an assertion). The process exhibits undefined behavior — in the best case it aborts immediately; in the worst case it silently corrupts memory and the app continues running in a broken state. The specific undefined behavior is platform-dependent.
+User copies an image, a file path from Explorer, or rich text (formatted text from Word/Outlook) to their clipboard. They then dictate with VoiceType. The transcription replaces the clipboard content. The image/file/rich-text is gone — no way to recover it.
+
+With the old save/restore behavior, this was *also* the case (arboard's `get_text()` only saves text content, so images were already being lost and replaced with an empty string on restore). However, users may not have noticed because:
+1. The clipboard appeared to be "unchanged" after dictation (restored to empty or to text content that was there before)
+2. Users rarely copy an image and then immediately dictate
+
+With simplification, the clipboard *visibly* contains the transcription instead of appearing unchanged. This makes the content loss obvious and noticeable.
 
 **Why it happens:**
-From the Rust Nomicon and RFC 2945: a Rust panic that unwinds through an `extern "C"` (or `extern "system"`) FFI boundary is undefined behavior per the Rust specification. The Windows `LowLevelKeyboardProc` callback is called by the OS from C code — it is precisely an FFI boundary. Even if `panic = "abort"` is set in Cargo.toml (which would catch this for the common case), it is not set for the existing project (which uses default `panic = "unwind"`). An unwinding panic crossing this boundary may corrupt the hook chain for the entire system, not just this app.
+arboard's `set_text()` calls `OpenClipboard` / `EmptyClipboard` / `SetClipboardData` with CF_UNICODETEXT. The `EmptyClipboard` call destroys all clipboard formats — CF_BITMAP, CF_HDROP (file list), CF_HTML, CF_RTF, and any custom formats. This is standard Win32 behavior: the clipboard can only have one owner at a time, and `EmptyClipboard` clears all formats from the previous owner.
 
 **How to avoid:**
-Wrap the entire callback body in `std::panic::catch_unwind`:
+This is the intended behavior and matches every other dictation tool. The clipboard is a transient holding area, not a persistent store. Accept the behavior change. The only mitigation needed is documentation clarity — update the CLAUDE.md key decisions to note that clipboard content is replaced by transcription.
 
-```rust
-unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
-    let result = std::panic::catch_unwind(|| {
-        if code >= 0 {
-            let kb = *(lparam as *const KBDLLHOOKSTRUCT);
-            let _ = HOOK_SENDER.try_send(HookEvent { vk: kb.vkCode, flags: kb.flags, wp: wparam });
-        }
-        CallNextHookEx(ptr::null_mut(), code, wparam, lparam)
-    });
-    match result {
-        Ok(r) => r,
-        Err(_) => CallNextHookEx(ptr::null_mut(), code, wparam, lparam), // safe fallback
-    }
-}
-```
-
-Alternatively, keep the callback so minimal (just one AtomicStore and one return) that no panic is possible.
-
-Never use `.unwrap()`, `.expect()`, index operations, or any fallible operation inside the hook callback body.
+If users want clipboard persistence, they should use a clipboard manager (Ditto, Windows Clipboard History via Win+V). This is not VoiceType's responsibility.
 
 **Warning signs:**
-- App crashes with no Rust backtrace during hotkey use (OS-level crash rather than Rust panic)
-- The crash happens intermittently and is hard to reproduce under debugger
-- Crash only occurs when the keyboard is used rapidly or in specific key sequences
+- No warning signs needed — this is expected behavior
+- The only risk is a user complaint: "I had an image on my clipboard and VoiceType erased it"
 
-**Phase to address:** Phase 1 (hook implementation). Code review gate: the hook callback must be reviewed for any panic-capable operations before merging.
-
----
-
-### Pitfall 5: Coexistence of tauri-plugin-global-shortcut (RegisterHotKey) and WH_KEYBOARD_LL Causes Double-Firing or Deadlock
-
-**What goes wrong:**
-The existing app uses `tauri-plugin-global-shortcut` (which wraps the `global-hotkey` crate, which uses Win32 `RegisterHotKey`). The new v1.2 milestone adds a WH_KEYBOARD_LL hook in the same process. These two systems both observe keyboard events at the global level. Depending on implementation, two failure modes appear:
-
-1. **Double-firing**: A standard hotkey (e.g., Ctrl+F9) registered via RegisterHotKey also passes through the WH_KEYBOARD_LL hook. If the hook logic is not explicitly scoped to only handle Ctrl+Win combinations, it may also trigger on Ctrl+F9, causing double-execution of the hotkey handler.
-
-2. **Cross-thread message loop interference**: Both systems install into the same process's message loop. If the hook thread and the RegisterHotKey thread share state (Arc<Mutex<...>>) and both try to acquire the same lock in response to the same keypress event, a deadlock can occur.
-
-**Why it happens:**
-`RegisterHotKey` works through the WM_HOTKEY message, which is delivered to the thread that registered it. `WH_KEYBOARD_LL` operates at a lower level and fires before WM_HOTKEY is generated. They are independent mechanisms that both observe the same keystrokes. The existing `tauri-plugin-global-shortcut` state machine in lib.rs (handle_shortcut, rebind_hotkey, etc.) was not designed to coexist with a parallel low-level hook. During the transition phase, both systems will be active simultaneously (fallback path if hook fails to install).
-
-**How to avoid:**
-- In the WH_KEYBOARD_LL callback, immediately check if the key combination involves VK_LWIN or VK_RWIN. Only process combinations that include a Win modifier — pass everything else through via `CallNextHookEx` with no state changes. This scopes the hook to only the Ctrl+Win use case.
-- Define a clear state ownership boundary: the WH_KEYBOARD_LL handler owns the `is_recording` AtomicBool when the hook is active; the RegisterHotKey handler owns it when hook is not installed. Never let both read-modify-write the same AtomicBool concurrently.
-- During the transition (hook active), unregister the overlapping standard hotkey from RegisterHotKey to avoid double-registration.
-- Lock acquisition order must be consistent across both callback paths to prevent deadlock.
-
-**Warning signs:**
-- Transcription starts twice in rapid succession after a single hotkey press
-- App deadlocks under specific timing conditions when both a standard key and Ctrl+Win are pressed close together
-- Toggling the hotkey in settings while the hook is active causes a hang
-
-**Phase to address:** Phase 1 (hook installation) and Phase 2 (fallback/coexistence logic). The boundary between the two systems must be documented as an invariant.
+**Phase to address:** No code mitigation needed. Acknowledge in release notes.
 
 ---
 
 ## Moderate Pitfalls
 
-### Pitfall 6: Synthetic Key Injection (SendInput for Start Menu Suppression) Recursively Re-Enters the Hook
+### Pitfall 5: The `Clipboard::new()` Call Fails If Another App Has the Clipboard Open
 
 **What goes wrong:**
-The hook callback calls `SendInput` to inject the VK 0xE8 mask key. The hook itself is called again for this injected event (because WH_KEYBOARD_LL is called for all keyboard input including synthetic). This causes infinite recursion — the hook callback calls SendInput, which triggers the hook, which calls SendInput again — until the stack overflows or the timeout fires.
+`Clipboard::new()` (arboard) internally calls `OpenClipboard`. If another application currently has the clipboard open (e.g., a clipboard manager polling the clipboard, or the user is actively pasting in another app), `OpenClipboard` fails with `ERROR_ACCESS_DENIED`. The current code at line 40 propagates this as an error, failing the entire injection.
 
 **Why it happens:**
-WH_KEYBOARD_LL receives both physical and synthetic keyboard events. Any call to `SendInput`, `keybd_event`, or `PostMessage` with key input from within the hook callback will re-enter the callback. The official docs confirm the hook fires for `keybd_event`-originated input.
+The Win32 clipboard is a global resource with exclusive locking. Only one process can have the clipboard open at a time. Clipboard managers like Ditto poll the clipboard frequently, and some hold the clipboard open for several milliseconds during each poll cycle. The existing code already handles this implicitly (the retry loop at lines 57-92 retries `set_text`), but `Clipboard::new()` on line 40 has no retry — it fails immediately.
 
 **How to avoid:**
-Check the `LLKHF_INJECTED` flag (bit 4 of `KBDLLHOOKSTRUCT.flags`) at the start of every callback invocation. If set, the event is synthetic — pass it through without any processing or re-injection:
+This pitfall exists in the current code and is unrelated to the save/restore removal. However, removing the save step (line 43: `clipboard.get_text().ok()`) eliminates one clipboard access that could also fail. The simplification marginally *improves* reliability by reducing the number of clipboard operations from 4 (get_text for save, set_text, get_text for verify, set_text for restore) to 2 (set_text, get_text for verify).
 
-```rust
-if kb.flags & 0x10 != 0 { // LLKHF_INJECTED
-    return CallNextHookEx(ptr::null_mut(), code, wparam, lparam);
-}
-```
-
-This is the standard guard used by AutoHotkey and all hook-based tools.
+No additional mitigation needed for v1.3 — this is already handled acceptably.
 
 **Warning signs:**
-- Stack overflow crash shortly after first hotkey press
-- Exponential CPU spike when hotkey is pressed (hook firing thousands of times per second)
-- App freeze immediately after first successful Ctrl+Win detection
+- Sporadic `inject_text: clipboard access failed` errors in logs
+- Failures correlate with Ditto or another clipboard manager being installed
 
-**Phase to address:** Phase 1 (hook implementation). Must be the first check in the callback, before any other logic.
+**Phase to address:** Not a v1.3 concern. Existing behavior is acceptable.
 
 ---
 
-### Pitfall 7: Left vs. Right Modifier Ambiguity — VK_CONTROL Fires Instead of VK_LCONTROL
+### Pitfall 6: Removing Save/Restore Changes the Timing Profile — Regression in Paste Reliability
 
 **What goes wrong:**
-The hook receives `vkCode == VK_CONTROL (0x11)` instead of `VK_LCONTROL (0xA2)` or `VK_RCONTROL (0xA3)`. The state machine that tracks "is Ctrl currently pressed?" either never detects the press (if it only watches VK_LCONTROL) or incorrectly identifies which Ctrl key was pressed (affects user UX for left-vs-right hotkey preferences).
+The old flow was: `get_text` (save) -> `set_text` -> `get_text` (verify) -> sleep 150ms -> Ctrl+V -> sleep 80ms -> `set_text` (restore). Total clipboard operations: 4. Total time: ~280ms + verification attempts.
 
-Similarly, VK_LWIN (0x5B) and VK_RWIN (0x5C) are distinct — the user may want only left-Win to trigger (to not interfere with right-Win+L for lock screen).
+The new flow is: `set_text` -> `get_text` (verify) -> sleep 150ms -> Ctrl+V -> sleep 80ms. Total clipboard operations: 2. Total time: ~280ms + verification attempts, but the *start* of the function is faster because there's no initial `get_text`.
+
+The overall latency improvement is minimal (~1-5ms for the removed get_text call), but the *timing window* changes. Some clipboard-monitoring apps track clipboard ownership changes and may behave differently when there are fewer ownership transitions.
 
 **Why it happens:**
-Windows keyboards send different virtual key codes depending on the physical key, but older hardware, software keyboard emulators, remote desktop sessions, and the on-screen keyboard may send the generic `VK_CONTROL` rather than the side-specific codes. The KBDLLHOOKSTRUCT provides `scanCode` and the `LLKHF_EXTENDED` flag in `flags` (bit 0), which can be used with `MapVirtualKeyW(scanCode, MAPVK_VSC_TO_VK_EX)` to disambiguate.
+The save operation (`get_text`) read the clipboard without changing ownership. But it did open and close the clipboard, which introduced a brief window where the clipboard was "locked" before the set_text call. Some clipboard managers interpret rapid open/close/open/close patterns as "an app is actively using the clipboard" and back off from polling. With the save removed, the first clipboard operation is now `set_text` (which changes ownership immediately), and monitoring apps may compete for clipboard access more aggressively.
 
 **How to avoid:**
-Track all three VK codes for each modifier: VK_CONTROL, VK_LCONTROL, and VK_RCONTROL. Treat all three as "Ctrl pressed." For the Win key, track VK_LWIN and VK_RWIN separately. Use the `LLKHF_EXTENDED` flag to distinguish extended (right-side) keys when vkCode is the generic form.
-
-Design the state machine so it does not assume left-only modifiers. If the product decision is "only left Ctrl + left Win", enforce it by also checking the scanCode / extended flag, not just vkCode.
+This is unlikely to cause real problems but is worth noting. The 150ms pre-paste delay already provides ample time for clipboard propagation. Monitor logs for increased clipboard verification retry rates after the change. If retry rates increase, the existing retry loop already handles it.
 
 **Warning signs:**
-- Ctrl+Win combination detected on desktop PC but not on remote desktop session
-- Right-Ctrl + Win triggers the hotkey when it should not (or vice versa)
-- On-screen keyboard or accessibility tools cause unintended hotkey firing
+- Clipboard verification retry count increases after the change (visible in log output)
+- More frequent clipboard mismatch warnings in logs
 
-**Phase to address:** Phase 1 (hook state machine). The VK code enumeration must cover all three variants from the start.
+**Phase to address:** Monitor during testing after implementation. No preemptive action needed.
 
 ---
 
-### Pitfall 8: Modifier Key State Desync When App Is Backgrounded Mid-Press
+### Pitfall 7: The Empty-String Restore for Non-Text Content Is Also Being Removed
 
 **What goes wrong:**
-The user holds Ctrl, switches to another window via Alt+Tab, then releases Ctrl. The hook receives the Ctrl KEYDOWN but misses the KEYUP (or vice versa depending on timing). The internal `ctrl_down: bool` state is now permanently stuck as `true`. Subsequently, pressing any key is misidentified as "Ctrl held" — the hotkey fires unexpectedly or never fires because the combo is perceived as already active.
+Lines 144-148 in the current code handle the case where the original clipboard was empty or non-text: they call `clipboard.set_text("")` to "clear" the clipboard. This was a cleanup step. After removal, if the original clipboard had an image, and the user dictates, the clipboard will contain the transcription text. If the user then tries to paste expecting the image... they get text instead.
+
+With the old behavior, they would have gotten an empty string paste — also wrong, but in a different way.
 
 **Why it happens:**
-WH_KEYBOARD_LL is a global hook and does receive events when the app is not focused. However, if the hook thread's message pump is blocked at the moment the KEYUP event arrives (e.g., during a transcription pipeline operation), the event is delivered after the timeout and may be dropped (see Pitfall 3). The `GetAsyncKeyState` function cannot be called from inside the hook callback (the official docs explicitly warn: "the callback function is called before the asynchronous state of the key is updated"). There is also no OS-provided "you missed some key events" notification.
+The old code was already broken for non-text clipboard content — it could never properly save/restore images or rich text. It just masked the breakage by setting an empty string. The simplification makes the behavior more *honest*: the clipboard contains exactly what VoiceType put there, no pretense of preservation.
 
 **How to avoid:**
-- On WM_HOTKEY or application focus-change events (WM_ACTIVATEAPP with wParam=FALSE), reset all modifier state flags to their actual hardware state using `GetKeyState` called from the main thread (not inside the hook callback).
-- Implement a periodic modifier-state reconciliation (every 100ms) that calls `GetKeyState(VK_CONTROL)` and `GetKeyState(VK_LWIN)` on the hook thread and corrects the internal AtomicBool state if it diverges.
-- Design the state machine to recover from stuck-modifier state: if `ctrl_down` has been `true` for more than 2 seconds without a corresponding Win key press, reset it.
+No mitigation needed. The old behavior was already lossy for non-text content. The new behavior is more predictable: after dictation, the clipboard always contains the transcription. Users can reason about this more easily than "sometimes my clipboard is mysteriously empty after dictation."
 
 **Warning signs:**
-- After Alt+Tabbing away and back, the hotkey fires on the very next keypress with no modifier held
-- Holding Ctrl and quickly Alt+Tabbing causes a "phantom" hotkey trigger
-- User reports the app "randomly starts recording" without pressing the hotkey
+- None — this is an improvement in predictability
 
-**Phase to address:** Phase 1 (state machine design) and Phase 2 (focus change integration testing).
-
----
-
-### Pitfall 9: Hook Thread Has No Message Pump — Hook Callbacks Never Fire
-
-**What goes wrong:**
-The hook is installed on a standard Rust `std::thread::spawn` thread. The HHOOK is valid, but keyboard callbacks never fire. No events reach the hook callback at all.
-
-**Why it happens:**
-The official `LowLevelKeyboardProc` documentation states explicitly: "the thread that installed the hook must have a message loop." The Windows hook subsystem delivers callbacks to the installing thread by posting a special message to its message queue. If the thread has no Win32 message loop (no `GetMessage` / `PeekMessage` / `DispatchMessage` pump), those messages are never processed and the callback is never invoked. A standard Rust thread (`std::thread::spawn`) has no Win32 message loop. The Tauri main thread has a message loop (WebView2 runs one), but it is not safe to install the hook on it.
-
-**How to avoid:**
-The hook thread must run an explicit Win32 message loop using `windows-rs` or `winapi`:
-
-```rust
-std::thread::spawn(move || {
-    let hhook = unsafe {
-        SetWindowsHookExW(WH_KEYBOARD_LL, Some(hook_proc), None, 0)
-    }.expect("hook install failed");
-
-    // Required: Win32 message loop on this thread
-    let mut msg = MSG::default();
-    loop {
-        match unsafe { GetMessageW(&mut msg, None, 0, 0) } {
-            BOOL(0) | BOOL(-1) => break, // WM_QUIT or error
-            _ => unsafe {
-                TranslateMessage(&msg);
-                DispatchMessageW(&msg);
-            }
-        }
-    }
-    unsafe { UnhookWindowsHookEx(hhook) };
-});
-```
-
-**Warning signs:**
-- `SetWindowsHookExW` returns success but the callback function is never called
-- Inserting a `println!` at the top of the callback confirms it is never reached
-- Hook works when installed on the Tauri main thread (which has a loop) but not on a spawned thread
-
-**Phase to address:** Phase 1. This is a prerequisite that must be verified with a minimal proof-of-concept before building the full state machine.
-
----
-
-### Pitfall 10: Windows Defender Escalates False Positive Due to WH_KEYBOARD_LL
-
-**What goes wrong:**
-The WH_KEYBOARD_LL addition causes Windows Defender to reclassify the VoiceType binary from "low suspicion" (due to existing `SendInput` for clipboard paste) to "high suspicion" (keyboard snooping + input injection). The binary is quarantined or users receive a SmartScreen warning that was not present in v1.0/v1.1.
-
-**Why it happens:**
-The existing app already uses `SendInput` for Ctrl+V injection (clipboard paste), which is a known malware signal. `SetWindowsHookExW` with `WH_KEYBOARD_LL` and `dwThreadId = 0` (global hook) is a primary keylogger API pattern. The combination of global keyboard hook + key injection + running at startup = the exact signature of credential-stealing malware. Microsoft's 2024-2025 expanded keylogger protection in Defender (announced on Windows IT Pro Blog, September 2024) increased the ML classifier sensitivity for these API combinations.
-
-The fact that the hook code is in Rust rather than C/C++ provides no protection — Defender classifies on binary behavior, not source language.
-
-**How to avoid:**
-- Code signing with an OV or EV certificate (already recommended in the v1.0 PITFALLS.md) is the primary mitigation. Signed binaries receive substantially higher trust and are far less likely to trigger heuristic ML classifiers.
-- Submit the signed v1.2 binary to Microsoft Security Intelligence (MSCI) for review before public distribution.
-- Document the behavior in the app's About or README: "VoiceType installs a global keyboard hook to detect Ctrl+Win. This is required for modifier-only hotkey support. The hook does not log or transmit keystrokes."
-- For the personal use / friend distribution scenario (no OV cert): document the Defender exclusion path and be aware that the exclusion applies per binary hash — each new build requires the same process.
-
-**Warning signs:**
-- V1.0/v1.1 passed Defender silently, but v1.2 triggers a SmartScreen warning on first run
-- Windows Event Log shows Defender event 1116 (malware detection) or 1117 (remediation) after install
-- VirusTotal scan shows 1-3 engine detections on the new binary (was 0 on v1.1)
-
-**Phase to address:** Distribution testing phase. Run the v1.2 binary through VirusTotal before any distribution — treat any new detection vs. v1.1 as a blocking issue.
+**Phase to address:** Acknowledge in commit message that non-text clipboard content was already not preserved.
 
 ---
 
@@ -327,12 +181,10 @@ The fact that the hook code is in Rust rather than C/C++ provides no protection 
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Install hook on Tauri main thread instead of dedicated hook thread | Avoids writing a Win32 message loop | Main thread blocked by hook; Tauri UI freezes during any hook processing delay; WM_QUIT handling breaks | Never — dedicated thread is mandatory |
-| Skip `LLKHF_INJECTED` guard in callback | Simpler callback code | Infinite recursion when sending mask-key synthetic events; immediate stack overflow | Never |
-| Use `GetAsyncKeyState` inside hook callback to verify modifier state | Simpler "confirm key state" logic | Undefined per official docs — async state not updated yet when callback fires; returns stale data | Never |
-| Skip hook health-check (let dead hook stay dead) | Less code to write | Hotkey silently stops working; user must restart app | Only acceptable for MVP with a visible "hook is inactive" status indicator |
-| Skip debounce, detect exact Ctrl-then-Win ordering | Faster initial implementation | Fails for users who press Win slightly before Ctrl (fast typists, human timing variance); brittle | Only for initial proof-of-concept — must add debounce before beta |
-| Keep RegisterHotKey active alongside WH_KEYBOARD_LL permanently | Simpler fallback logic | Double-firing risk on overlapping hotkeys; complex state ownership | Only acceptable if non-overlapping hotkeys are guaranteed (Ctrl+Win through hook, all other combos via RegisterHotKey) |
+| Remove the 80ms post-paste sleep alongside the restore | Saves 80ms per transcription | Intermittent paste failures in Office apps that haven't consumed the clipboard yet | Never — the sleep protects paste consumption, not restore |
+| Remove the 150ms pre-paste delay alongside the restore | Saves 150ms per transcription | Outlook and Word paste stale cached content instead of the transcription | Never — the delay protects Office app clipboard ingestion |
+| Remove the verification loop alongside the restore | Simpler code, fewer clipboard operations | Chromium WebView clipboard races cause silent paste failures | Never — the verification loop protects against a different race condition |
+| Skip testing with clipboard managers (Ditto, CopyQ) installed | Faster testing cycle | Undiscovered clipboard contention issues in real-world environments | Only for initial smoke test; must test with clipboard managers before release |
 
 ---
 
@@ -340,12 +192,11 @@ The fact that the hook code is in Rust rather than C/C++ provides no protection 
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Tauri + WH_KEYBOARD_LL | Install hook without setting DeviceEventFilter | Set `DeviceEventFilter::Always` before building the app; install hook on separate thread |
-| tauri-plugin-global-shortcut + WH_KEYBOARD_LL | Assume they are independent; let both observe the same keys | Scope WH_KEYBOARD_LL strictly to Win-key combos; unregister the overlapping RegisterHotKey when hook is active |
-| `SendInput` from hook callback (mask key) | Call SendInput synchronously inside the callback | Call from the worker thread that receives the hook event channel; never from inside the callback itself |
-| Rust `std::thread::spawn` + WH_KEYBOARD_LL | Spawn a thread without a Win32 message loop | The hook thread must run `GetMessage` / `DispatchMessage` loop; this is non-negotiable per Win32 docs |
-| `Arc<Mutex<...>>` state shared with hook thread | Lock the mutex inside the hook callback | Use `AtomicBool` for all state communicated from within the callback; move all mutex-guarded operations to the worker thread |
-| `UnhookWindowsHookEx` at app shutdown | Call from a different thread than where the hook was installed | Call `UnhookWindowsHookEx` from the hook thread itself, then send WM_QUIT to exit the message loop |
+| Windows Clipboard History (Win+V) | Assume transcriptions won't appear in history | Accept that every transcription will appear; document for users. Optionally exclude via `ExcludeClipboardContentFromMonitorProcessing` format in future |
+| Third-party clipboard managers (Ditto, CopyQ) | Assume they won't interfere | Test that clipboard managers don't reclaim clipboard ownership between set_text and Ctrl+V. The existing 150ms delay and retry loop handle this. |
+| Office apps (Outlook, Word, Excel) | Remove the 150ms pre-paste delay thinking it was for the restore | The delay exists because Office processes WM_CLIPBOARDUPDATE asynchronously. Keep it. |
+| Tauri WebView (Chromium) | Remove the verify-and-retry loop thinking it was for the restore | The loop exists because Chromium can reclaim clipboard ownership via navigator.clipboard API. Keep it. |
+| Password managers (Bitwarden, KeePass) | Not considering that password managers clear clipboard on a timer | If the user copies a password, dictates, then the password manager timer fires — it may clear the transcription from clipboard. This is the password manager's behavior, not VoiceType's problem. No action needed. |
 
 ---
 
@@ -353,10 +204,8 @@ The fact that the hook code is in Rust rather than C/C++ provides no protection 
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Blocking channel send in hook callback | Hook timeout fires; hook silently removed after 11 timeouts | Use `try_send` on an unbounded channel; never block in callback | Immediately if transcription pipeline is active and channel is full |
-| Debounce timer using `thread::sleep` inside hook thread | Sleep blocks message pump; hook stops receiving events during sleep | Run debounce timer on the worker thread, not the hook thread; hook thread must only pump messages | Every debounce window while sleep is active |
-| Re-evaluating modifier combo state on every key event including non-modifiers | Unnecessary work; risk of timeout on slow machines | State machine only evaluates when vkCode is in {VK_CONTROL, VK_LCONTROL, VK_RCONTROL, VK_LWIN, VK_RWIN}; all other keys bypass the logic | From first non-modifier keypress |
-| Heap allocation in hook callback (Box, Vec, String formatting) | Memory allocator contention; jitter causing timeout | Pre-allocate all structures on the worker thread; callback sends only primitive values (u32 vkCode, u32 flags, usize wparam) via `AtomicPtr` or fixed-size channel | Under memory pressure or with jemalloc contention |
+| Removing both sleeps (150ms + 80ms) to "speed up" injection | Paste works on developer's machine but fails in Outlook on slower machines | Keep both sleeps; they are for target app compatibility, not clipboard logic | Immediately on Office apps, especially on machines with many Outlook add-ins |
+| Removing the verify loop to reduce clipboard operations from 2 to 1 | Paste occasionally injects wrong text | Keep the loop; it catches real clipboard races | When Tauri WebView has recently used navigator.clipboard API |
 
 ---
 
@@ -364,9 +213,8 @@ The fact that the hook code is in Rust rather than C/C++ provides no protection 
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Logging `dwExtraInfo` from KBDLLHOOKSTRUCT to a log file | Other hook-using apps can embed arbitrary data in `dwExtraInfo`; if logged verbosely, creates a potential data exfiltration channel in log files | Never log raw KBDLLHOOKSTRUCT fields other than vkCode and flags; ignore dwExtraInfo entirely |
-| Using a static mutable HHOOK without synchronization | Data race if hook is reinstalled concurrently | Store HHOOK in a Mutex or use a thread-local; the hook thread owns its own HHOOK exclusively |
-| Not validating `nCode` parameter before processing | Undefined behavior if nCode < 0 and callback processes the event | First line of callback: `if code < 0 { return CallNextHookEx(...) }` — non-negotiable per Win32 spec |
+| Transcription of sensitive dictation (passwords, PII) persists on clipboard indefinitely | Another app or user can read the clipboard content; appears in clipboard history | Accept as standard dictation tool behavior; users should not dictate passwords. Optionally add `ExcludeClipboardContentFromMonitorProcessing` format in future |
+| Clipboard sync to cloud enabled in Windows Settings | Transcribed text synced to Microsoft cloud and other devices | Not VoiceType's responsibility; users control clipboard sync settings. Note in docs if privacy is a concern |
 
 ---
 
@@ -374,24 +222,21 @@ The fact that the hook code is in Rust rather than C/C++ provides no protection 
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| No indication that hook is installed and healthy | Users don't know if the Ctrl+Win hotkey is active; press it and nothing happens | Show a hook status indicator in the system tray tooltip ("Hook: Active" vs "Hook: Inactive — using standard hotkey") |
-| Ctrl+Win fires while user is typing Ctrl+Z (undo) | Users who type fast hit Ctrl+Win accidentally when reaching for Ctrl+Z; app starts recording unexpectedly | Require both Ctrl and Win to be held for ≥50ms before triggering; do not trigger on sub-50ms press sequences |
-| Start menu flashes open for 1-2 frames before suppression | Jarring visual glitch; users think app is broken | The mask-key SendInput must be dispatched before the Win key KEYUP event reaches the shell; timing matters — see Pitfall 2 |
-| Frontend hotkey-capture UI still uses old tauri-plugin-global-shortcut capture mode | Settings panel cannot capture "Ctrl+Win" as a hotkey choice — modifier-only combos are not representable in the standard hotkey string format | Build a separate capture mode that explicitly shows modifier-only combos as valid options; store as a distinct format ("Ctrl+Win") separate from standard hotkey strings |
-| No fallback notification when hook install fails | App launches silently without a working Ctrl+Win hotkey; user confused | On hook install failure, revert to standard hotkey mode and show a tray notification: "Modifier-only hotkey unavailable. Using standard hotkey [X] instead." |
+| Not documenting the behavior change | Users who relied on clipboard being "unchanged" after dictation are surprised when their copied content is replaced | Add a note in release notes or changelog: "After dictation, the transcription text remains on your clipboard. This matches standard dictation tool behavior." |
+| Users expect the clipboard to be "clean" after dictation | Some users may not want the transcription lingering on clipboard (sensitive content) | This is standard behavior for every dictation tool; no special handling needed |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Hook with Tauri window focused:** Open VoiceType settings panel, put it in focus, press Ctrl+Win. Verify the hotkey fires. If it doesn't, `DeviceEventFilter` is not set correctly.
-- [ ] **Start menu suppression on Windows 11:** On a Windows 11 machine (different from dev machine if dev is Win10), press Ctrl+Win — verify Start menu does NOT open. Test Win key alone after — verify Start menu DOES open (hotkey not over-suppressing).
-- [ ] **Hook recovery after timeout:** Simulate a slow hook by adding a 500ms sleep in the callback (debug build only). Verify the hook-health monitor detects the drop and reinstalls. Remove the sleep before shipping.
-- [ ] **Left vs. right modifier coverage:** Test Ctrl+Win with right Ctrl. Test with right Win. Verify behavior is as designed (either both work or only left works, per product decision — not "one works and the other is undefined").
-- [ ] **App shutdown with hook active:** Close VoiceType while Ctrl+Win hook is installed. Verify no lingering hook ghost process in Process Monitor (hook should be unregistered in Drop impl).
-- [ ] **Coexistence during transition phase:** If the fallback is "use standard hotkey," verify that switching between hook mode and RegisterHotKey mode does not double-register or leave both active simultaneously.
-- [ ] **Antivirus scan of v1.2 binary:** Run through VirusTotal before any distribution. Compare detection count against v1.1 baseline. Any new detections are a blocking issue.
-- [ ] **Debounce correctness:** Press Win before Ctrl (reversed order, fast) — verify the hotkey still fires. Press Ctrl, hold 1 second, then press Win — verify the hotkey still fires (slow press is valid). Press Ctrl+Win and immediately release Ctrl before Win — verify hotkey fires but does not stay in "active" state.
+- [ ] **Post-paste sleep preserved:** Verify the 80ms sleep after Ctrl+V is still present. Remove only the save/restore code, not the sleep.
+- [ ] **Pre-paste delay preserved:** Verify the 150ms delay before Ctrl+V is still present. Test paste in Outlook specifically.
+- [ ] **Verify loop preserved:** Verify the 5-attempt clipboard verification loop is still present. Test with Tauri settings window open (WebView active).
+- [ ] **Doc comments updated:** The inject_text doc comment (lines 27-37) references save/restore in the sequence. Update to reflect the simplified flow.
+- [ ] **Release Win keys still called:** The `release_win_keys` call (line 120) must remain — it is unrelated to clipboard save/restore.
+- [ ] **Error handling unchanged:** The `Clipboard::new()` error propagation and verification failure logging should remain unchanged.
+- [ ] **Test in Office apps:** Paste into Outlook, Word, Excel, Teams. Verify the correct transcription appears, not stale content.
+- [ ] **Test rapid sequential dictation:** Dictate twice in quick succession. Verify both transcriptions paste correctly (no race between the second set_text and the first app's paste consumption).
 
 ---
 
@@ -399,12 +244,11 @@ The fact that the hook code is in Rust rather than C/C++ provides no protection 
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| DeviceEventFilter not set (hook dead when Tauri focused) | LOW | Add one line to AppBuilder; rebuild and test |
-| Start menu suppression missing on Windows 11 | MEDIUM | Implement mask-key SendInput on the hook worker thread; requires testing on both Win10 and Win11 |
-| Hook silently removed (no health check) | MEDIUM | Add a background health-check timer; requires hook reinstall logic and state reset |
-| Panic crossing FFI boundary (callback crash) | HIGH | Add `catch_unwind` wrapper around entire callback; requires full regression testing of the hook path |
-| Double-firing from coexisting RegisterHotKey + WH_KEYBOARD_LL | MEDIUM | Audit which keys are registered where; unregister the overlapping key from one system |
-| Defender flags v1.2 binary | HIGH | Same recovery as v1.0 pitfall: purchase OV cert, sign binary, re-release; short-term: per-machine exclusion |
+| Accidentally removed the post-paste sleep | LOW | Add `thread::sleep(Duration::from_millis(80))` back after Ctrl+V release |
+| Accidentally removed the pre-paste delay | LOW | Add `thread::sleep(Duration::from_millis(150))` back before Ctrl+V |
+| Accidentally removed the verify loop | MEDIUM | Restore the 5-attempt retry loop from git history; requires understanding the Chromium race condition |
+| Users report privacy concerns with clipboard history | LOW | Register `ExcludeClipboardContentFromMonitorProcessing` format via raw Win32 API alongside set_text; arboard doesn't expose this natively |
+| Paste regression in Office apps after timing change | LOW | Increase pre-paste delay from 150ms to 200ms if Office apps show issues |
 
 ---
 
@@ -412,37 +256,27 @@ The fact that the hook code is in Rust rather than C/C++ provides no protection 
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Hook dead when Tauri window focused (#1) | Phase 1: Hook installation | Test: open settings window, put in focus, press Ctrl+Win — must fire |
-| Start menu opens despite suppression (#2) | Phase 1: Hook implementation | Test on Windows 10 AND Windows 11; Win key alone must still work after fix |
-| Hook silently removed after timeout (#3) | Phase 1: Callback architecture | Verify callback returns in <5ms; add logging that shows callback return time |
-| Panic across FFI boundary (#4) | Phase 1: Code review gate | PR review checklist item: zero fallible operations in callback body |
-| RegisterHotKey + WH_KEYBOARD_LL coexistence (#5) | Phase 1 + Phase 2 (fallback) | Test: trigger Ctrl+Win rapidly 20 times; verify exactly 20 recording sessions, not 40 |
-| SendInput recursive re-entry (#6) | Phase 1: LLKHF_INJECTED guard | Verify CPU usage does not spike on first Ctrl+Win press |
-| Left vs. right modifier ambiguity (#7) | Phase 1: State machine | Test right-Ctrl + Win, left-Ctrl + right-Win, and right-Ctrl + right-Win |
-| Modifier state desync on focus loss (#8) | Phase 2: Integration testing | Alt-Tab away mid-Ctrl-hold; verify no phantom trigger on return |
-| Missing Win32 message loop (#9) | Phase 1: Thread setup | Verify callback fires in smoke test before any other feature work |
-| Defender false positive escalation (#10) | Distribution testing | VirusTotal check of signed v1.2 binary before release |
+| Post-paste sleep removed (#1) | Implementation | Code review: verify `thread::sleep(Duration::from_millis(80))` is present after Ctrl+V |
+| Verify loop removed (#2) | Implementation | Code review: verify the retry loop and 150ms delay are untouched |
+| Clipboard history exposure (#3) | Release notes | Changelog mentions the behavior change |
+| Non-text content loss (#4) | Release notes | Acknowledged in commit message |
+| Timing profile change (#6) | Post-implementation testing | Compare clipboard retry rates in logs before and after the change |
+| Doc comments stale (#checklist) | Implementation | Doc comment on inject_text updated to reflect new flow |
 
 ---
 
 ## Sources
 
-- [LowLevelKeyboardProc — Microsoft Docs (verified 2025-07-14)](https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelkeyboardproc) — HIGH confidence
-- [KBDLLHOOKSTRUCT — Microsoft Docs](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-kbdllhookstruct) — HIGH confidence
-- [SetWindowsHookExA — Microsoft Docs](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowshookexa) — HIGH confidence
-- [Tauri issue #13919: WH_KEYBOARD_LL not capturing system keys when Tauri window focused](https://github.com/tauri-apps/tauri/issues/13919) — HIGH confidence (confirmed resolved via DeviceEventFilter)
-- [Tauri issue #14770: rdev keyboard events break when Tauri window focused](https://github.com/tauri-apps/tauri/issues/14770) — HIGH confidence (same root cause; DeviceEventFilter::Always fix confirmed)
-- [AutoHotkey: Prevent Win from opening Start menu — Any Version](https://www.autohotkey.com/boards/viewtopic.php?t=101812) — MEDIUM confidence (community-validated; vkE8 mask key technique)
-- [AutoHotkey: Disable left Windows key on Windows 11 with AHK 2](https://www.autohotkey.com/boards/viewtopic.php?t=96593) — MEDIUM confidence (Windows 11 behavioral differences confirmed by community)
-- [AutoHotkey MenuMaskKey docs — vkE8 as unassigned mask key](https://autohotkey.com/docs/commands/_MenuMaskKey.htm) — MEDIUM confidence
-- [Rust Nomicon: FFI and panics](https://doc.rust-lang.org/nomicon/ffi.html) — HIGH confidence
-- [RFC 2945: C-unwind ABI](https://rust-lang.github.io/rfcs/2945-c-unwind-abi.html) — HIGH confidence
-- [catch_unwind — Rust std docs](https://doc.rust-lang.org/std/panic/fn.catch_unwind.html) — HIGH confidence
-- [Raymond Chen (The Old New Thing): GetKeyState vs GetAsyncKeyState](https://devblogs.microsoft.com/oldnewthing/20041130-00/?p=37173) — HIGH confidence
-- [Microsoft: Keylogging malware protection built into Windows (Sep 2024)](https://techcommunity.microsoft.com/blog/windows-itpro-blog/keylogging-malware-protection-built-into-windows/4256289) — HIGH confidence (confirms expanded Defender ML sensitivity)
-- [Virtual-Key Codes — Microsoft Docs](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes) — HIGH confidence (VK_LCONTROL=0xA2, VK_RCONTROL=0xA3, VK_LWIN=0x5B, VK_RWIN=0x5C)
-- [SetWindowsHookExW in windows-rs — Microsoft GitHub](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/UI/WindowsAndMessaging/fn.SetWindowsHookExW.html) — HIGH confidence
+- [Clipboard Formats — Microsoft Win32 Docs](https://learn.microsoft.com/en-us/windows/win32/dataxchg/clipboard-formats) — HIGH confidence
+- [WM_CLIPBOARDUPDATE — Microsoft Win32 Docs](https://learn.microsoft.com/en-us/windows/win32/dataxchg/wm-clipboardupdate) — HIGH confidence
+- [arboard Clipboard API — docs.rs](https://docs.rs/arboard/latest/arboard/struct.Clipboard.html) — HIGH confidence
+- [arboard GitHub — 1Password](https://github.com/1Password/arboard) — HIGH confidence (arboard only saves text and images; no custom format support)
+- [ExcludeClipboardContentFromMonitorProcessing — CopyQ issue #2679](https://github.com/hluk/CopyQ/issues/2679) — MEDIUM confidence (documents the clipboard history exclusion format; confirmed by KeePass implementation)
+- [PowerShell clipboard history exclusion — GitHub issue #17454](https://github.com/PowerShell/PowerShell/issues/17454) — MEDIUM confidence (confirms CanIncludeInClipboardHistory and ExcludeClipboardContentFromMonitorProcessing formats)
+- [Windows Clipboard History privacy — GhostVolt](https://www.ghostvolt.com/blog/Is-the-Windows-Clipboard-Function-History-or-Sync-Secure.html) — MEDIUM confidence
+- [Password manager clipboard security — TechSpot](https://www.techspot.com/news/97320-you-change-password-manager-clipboard-settings-now.html) — MEDIUM confidence (context on clipboard as a security surface)
+- Current codebase: `src-tauri/src/inject.rs` — direct analysis of existing implementation
 
 ---
-*Pitfalls research for: WH_KEYBOARD_LL modifier-only hotkey integration into Tauri 2.0 (VoiceType v1.2 Keyboard Hook milestone)*
-*Researched: 2026-03-02*
+*Pitfalls research for: Clipboard simplification — removing save/restore from inject_text (VoiceType v1.3)*
+*Researched: 2026-03-07*
