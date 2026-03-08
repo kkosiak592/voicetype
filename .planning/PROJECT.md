@@ -55,7 +55,18 @@ Voice dictation must feel instant — sub-1500ms from end-of-speech to text appe
 
 ### Active
 
-(None — planning next milestone)
+- [ ] Global prefix text toggle with custom prefix string in General Settings → Output card
+- [ ] Prefix applied in transcription pipeline after ALL CAPS formatting
+- [ ] Prefix text and enabled state persisted in settings.json
+
+## Current Milestone: v1.5 Prefix Text
+
+**Goal:** Add a toggleable prefix string (e.g., "TEPC: ") that gets prepended to all dictated output, for use cases like shop drawing review annotations.
+
+**Target features:**
+- Global prefix on/off toggle in Output card
+- Custom prefix text input
+- Pipeline integration after ALL CAPS, before trailing space
 
 ## Current State
 
@@ -137,4 +148,4 @@ v1.4 shipped 2026-03-07. Five milestones complete (v1.0 MVP, v1.1 Auto-Updates, 
 | CreateToolhelp32Snapshot for process enumeration | EnumWindows for visible windows + snapshot for exe names — two-phase approach | ✓ Good |
 
 ---
-*Last updated: 2026-03-07 after v1.4 milestone*
+*Last updated: 2026-03-08 after v1.5 milestone start*
