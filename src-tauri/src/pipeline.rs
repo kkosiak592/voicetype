@@ -421,6 +421,17 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
         }
     };
 
+    // Apply prefix text (after ALL CAPS — prefix itself is not uppercased).
+    let formatted = {
+        let profile = app.state::<crate::profiles::ActiveProfile>();
+        let guard = profile.0.lock().unwrap_or_else(|e| e.into_inner());
+        if guard.prefix_enabled && !guard.prefix_text.is_empty() {
+            format!("{}{}", guard.prefix_text, formatted)
+        } else {
+            formatted
+        }
+    };
+
     let formatted_for_tooltip = formatted.clone();
     let to_inject = format!("{} ", formatted); // trailing space per CONTEXT.md
 

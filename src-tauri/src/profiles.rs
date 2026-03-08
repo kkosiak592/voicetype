@@ -13,6 +13,8 @@ pub struct Profile {
     pub corrections: HashMap<String, String>,
     pub all_caps: bool,
     pub filler_removal: bool,
+    pub prefix_enabled: bool,
+    pub prefix_text: String,
 }
 
 /// Returns a default empty profile.
@@ -21,6 +23,8 @@ pub fn default_profile() -> Profile {
         corrections: HashMap::new(),
         all_caps: false,
         filler_removal: false,
+        prefix_enabled: false,
+        prefix_text: String::new(),
     }
 }
 
