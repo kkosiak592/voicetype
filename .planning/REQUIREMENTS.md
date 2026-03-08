@@ -32,16 +32,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PFX-01 | — | Pending |
-| PFX-02 | — | Pending |
-| PFX-03 | — | Pending |
-| PFX-04 | — | Pending |
+| PFX-01 | Phase 27 | Pending |
+| PFX-02 | Phase 27 | Pending |
+| PFX-03 | Phase 27 | Pending |
+| PFX-04 | Phase 27 | Pending |
 
 **Coverage:**
 - v1.5 requirements: 4 total
-- Mapped to phases: 0
-- Unmapped: 4 ⚠️
+- Mapped to phases: 4
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-08*
-*Last updated: 2026-03-08 after initial definition*
+*Last updated: 2026-03-08 after roadmap creation*
