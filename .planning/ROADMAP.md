@@ -7,7 +7,7 @@
 - ✅ **v1.2 Keyboard Hook** — Phases 15-20.1 (shipped 2026-03-07)
 - ✅ **v1.3 Clipboard Simplification** — Phase 22 (shipped 2026-03-07)
 - ✅ **v1.4 Per-App Settings** — Phases 23-26 (shipped 2026-03-07)
-- 🚧 **v1.5 Prefix Text** — Phase 27 (in progress)
+- ✅ **v1.5 Prefix Text** — Phase 27 (shipped 2026-03-08)
 
 ## Phases
 
@@ -70,28 +70,12 @@
 
 </details>
 
-### v1.5 Prefix Text (In Progress)
+<details>
+<summary>✅ v1.5 Prefix Text (Phase 27) — SHIPPED 2026-03-08</summary>
 
-**Milestone Goal:** Add a toggleable prefix string that gets prepended to all dictated output, for annotation use cases like shop drawing review.
+- [x] Phase 27: Prefix Text (1/1 plan) — completed 2026-03-08
 
-- [x] **Phase 27: Prefix Text** - Global prefix toggle with custom text, pipeline integration, and persistence (completed 2026-03-08)
-
-## Phase Details
-
-### Phase 27: Prefix Text
-**Goal**: Users can prepend a configurable prefix string to all dictated output
-**Depends on**: Phase 26 (existing settings and pipeline infrastructure)
-**Requirements**: PFX-01, PFX-02, PFX-03, PFX-04
-**Success Criteria** (what must be TRUE):
-  1. User can toggle prefix on/off from General Settings Output card and the toggle state is reflected immediately
-  2. User can type a custom prefix string (e.g., "TEPC: ") and see it applied to the next dictation
-  3. Dictated text is injected with the prefix prepended when enabled (and without prefix when disabled)
-  4. Prefix is applied after ALL CAPS formatting (e.g., ALL CAPS + prefix yields "TEPC: THIS IS A NOTE")
-  5. Prefix toggle state and text survive app restart
-**Plans**: 1 plan
-
-Plans:
-- [ ] 27-01-PLAN.md — Backend prefix fields, IPC commands, pipeline integration, and frontend UI
+</details>
 
 ## Progress
 
@@ -102,10 +86,11 @@ Plans:
 | 15-20.1 | v1.2 | 15/15 | Complete | 2026-03-07 |
 | 22 | v1.3 | 1/1 | Complete | 2026-03-07 |
 | 23-26 | v1.4 | 5/5 | Complete | 2026-03-07 |
-| 27 | 1/1 | Complete    | 2026-03-08 | - |
+| 27 | v1.5 | 1/1 | Complete | 2026-03-08 |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
 Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
 Full v1.2 milestone details: `.planning/milestones/v1.2-ROADMAP.md`
 Full v1.3 milestone details: `.planning/milestones/v1.3-ROADMAP.md`
 Full v1.4 milestone details: `.planning/milestones/v1.4-ROADMAP.md`
+Full v1.5 milestone details: `.planning/milestones/v1.5-ROADMAP.md`

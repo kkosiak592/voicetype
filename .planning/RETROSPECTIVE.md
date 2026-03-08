@@ -219,6 +219,41 @@
 
 ---
 
+## Milestone: v1.5 — Prefix Text
+
+**Shipped:** 2026-03-08
+**Phases:** 1 | **Plans:** 1
+**Timeline:** 1 day (2026-03-08)
+
+### What Was Built
+- Toggleable prefix string (e.g., "TEPC: ") prepended to all dictated output
+- Profile struct extended with prefix_enabled and prefix_text fields
+- 4 IPC commands for get/set prefix state and text
+- Pipeline prefix prepend step after ALL CAPS formatting
+- PrefixTextInput component with toggle + conditional text input in Output card
+
+### What Worked
+- Single-phase, single-plan milestone with tight scope — executed in 3 minutes
+- Followed existing setting patterns (IPC commands, profile fields, component structure)
+- Prefix after ALL CAPS ordering decision was correct — "TEPC: THIS IS A NOTE" not "TEPC: this is a note"
+
+### What Was Inefficient
+- Nothing — clean, minimal scope matching v1.3 pattern
+
+### Patterns Established
+- Compound setting pattern: toggle + conditional text input (PrefixTextInput)
+- Prefix text stored verbatim — user controls spacing in prefix string
+
+### Key Lessons
+1. Small feature milestones (v1.3, v1.5) execute cleanest — tight scope eliminates scope creep
+2. Matching existing patterns (IPC command pairs, profile fields) makes implementation predictable
+
+### Cost Observations
+- Single session, 3 minutes execution
+- Notable: fastest plan execution to date
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -230,6 +265,7 @@
 | v1.2 | ~10 | 10 | 21 | 253 | Scope growth beyond original goal — benchmark-driven model decisions |
 | v1.3 | 1 | 1 | 0 | 2 | Subtractive milestone — net -24 lines, simplest execution |
 | v1.4 | ~5 | 4 | 0 | ~10 | Cleanest execution — 33 min total, 0 scope creep, pure function testing |
+| v1.5 | 1 | 1 | 0 | ~5 | Fastest execution — 3 min, single plan, matching existing patterns |
 
 ### Top Lessons (Verified Across Milestones)
 

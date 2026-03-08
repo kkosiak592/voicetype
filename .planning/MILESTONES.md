@@ -1,4 +1,20 @@
 # Milestones
+## v1.5 Prefix Text (Shipped: 2026-03-08)
+
+**Phases completed:** 1 phase, 1 plan, 2 tasks
+**Timeline:** 1 day (2026-03-08)
+**Git range:** feat(27-01)
+
+**Delivered:** Toggleable prefix string prepended to all dictated output, for annotation use cases like shop drawing review.
+
+**Key accomplishments:**
+- Profile struct extended with prefix_enabled and prefix_text fields, with 4 IPC commands (Phase 27)
+- Pipeline prefix prepend step after ALL CAPS formatting so prefix string is not uppercased (Phase 27)
+- PrefixTextInput component with toggle switch and conditional text input in General Settings Output card (Phase 27)
+- Settings persist across restarts via settings.json (Phase 27)
+
+---
+
 
 ## v1.4 Per-App Settings (Shipped: 2026-03-07)
 
