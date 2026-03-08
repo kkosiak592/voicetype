@@ -1047,6 +1047,56 @@ fn set_filler_removal(app: tauri::AppHandle, enabled: bool) -> Result<(), String
     Ok(())
 }
 
+/// Get the prefix enabled flag from the active profile.
+#[tauri::command]
+fn get_prefix_enabled(app: tauri::AppHandle) -> Result<bool, String> {
+    let state = app.state::<profiles::ActiveProfile>();
+    let guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+    Ok(guard.prefix_enabled)
+}
+
+/// Toggle prefix text. Persists to flat `prefix_enabled` key in settings.json.
+#[tauri::command]
+fn set_prefix_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    {
+        let state = app.state::<profiles::ActiveProfile>();
+        let mut guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+        guard.prefix_enabled = enabled;
+    }
+
+    let mut json = read_settings(&app)?;
+    json["prefix_enabled"] = serde_json::Value::Bool(enabled);
+    write_settings(&app, &json)?;
+
+    log::info!("Prefix enabled set to {}", enabled);
+    Ok(())
+}
+
+/// Get the prefix text from the active profile.
+#[tauri::command]
+fn get_prefix_text(app: tauri::AppHandle) -> Result<String, String> {
+    let state = app.state::<profiles::ActiveProfile>();
+    let guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+    Ok(guard.prefix_text.clone())
+}
+
+/// Set the prefix text string. Persists to flat `prefix_text` key in settings.json.
+#[tauri::command]
+fn set_prefix_text(app: tauri::AppHandle, text: String) -> Result<(), String> {
+    {
+        let state = app.state::<profiles::ActiveProfile>();
+        let mut guard = state.0.lock().map_err(|e| format!("state lock failed: {}", e))?;
+        guard.prefix_text = text.clone();
+    }
+
+    let mut json = read_settings(&app)?;
+    json["prefix_text"] = serde_json::Value::String(text.clone());
+    write_settings(&app, &json)?;
+
+    log::info!("Prefix text set to {:?}", text);
+    Ok(())
+}
+
 /// Get the always-listen flag from managed state.
 #[tauri::command]
 fn get_always_listen(app: tauri::AppHandle) -> Result<bool, String> {
@@ -1838,6 +1888,10 @@ pub fn run() {
             set_all_caps,
             get_filler_removal,
             set_filler_removal,
+            get_prefix_enabled,
+            set_prefix_enabled,
+            get_prefix_text,
+            set_prefix_text,
             get_always_listen,
             set_always_listen,
             get_setting,
@@ -2141,6 +2195,15 @@ pub fn run() {
                     active_profile.filler_removal = flag;
                 }
 
+                // Load flat prefix_enabled key
+                if let Some(flag) = json.get("prefix_enabled").and_then(|v| v.as_bool()) {
+                    active_profile.prefix_enabled = flag;
+                }
+                // Load flat prefix_text key
+                if let Some(text) = json.get("prefix_text").and_then(|v| v.as_str()) {
+                    active_profile.prefix_text = text.to_string();
+                }
+
                 // Build corrections engine from corrections map
                 let engine = corrections::CorrectionsEngine::from_map(&active_profile.corrections)
                     .unwrap_or_else(|e| {
@@ -2148,9 +2211,11 @@ pub fn run() {
                         corrections::CorrectionsEngine::from_map(&std::collections::HashMap::new()).unwrap()
                     });
 
-                log::info!("Vocabulary profile loaded (all_caps={}, filler_removal={}, corrections={})",
+                log::info!("Vocabulary profile loaded (all_caps={}, filler_removal={}, prefix_enabled={}, prefix_text={:?}, corrections={})",
                     active_profile.all_caps,
                     active_profile.filler_removal,
+                    active_profile.prefix_enabled,
+                    active_profile.prefix_text,
                     active_profile.corrections.len()
                 );
                 app.manage(profiles::ActiveProfile(std::sync::Mutex::new(active_profile)));
