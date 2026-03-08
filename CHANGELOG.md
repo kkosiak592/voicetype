@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-03-08
+
+### Added
+
+- Toggleable prefix text that gets prepended to all dictated output (e.g., "TEPC: ")
+- PrefixTextInput component with on/off toggle and custom text input in General Settings → Output card
+- Prefix applied after ALL CAPS formatting so prefix string is not uppercased (e.g., "TEPC: THIS IS A NOTE")
+- Prefix enabled state and text persisted across app restarts via settings.json
+
 ## [1.4.0] - 2026-03-07
 
 ### Added
@@ -98,7 +107,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - NSIS installer for Windows distribution
 - Auto-update infrastructure (updater plugin, Ed25519 signing)
 
-[Unreleased]: https://github.com/kkosiak592/voicetype/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/kkosiak592/voicetype/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/kkosiak592/voicetype/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/kkosiak592/voicetype/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/kkosiak592/voicetype/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/kkosiak592/voicetype/compare/v1.1.0...v1.2.0
