@@ -3,6 +3,7 @@ import { RecordingModeToggle } from '../RecordingModeToggle';
 import { AllCapsToggle } from '../AllCapsToggle';
 import { AlwaysListenToggle } from '../AlwaysListenToggle';
 import { FillerRemovalToggle } from '../FillerRemovalToggle';
+import { PrefixTextInput } from '../PrefixTextInput';
 
 interface GeneralSectionProps {
   hotkey: string;
@@ -102,6 +103,10 @@ export function GeneralSection({
               </div>
               <FillerRemovalToggle />
             </div>
+
+            <div className="my-4 border-t border-gray-100 dark:border-gray-800" />
+
+            <PrefixTextInput />
           </section>
         </div>
       </div>
