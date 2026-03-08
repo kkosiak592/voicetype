@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-03-08
+
+### Fixed
+
+- Tray menu crash when window handle becomes invalid (unwrap on show/set_focus)
+- VAD silently discarding final speech segment under 0.5s — now appended to last segment
+- Audio artifacts bleeding between recordings due to FFT resampler state not being reset
+- APPDATA environment variable panic replaced with graceful error propagation
+- Download cancel check added after stream completes (before SHA256/rename)
+
+### Changed
+
+- `set_setting` IPC command now validates against a key allowlist (security hardening)
+- SHA256 checksum infrastructure added for Moonshine and Parakeet model downloads
+- Engine-loading code deduplicated via shared helpers (Parakeet + Moonshine)
+- Recording-start logic deduplicated between Hold-to-Talk and Toggle modes
+- `models_dir()` consolidated into shared `paths.rs` module
+- `eprintln!` replaced with `log::warn!` for consistent logging (foreground.rs)
+
+### Removed
+
+- Dead code: `vad_chunk_for_moonshine`, `open_stream`, unused `sample_count` binding
+- Useless test that only verified stdlib `to_uppercase()`
+- Stale research artifacts
+
 ## [1.5.0] - 2026-03-08
 
 ### Added
@@ -107,7 +132,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - NSIS installer for Windows distribution
 - Auto-update infrastructure (updater plugin, Ed25519 signing)
 
-[Unreleased]: https://github.com/kkosiak592/voicetype/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/kkosiak592/voicetype/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/kkosiak592/voicetype/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/kkosiak592/voicetype/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/kkosiak592/voicetype/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/kkosiak592/voicetype/compare/v1.2.0...v1.3.0
