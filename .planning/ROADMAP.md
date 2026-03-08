@@ -74,7 +74,7 @@
 
 **Milestone Goal:** Add a toggleable prefix string that gets prepended to all dictated output, for annotation use cases like shop drawing review.
 
-- [ ] **Phase 27: Prefix Text** - Global prefix toggle with custom text, pipeline integration, and persistence
+- [x] **Phase 27: Prefix Text** - Global prefix toggle with custom text, pipeline integration, and persistence (completed 2026-03-08)
 
 ## Phase Details
 
@@ -102,7 +102,7 @@ Plans:
 | 15-20.1 | v1.2 | 15/15 | Complete | 2026-03-07 |
 | 22 | v1.3 | 1/1 | Complete | 2026-03-07 |
 | 23-26 | v1.4 | 5/5 | Complete | 2026-03-07 |
-| 27 | v1.5 | 0/1 | Not started | - |
+| 27 | 1/1 | Complete   | 2026-03-08 | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
 Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`

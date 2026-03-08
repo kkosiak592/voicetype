@@ -9,10 +9,10 @@ Requirements for v1.5 Prefix Text milestone.
 
 ### Prefix
 
-- [ ] **PFX-01**: User can enable/disable a prefix toggle in General Settings → Output card
-- [ ] **PFX-02**: User can set a custom prefix string (e.g., "TEPC: ") via text input
-- [ ] **PFX-03**: Prefix is prepended to all dictated output when enabled (after ALL CAPS, before trailing space)
-- [ ] **PFX-04**: Prefix enabled state and text are persisted across app restarts
+- [x] **PFX-01**: User can enable/disable a prefix toggle in General Settings → Output card
+- [x] **PFX-02**: User can set a custom prefix string (e.g., "TEPC: ") via text input
+- [x] **PFX-03**: Prefix is prepended to all dictated output when enabled (after ALL CAPS, before trailing space)
+- [x] **PFX-04**: Prefix enabled state and text are persisted across app restarts
 
 ## Future Requirements
 
@@ -32,10 +32,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PFX-01 | Phase 27 | Pending |
-| PFX-02 | Phase 27 | Pending |
-| PFX-03 | Phase 27 | Pending |
-| PFX-04 | Phase 27 | Pending |
+| PFX-01 | Phase 27 | Complete |
+| PFX-02 | Phase 27 | Complete |
+| PFX-03 | Phase 27 | Complete |
+| PFX-04 | Phase 27 | Complete |
 
 **Coverage:**
 - v1.5 requirements: 4 total
