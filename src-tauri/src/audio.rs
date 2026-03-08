@@ -12,6 +12,7 @@ struct ResamplingState {
     resampler: FftFixedIn<f32>,
     staging: Vec<f32>,
     chunk_size: usize,
+    native_rate: usize,
 }
 
 impl ResamplingState {
@@ -28,6 +29,7 @@ impl ResamplingState {
             resampler,
             staging: Vec::new(),
             chunk_size,
+            native_rate: in_rate,
         })
     }
 
@@ -186,24 +188,12 @@ fn build_stream_from_device(
     })
 }
 
-/// Open an on-demand microphone capture stream using the system default device.
+/// Open an on-demand microphone capture stream using a specific device.
 ///
 /// Stream is active immediately — caller is responsible for dropping the AudioCapture
 /// when done to release the microphone. Audio is discarded unless the `recording` flag
 /// is set to `true`. When recording, samples are downmixed to mono, resampled to 16kHz,
 /// and appended to `buffer`.
-pub fn open_stream(
-) -> Result<AudioCapture, Box<dyn std::error::Error + Send + Sync>> {
-    let host = cpal::default_host();
-    let device = host
-        .default_input_device()
-        .ok_or("No default input device found")?;
-    build_stream_from_device(device)
-}
-
-/// Open an on-demand microphone capture stream using a specific device.
-///
-/// Same as `open_stream()` but accepts a `cpal::Device` directly.
 /// Stream is active immediately — caller is responsible for dropping the AudioCapture
 /// when done to release the microphone.
 pub fn open_stream_with_device(
@@ -255,12 +245,18 @@ impl AudioCapture {
         if let Ok(mut buf) = self.buffer.lock() {
             buf.clear();
         }
-        // Reset resampler staging by replacing with a fresh instance using the
-        // same native rate as the original. Since we cannot easily retrieve the
-        // original native_rate after construction, we rely on the caller to
-        // re-initialize if needed. The staging Vec clear is the critical part.
+        // Recreate the resampler to reset FFT internal overlap/delay buffers.
+        // Clearing only the staging vec is insufficient — the FftFixedIn resampler
+        // retains internal state that causes artifacts bleeding between recordings.
         if let Ok(mut rs) = self.resampling.lock() {
-            rs.staging.clear();
+            let native_rate = rs.native_rate;
+            match ResamplingState::new(native_rate) {
+                Ok(fresh) => *rs = fresh,
+                Err(e) => {
+                    log::error!("Failed to recreate resampler: {}, clearing staging only", e);
+                    rs.staging.clear();
+                }
+            }
         }
     }
 

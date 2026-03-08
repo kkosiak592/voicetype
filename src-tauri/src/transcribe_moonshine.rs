@@ -99,7 +99,7 @@ pub fn warm_up_moonshine(engine: &mut MoonshineEngine) {
 /// Moonshine Tiny is trained on 4-30 second audio segments. Audio longer than 30 seconds
 /// MUST be split with VAD before inference — passing longer audio produces garbled output.
 ///
-/// For audio > 30s: splits via `vad_chunk_for_moonshine` then concatenates chunk results.
+/// For audio > 30s: splits via `vad_chunk_audio` then concatenates chunk results.
 /// For audio <= 30s: passes directly to the engine.
 ///
 /// Returns the trimmed transcription text, or an error string on failure.

@@ -13,9 +13,10 @@ pub enum ModelMode {
 }
 
 /// Returns the path to the VoiceType models directory in APPDATA.
-pub fn models_dir() -> PathBuf {
-    let appdata = std::env::var("APPDATA").expect("APPDATA environment variable not set");
-    PathBuf::from(appdata).join("VoiceType").join("models")
+///
+/// Delegates to the shared `paths::models_dir()` to avoid duplication.
+pub fn models_dir() -> Result<PathBuf, String> {
+    crate::paths::models_dir()
 }
 
 /// Extended GPU detection result for provider selection and UI display.
@@ -198,7 +199,7 @@ pub fn resolve_model_path(mode: &ModelMode) -> Result<PathBuf, String> {
         ModelMode::Cpu => "ggml-small.en-q5_1.bin",
     };
 
-    let path = models_dir().join(filename);
+    let path = models_dir()?.join(filename);
 
     log::info!(
         "Model selection: {:?} mode — looking for '{}'",

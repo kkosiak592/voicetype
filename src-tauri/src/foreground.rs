@@ -192,7 +192,7 @@ unsafe fn get_process_exe_name(pid: u32) -> Option<String> {
     let _ = CloseHandle(handle);
 
     if result.is_err() {
-        eprintln!("QueryFullProcessImageNameW failed for pid {}", pid);
+        log::warn!("QueryFullProcessImageNameW failed for pid {}", pid);
         return None;
     }
 

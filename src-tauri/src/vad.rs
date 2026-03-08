@@ -162,11 +162,6 @@ pub fn vad_trim_silence(samples: &[f32]) -> Vec<f32> {
 /// 4. Discard segments shorter than MIN_SEGMENT_SAMPLES (0.5s = 8000 samples)
 /// 5. Fallback: return full audio as single segment if chunking produces nothing
 ///
-/// Creates a fresh VoiceActivityDetector per call (correct — Silero LSTM state must reset).
-pub fn vad_chunk_for_moonshine(samples: &[f32]) -> Vec<Vec<f32>> {
-    vad_chunk_audio(samples, 30)
-}
-
 /// Split audio into VAD-based chunks for engines with limited context windows.
 ///
 /// Generic version of the Moonshine-specific chunker. `max_segment_secs` controls
@@ -258,6 +253,11 @@ pub fn vad_chunk_audio(samples: &[f32], max_segment_secs: u32) -> Vec<Vec<f32>> 
         let remaining = &samples[start_sample..];
         if remaining.len() >= MIN_SEGMENT_SAMPLES {
             segments.push(remaining.to_vec());
+        } else if !segments.is_empty() {
+            // Append short trailing speech to the last segment rather than discarding.
+            // After silence-based splitting, trailing audio under 0.5s is real speech
+            // (e.g., "yes", "OK") that would otherwise be lost.
+            segments.last_mut().unwrap().extend_from_slice(remaining);
         }
     }
 

@@ -70,7 +70,7 @@ impl PipelineState {
 pub async fn run_pipeline(app: tauri::AppHandle) {
     // 1. Stop recording and get audio buffer
     // Lock AudioCaptureMutex, flush+get buffer, drop the stream (releases mic), then drop guard.
-    let (sample_count, samples) = {
+    let (_, samples) = {
         let audio_mutex = app.state::<crate::audio::AudioCaptureMutex>();
         let mut guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
         match guard.as_ref() {
@@ -147,8 +147,6 @@ pub async fn run_pipeline(app: tauri::AppHandle) {
         samples.len(),
         samples.len() as f32 / 16000.0
     );
-    let _ = sample_count; // used for logging above; suppress unused warning
-
     // VAD silence trim: remove leading/trailing silence before engine dispatch.
     // Applies to both Whisper and Parakeet — engine-agnostic improvement.
     // Cost: ~2-5ms (one Silero VAD pass over the buffer).

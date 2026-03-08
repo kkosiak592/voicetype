@@ -45,11 +45,4 @@ mod tests {
         let engine = CorrectionsEngine::from_map(&HashMap::new()).expect("empty engine failed");
         assert_eq!(engine.apply("hello world"), "hello world");
     }
-
-    #[test]
-    fn all_caps_uppercases_text() {
-        let text = "hello world";
-        let result = text.to_uppercase();
-        assert_eq!(result, "HELLO WORLD");
-    }
 }

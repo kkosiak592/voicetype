@@ -114,8 +114,8 @@ pub fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "settings" | "update_available" => {
                 if let Some(w) = app.get_webview_window("settings") {
-                    w.show().unwrap();
-                    w.set_focus().unwrap();
+                    let _ = w.show();
+                    let _ = w.set_focus();
                 }
             }
             "quit" => {

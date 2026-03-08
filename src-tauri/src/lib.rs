@@ -1,6 +1,7 @@
 mod audio;
 mod corrections;
 mod download;
+mod paths;
 mod filler;
 mod history;
 mod inject;
@@ -288,24 +289,82 @@ fn read_saved_parakeet_model(app_handle: &tauri::AppHandle) -> String {
         .to_string()
 }
 
-/// Read the saved Parakeet model variant from in-memory settings at startup.
-/// Returns "parakeet-tdt-v2-fp32" by default.
-fn read_saved_parakeet_model_startup(app: &tauri::App) -> String {
-    let state = app.state::<SettingsState>();
-    let guard = match state.0.lock() {
-        Ok(g) => g,
-        Err(_) => return "parakeet-tdt-v2-fp32".to_string(),
-    };
-    guard.get("parakeet_model")
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty())
-        .unwrap_or("parakeet-tdt-v2-fp32")
-        .to_string()
+/// Resolve the ONNX execution provider string from cached GPU detection.
+///
+/// Returns the provider recommended for Parakeet/Moonshine (e.g. "cuda", "directml", "cpu").
+/// Falls back to "cpu" when the whisper feature (and thus CachedGpuDetection) is not compiled in.
+fn resolve_onnx_provider(app_handle: &tauri::AppHandle) -> String {
+    #[cfg(feature = "whisper")]
+    {
+        let gpu_detection = app_handle.state::<CachedGpuDetection>();
+        gpu_detection.0.parakeet_provider.clone()
+    }
+    #[cfg(not(feature = "whisper"))]
+    {
+        let _ = app_handle;
+        "cpu".to_string()
+    }
 }
 
-/// Resolve the model directory for a Parakeet variant.
-fn resolve_parakeet_dir() -> std::path::PathBuf {
-    download::parakeet_fp32_model_dir()
+/// Load the Parakeet model, store it in managed state, and warm up in background.
+///
+/// Shared by `set_engine` (runtime switch) and `setup()` (startup load).
+/// Returns Ok on success, Err with a description on failure.
+#[cfg(feature = "parakeet")]
+fn load_and_store_parakeet(
+    app_handle: &tauri::AppHandle,
+    dir_str: &str,
+    provider: &str,
+    variant_id: &str,
+) -> Result<(), String> {
+    match transcribe_parakeet::load_parakeet(dir_str, provider) {
+        Ok(p) => {
+            let parakeet_state = app_handle.state::<ParakeetStateMutex>();
+            let inner_arc = std::sync::Arc::new(std::sync::Mutex::new(p));
+            let warmup_arc = inner_arc.clone();
+            {
+                let mut guard = parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                *guard = Some(inner_arc);
+            }
+            log::info!("Parakeet model loaded (variant: {})", variant_id);
+            std::thread::spawn(move || {
+                let mut guard = warmup_arc.lock().unwrap_or_else(|e| e.into_inner());
+                transcribe_parakeet::warm_up_parakeet(&mut guard);
+            });
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// Load the Moonshine model, store it in managed state, and warm up in background.
+///
+/// Shared by `set_engine` (runtime switch) and `setup()` (startup load).
+/// Returns Ok on success, Err with a description on failure.
+#[cfg(feature = "moonshine")]
+fn load_and_store_moonshine(
+    app_handle: &tauri::AppHandle,
+    model_dir: &std::path::Path,
+    provider: &str,
+) -> Result<(), String> {
+    match transcribe_moonshine::load_moonshine(model_dir, provider) {
+        Ok(engine_instance) => {
+            let moonshine_state = app_handle.state::<MoonshineStateMutex>();
+            let inner_arc = std::sync::Arc::new(std::sync::Mutex::new(engine_instance));
+            let warmup_arc = inner_arc.clone();
+            {
+                let mut guard = moonshine_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                *guard = Some(inner_arc);
+            }
+            log::info!("Moonshine model loaded");
+            std::thread::spawn(move || {
+                let mut guard = warmup_arc.lock().unwrap_or_else(|e| e.into_inner());
+                transcribe_moonshine::warm_up_moonshine(&mut guard);
+            });
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
 }
 
 #[tauri::command]
@@ -369,49 +428,24 @@ fn set_engine(app: tauri::AppHandle, engine: String, parakeet_model: Option<Stri
     // If switching to Parakeet, always reload model (required for variant switching)
     #[cfg(feature = "parakeet")]
     if new_engine == TranscriptionEngine::Parakeet {
-        let parakeet_state = app.state::<ParakeetStateMutex>();
         let parakeet_model_id = parakeet_model
             .clone()
             .unwrap_or_else(|| read_saved_parakeet_model(&app));
-        let model_dir = resolve_parakeet_dir();
+        let model_dir = download::parakeet_fp32_model_dir()?;
         if model_dir.exists() {
             let dir_str = model_dir.to_string_lossy().to_string();
-            #[cfg(feature = "whisper")]
-            let provider = {
-                let gpu_detection = app.state::<CachedGpuDetection>();
-                gpu_detection.0.parakeet_provider.clone()
-            };
-            #[cfg(not(feature = "whisper"))]
-            let provider = "cpu".to_string();
-            match transcribe_parakeet::load_parakeet(&dir_str, &provider) {
-                Ok(p) => {
-                    let inner_arc = std::sync::Arc::new(std::sync::Mutex::new(p));
-                    let warmup_arc = inner_arc.clone();
-                    {
-                        let mut guard = parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
-                        *guard = Some(inner_arc);
-                    }
-                    log::info!("Parakeet model loaded on engine switch (variant: {})", parakeet_model_id);
-                    // Warm up after engine switch
-                    std::thread::spawn(move || {
-                        let mut guard = warmup_arc.lock().unwrap_or_else(|e| e.into_inner());
-                        transcribe_parakeet::warm_up_parakeet(&mut guard);
-                    });
-                }
-                Err(e) => {
-                    log::error!("Failed to load Parakeet on engine switch: {}", e);
-                    // Revert to Whisper since Parakeet failed
-                    let state = app.state::<ActiveEngine>();
-                    let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
-                    *guard = TranscriptionEngine::Whisper;
-                    return Err(format!(
-                        "Parakeet model failed to load: {}. Reverting to Whisper.",
-                        e
-                    ));
-                }
+            let provider = resolve_onnx_provider(&app);
+            if let Err(e) = load_and_store_parakeet(&app, &dir_str, &provider, &parakeet_model_id) {
+                log::error!("Failed to load Parakeet on engine switch: {}", e);
+                let state = app.state::<ActiveEngine>();
+                let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+                *guard = TranscriptionEngine::Whisper;
+                return Err(format!(
+                    "Parakeet model failed to load: {}. Reverting to Whisper.",
+                    e
+                ));
             }
         } else {
-            // Revert — model not downloaded
             let state = app.state::<ActiveEngine>();
             let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
             *guard = TranscriptionEngine::Whisper;
@@ -423,40 +457,18 @@ fn set_engine(app: tauri::AppHandle, engine: String, parakeet_model: Option<Stri
     // If switching to Moonshine, load model with GPU provider
     #[cfg(feature = "moonshine")]
     if new_engine == TranscriptionEngine::Moonshine {
-        let moonshine_state = app.state::<MoonshineStateMutex>();
-        let model_dir = download::moonshine_tiny_model_dir();
+        let model_dir = download::moonshine_tiny_model_dir()?;
         if model_dir.exists() {
-            #[cfg(feature = "whisper")]
-            let provider = {
-                let gpu_detection = app.state::<CachedGpuDetection>();
-                gpu_detection.0.parakeet_provider.clone()
-            };
-            #[cfg(not(feature = "whisper"))]
-            let provider = "cpu".to_string();
-            match transcribe_moonshine::load_moonshine(&model_dir, &provider) {
-                Ok(engine_instance) => {
-                    let inner_arc = std::sync::Arc::new(std::sync::Mutex::new(engine_instance));
-                    let warmup_arc = inner_arc.clone();
-                    {
-                        let mut guard = moonshine_state.0.lock().unwrap_or_else(|e| e.into_inner());
-                        *guard = Some(inner_arc);
-                    }
-                    log::info!("Moonshine model loaded on engine switch");
-                    std::thread::spawn(move || {
-                        let mut guard = warmup_arc.lock().unwrap_or_else(|e| e.into_inner());
-                        transcribe_moonshine::warm_up_moonshine(&mut guard);
-                    });
-                }
-                Err(e) => {
-                    log::error!("Failed to load Moonshine on engine switch: {}", e);
-                    let state = app.state::<ActiveEngine>();
-                    let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
-                    *guard = TranscriptionEngine::Whisper;
-                    return Err(format!(
-                        "Moonshine model failed to load: {}. Reverting to Whisper.",
-                        e
-                    ));
-                }
+            let provider = resolve_onnx_provider(&app);
+            if let Err(e) = load_and_store_moonshine(&app, &model_dir, &provider) {
+                log::error!("Failed to load Moonshine on engine switch: {}", e);
+                let state = app.state::<ActiveEngine>();
+                let mut guard = state.0.lock().unwrap_or_else(|e| e.into_inner());
+                *guard = TranscriptionEngine::Whisper;
+                return Err(format!(
+                    "Moonshine model failed to load: {}. Reverting to Whisper.",
+                    e
+                ));
             }
         } else {
             let state = app.state::<ActiveEngine>();
@@ -483,6 +495,43 @@ fn set_engine(app: tauri::AppHandle, engine: String, parakeet_model: Option<Stri
 /// Resolves the device from settings.json, opens a capture stream, clears the buffer,
 /// sets recording=true, stores the AudioCapture in managed state, and returns the
 /// buffer Arc for level streaming. Returns None if the stream could not be opened.
+/// Common recording-start sequence shared by HoldToTalk and Toggle modes.
+///
+/// Transitions the pipeline from IDLE to RECORDING, opens the audio stream,
+/// updates tray/pill UI, and starts the level-meter stream. Returns the shared
+/// audio buffer on success, or `None` if the transition was not possible or
+/// the microphone could not be opened.
+fn start_recording_common(
+    app: &tauri::AppHandle,
+    pipeline: &pipeline::PipelineState,
+) -> Option<Arc<std::sync::Mutex<Vec<f32>>>> {
+    use tauri::Emitter;
+    if !pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
+        return None;
+    }
+    let buffer_clone = match open_recording_stream(app) {
+        Some(b) => b,
+        None => {
+            log::error!("No microphone — cannot record");
+            pipeline.reset_to_idle();
+            return None;
+        }
+    };
+    tray::set_tray_state(app, tray::TrayState::Recording);
+    pill::show_pill(app);
+    app.emit_to("pill", "pill-state", "recording").ok();
+
+    let stream_active = app.state::<LevelStreamActive>();
+    stream_active.0.store(true, std::sync::atomic::Ordering::Relaxed);
+    pill::start_level_stream(
+        app.clone(),
+        buffer_clone.clone(),
+        stream_active.0.clone(),
+    );
+
+    Some(buffer_clone)
+}
+
 fn open_recording_stream(app: &tauri::AppHandle) -> Option<Arc<std::sync::Mutex<Vec<f32>>>> {
     let audio_mutex = app.state::<audio::AudioCaptureMutex>();
     let mut guard = audio_mutex.0.lock().unwrap_or_else(|e| e.into_inner());
@@ -580,51 +629,12 @@ pub(crate) fn handle_hotkey_event(app: &tauri::AppHandle, pressed: bool) {
 
         match mode {
             Mode::HoldToTalk => {
-                if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
-                    let buffer_clone = match open_recording_stream(app) {
-                        Some(b) => b,
-                        None => {
-                            log::error!("No microphone — cannot record");
-                            pipeline.reset_to_idle();
-                            return;
-                        }
-                    };
-                    tray::set_tray_state(app, tray::TrayState::Recording);
-                    pill::show_pill(app);
-                    app.emit_to("pill", "pill-state", "recording").ok();
-
-                    let stream_active = app.state::<LevelStreamActive>();
-                    stream_active.0.store(true, Ordering::Relaxed);
-                    pill::start_level_stream(
-                        app.clone(),
-                        buffer_clone,
-                        stream_active.0.clone(),
-                    );
-
+                if start_recording_common(app, &pipeline).is_some() {
                     log::info!("Pipeline: IDLE -> RECORDING (hold-to-talk)");
                 }
             }
             Mode::Toggle => {
-                if pipeline.transition(pipeline::IDLE, pipeline::RECORDING) {
-                    let buffer_clone = match open_recording_stream(app) {
-                        Some(b) => b,
-                        None => {
-                            log::error!("No microphone — cannot record (toggle)");
-                            pipeline.reset_to_idle();
-                            return;
-                        }
-                    };
-                    tray::set_tray_state(app, tray::TrayState::Recording);
-                    pill::show_pill(app);
-                    app.emit_to("pill", "pill-state", "recording").ok();
-                    let stream_active = app.state::<LevelStreamActive>();
-                    stream_active.0.store(true, Ordering::Relaxed);
-                    pill::start_level_stream(
-                        app.clone(),
-                        buffer_clone.clone(),
-                        stream_active.0.clone(),
-                    );
-
+                if let Some(buffer_clone) = start_recording_common(app, &pipeline) {
                     let vad_handle = vad::spawn_vad_worker(
                         app.clone(),
                         buffer_clone,
@@ -1090,10 +1100,10 @@ fn set_prefix_text(app: tauri::AppHandle, text: String) -> Result<(), String> {
     }
 
     let mut json = read_settings(&app)?;
-    json["prefix_text"] = serde_json::Value::String(text.clone());
+    log::info!("Prefix text set to {:?}", text);
+    json["prefix_text"] = serde_json::Value::String(text);
     write_settings(&app, &json)?;
 
-    log::info!("Prefix text set to {:?}", text);
     Ok(())
 }
 
@@ -1179,9 +1189,46 @@ fn get_setting(app: tauri::AppHandle, key: String) -> Result<serde_json::Value, 
     Ok(guard.get(&key).cloned().unwrap_or(serde_json::Value::Null))
 }
 
+/// Allowlist of valid settings keys accepted by `set_setting`.
+///
+/// Built from all keys written by dedicated set_* IPC commands and by the
+/// frontend's `store.set()` calls. Unknown keys are rejected to prevent
+/// the webview from writing arbitrary data to settings.json.
+const SETTINGS_ALLOWLIST: &[&str] = &[
+    // Frontend store.set() keys
+    "autostart",
+    "hotkey",
+    "recordingMode",
+    "selectedMic",
+    "selectedModel",
+    "theme",
+    // Backend-managed keys (also writable via set_setting for flexibility)
+    "active_engine",
+    "all_caps",
+    "always_listen",
+    "app_rules",
+    "corrections.default",
+    "filler_removal",
+    "microphone_device",
+    "parakeet_model",
+    "prefix_enabled",
+    "prefix_text",
+    "recording_mode",
+    "whisper_model_id",
+];
+
 /// Set a single setting by key and flush to disk.
+///
+/// Rejects unknown keys to prevent the webview from writing arbitrary data.
 #[tauri::command]
 fn set_setting(app: tauri::AppHandle, key: String, value: serde_json::Value) -> Result<(), String> {
+    if !SETTINGS_ALLOWLIST.contains(&key.as_str()) {
+        return Err(format!(
+            "Unknown settings key: '{}'. Valid keys: {}",
+            key,
+            SETTINGS_ALLOWLIST.join(", ")
+        ));
+    }
     let state = app.state::<SettingsState>();
     let mut guard = state.0.lock().map_err(|e| format!("settings lock failed: {}", e))?;
     guard[&key] = value;
@@ -1317,13 +1364,13 @@ fn read_saved_model_id(app: &tauri::App) -> Option<String> {
 /// Returns Err if the model_id is unknown.
 #[cfg(feature = "whisper")]
 fn model_id_to_path(model_id: &str) -> Result<std::path::PathBuf, String> {
-    use crate::transcribe::models_dir;
+    use crate::paths::models_dir;
     let filename = match model_id {
         "large-v3-turbo" => "ggml-large-v3-turbo-q5_0.bin",
         "small-en" => "ggml-small.en-q5_1.bin",
         _ => return Err(format!("Unknown model id: {}", model_id)),
     };
-    Ok(models_dir().join(filename))
+    Ok(models_dir()?.join(filename))
 }
 
 /// Info about a transcription model including availability and GPU recommendation.
@@ -1344,8 +1391,8 @@ struct ModelInfo {
 #[cfg(feature = "whisper")]
 #[tauri::command]
 fn list_models(app: tauri::AppHandle) -> Result<Vec<ModelInfo>, String> {
-    use crate::transcribe::models_dir;
-    let dir = models_dir();
+    use crate::paths::models_dir;
+    let dir = models_dir()?;
 
     // Determine GPU availability from cached detection
     let has_gpu = {
@@ -1470,13 +1517,18 @@ struct FirstRunStatus {
 #[cfg(feature = "whisper")]
 #[tauri::command]
 fn check_first_run(app: tauri::AppHandle) -> FirstRunStatus {
-    use crate::transcribe::{models_dir, ModelMode};
+    use crate::paths::models_dir;
+    use crate::transcribe::ModelMode;
     let cached = app.state::<CachedGpuMode>();
     let gpu_mode = matches!(cached.0, ModelMode::Gpu);
     let detection = app.state::<CachedGpuDetection>();
-    let dir = models_dir();
-    let large_exists = dir.join("ggml-large-v3-turbo-q5_0.bin").exists();
-    let small_exists = dir.join("ggml-small.en-q5_1.bin").exists();
+    let (large_exists, small_exists) = match models_dir() {
+        Ok(dir) => (
+            dir.join("ggml-large-v3-turbo-q5_0.bin").exists(),
+            dir.join("ggml-small.en-q5_1.bin").exists(),
+        ),
+        Err(_) => (false, false),
+    };
     // Parakeet fp32 is also a valid installed model — skip first-run if it is present
     let parakeet_fp32_exists = crate::download::parakeet_fp32_model_exists();
     // Moonshine Tiny is also a valid installed model — skip first-run if it is present
@@ -2017,7 +2069,6 @@ pub fn run() {
             }
 
             // If saved engine is Parakeet and parakeet feature is enabled, load model at startup.
-            // Uses variant-aware directory resolution so fp32 is loaded if that was the last selected variant.
             #[cfg(feature = "parakeet")]
             {
                 let saved_engine = {
@@ -2026,44 +2077,25 @@ pub fn run() {
                     *guard
                 };
                 if saved_engine == TranscriptionEngine::Parakeet {
-                    let parakeet_model_id = read_saved_parakeet_model_startup(app);
-                    let model_dir = resolve_parakeet_dir();
+                    let parakeet_model_id = read_saved_parakeet_model(app.handle());
+                    let model_dir = match download::parakeet_fp32_model_dir() {
+                        Ok(d) => d,
+                        Err(e) => {
+                            log::warn!("Cannot resolve Parakeet model dir: {} — falling back to Whisper", e);
+                            let engine_state = app.state::<ActiveEngine>();
+                            let mut guard = engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                            *guard = TranscriptionEngine::Whisper;
+                            return Ok(());
+                        }
+                    };
                     if model_dir.exists() {
                         let dir_str = model_dir.to_string_lossy().to_string();
-                        let provider = {
-                            let gpu_detection = app.state::<CachedGpuDetection>();
-                            gpu_detection.0.parakeet_provider.clone()
-                        };
-                        match transcribe_parakeet::load_parakeet(&dir_str, &provider) {
-                            Ok(p) => {
-                                let parakeet_state = app.state::<ParakeetStateMutex>();
-                                let inner_arc = std::sync::Arc::new(std::sync::Mutex::new(p));
-                                let warmup_arc = inner_arc.clone();
-                                {
-                                    let mut guard =
-                                        parakeet_state.0.lock().unwrap_or_else(|e| e.into_inner());
-                                    *guard = Some(inner_arc);
-                                }
-                                log::info!(
-                                    "Parakeet model loaded at startup (variant: {})",
-                                    parakeet_model_id
-                                );
-                                // Warm up in background to avoid blocking UI
-                                std::thread::spawn(move || {
-                                    let mut guard = warmup_arc.lock().unwrap_or_else(|e| e.into_inner());
-                                    transcribe_parakeet::warm_up_parakeet(&mut guard);
-                                });
-                            }
-                            Err(e) => {
-                                log::warn!(
-                                    "Parakeet startup load failed: {} — falling back to Whisper",
-                                    e
-                                );
-                                let engine_state = app.state::<ActiveEngine>();
-                                let mut guard =
-                                    engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
-                                *guard = TranscriptionEngine::Whisper;
-                            }
+                        let provider = resolve_onnx_provider(app.handle());
+                        if let Err(e) = load_and_store_parakeet(app.handle(), &dir_str, &provider, &parakeet_model_id) {
+                            log::warn!("Parakeet startup load failed: {} — falling back to Whisper", e);
+                            let engine_state = app.state::<ActiveEngine>();
+                            let mut guard = engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                            *guard = TranscriptionEngine::Whisper;
                         }
                     } else {
                         log::warn!(
@@ -2086,44 +2118,23 @@ pub fn run() {
                     *guard
                 };
                 if saved_engine == TranscriptionEngine::Moonshine {
-                    let model_dir = download::moonshine_tiny_model_dir();
+                    let model_dir = match download::moonshine_tiny_model_dir() {
+                        Ok(d) => d,
+                        Err(e) => {
+                            log::warn!("Cannot resolve Moonshine model dir: {} — falling back to Whisper", e);
+                            let engine_state = app.state::<ActiveEngine>();
+                            let mut guard = engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                            *guard = TranscriptionEngine::Whisper;
+                            return Ok(());
+                        }
+                    };
                     if model_dir.exists() {
-                        let provider = {
-                            #[cfg(feature = "whisper")]
-                            {
-                                let gpu_detection = app.state::<CachedGpuDetection>();
-                                gpu_detection.0.parakeet_provider.clone()
-                            }
-                            #[cfg(not(feature = "whisper"))]
-                            { "cpu".to_string() }
-                        };
-                        match transcribe_moonshine::load_moonshine(&model_dir, &provider) {
-                            Ok(engine_instance) => {
-                                let moonshine_state = app.state::<MoonshineStateMutex>();
-                                let inner_arc = std::sync::Arc::new(std::sync::Mutex::new(engine_instance));
-                                let warmup_arc = inner_arc.clone();
-                                {
-                                    let mut guard =
-                                        moonshine_state.0.lock().unwrap_or_else(|e| e.into_inner());
-                                    *guard = Some(inner_arc);
-                                }
-                                log::info!("Moonshine model loaded at startup");
-                                // Warm up in background to avoid blocking UI
-                                std::thread::spawn(move || {
-                                    let mut guard = warmup_arc.lock().unwrap_or_else(|e| e.into_inner());
-                                    transcribe_moonshine::warm_up_moonshine(&mut guard);
-                                });
-                            }
-                            Err(e) => {
-                                log::warn!(
-                                    "Moonshine startup load failed: {} — falling back to Whisper",
-                                    e
-                                );
-                                let engine_state = app.state::<ActiveEngine>();
-                                let mut guard =
-                                    engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
-                                *guard = TranscriptionEngine::Whisper;
-                            }
+                        let provider = resolve_onnx_provider(app.handle());
+                        if let Err(e) = load_and_store_moonshine(app.handle(), &model_dir, &provider) {
+                            log::warn!("Moonshine startup load failed: {} — falling back to Whisper", e);
+                            let engine_state = app.state::<ActiveEngine>();
+                            let mut guard = engine_state.0.lock().unwrap_or_else(|e| e.into_inner());
+                            *guard = TranscriptionEngine::Whisper;
                         }
                     } else {
                         log::warn!(
