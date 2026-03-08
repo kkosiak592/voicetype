@@ -70,7 +70,7 @@
 
 </details>
 
-### 🚧 v1.5 Prefix Text (In Progress)
+### v1.5 Prefix Text (In Progress)
 
 **Milestone Goal:** Add a toggleable prefix string that gets prepended to all dictated output, for annotation use cases like shop drawing review.
 
@@ -88,10 +88,10 @@
   3. Dictated text is injected with the prefix prepended when enabled (and without prefix when disabled)
   4. Prefix is applied after ALL CAPS formatting (e.g., ALL CAPS + prefix yields "TEPC: THIS IS A NOTE")
   5. Prefix toggle state and text survive app restart
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 27-01: TBD
+- [ ] 27-01-PLAN.md — Backend prefix fields, IPC commands, pipeline integration, and frontend UI
 
 ## Progress
 
@@ -102,7 +102,7 @@ Plans:
 | 15-20.1 | v1.2 | 15/15 | Complete | 2026-03-07 |
 | 22 | v1.3 | 1/1 | Complete | 2026-03-07 |
 | 23-26 | v1.4 | 5/5 | Complete | 2026-03-07 |
-| 27 | v1.5 | 0/? | Not started | - |
+| 27 | v1.5 | 0/1 | Not started | - |
 
 Full v1.0 milestone details: `.planning/milestones/v1.0-ROADMAP.md`
 Full v1.1 milestone details: `.planning/milestones/v1.1-ROADMAP.md`
